@@ -1,0 +1,37 @@
+# FastAPI and server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.25
+alembic==1.13.1
+# Note: SQLite3 is built into Python, no need to install it
+# For production with PostgreSQL, add: psycopg2-binary==2.9.9
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.6
+google-auth==2.26.2
+google-auth-oauthlib==1.2.0
+
+# Document processing
+python-docx==1.1.0
+PyLaTeX==1.4.2
+pypandoc==1.12
+
+# AI/LLM Integration
+openai==2.7.2
+
+# PDF generation
+reportlab==4.0.9
+
+# Utilities
+python-dotenv==1.0.0
+aiofiles==23.2.1
+email-validator==2.3.0
+
+# CORS is built into FastAPI - no separate package needed

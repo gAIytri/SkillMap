@@ -1,0 +1,329 @@
+import { useState, useEffect } from 'react';
+import {
+  Container,
+  Box,
+  Typography,
+  Button,
+  Grid,
+  CircularProgress,
+  Alert,
+  TextField,
+  InputAdornment,
+  Card,
+  CardContent,
+  CardActions,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DescriptionIcon from '@mui/icons-material/Description';
+import { colorPalette } from '../styles/theme';
+import projectService from '../services/projectService';
+import resumeService from '../services/resumeService';
+
+const Dashboard = () => {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [hasBaseResume, setHasBaseResume] = useState(false);
+  const [openCreateDialog, setOpenCreateDialog] = useState(false);
+  const [newProjectData, setNewProjectData] = useState({
+    project_name: '',
+    job_description: '',
+  });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  const loadDashboard = async () => {
+    try {
+      // Check if user has base resume
+      try {
+        await resumeService.getBaseResume();
+        setHasBaseResume(true);
+      } catch (err) {
+        if (err.response?.status === 404) {
+          setHasBaseResume(false);
+          // Redirect to upload if no base resume
+          navigate('/upload-resume');
+          return;
+        }
+      }
+
+      // Load projects
+      const projectsData = await projectService.getAllProjects();
+      setProjects(projectsData);
+    } catch (err) {
+      setError('Failed to load dashboard. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!newProjectData.project_name.trim()) {
+      alert('Please enter a project name');
+      return;
+    }
+
+    try {
+      const newProject = await projectService.createProject(newProjectData);
+      setOpenCreateDialog(false);
+      setNewProjectData({ project_name: '', job_description: '' });
+      navigate(`/project/${newProject.id}`);
+    } catch (err) {
+      alert('Failed to create project. Please try again.');
+    }
+  };
+
+  const handleDeleteProject = async (projectId) => {
+    if (!window.confirm('Are you sure you want to delete this project?')) {
+      return;
+    }
+
+    try {
+      await projectService.deleteProject(projectId);
+      setProjects(projects.filter((p) => p.id !== projectId));
+    } catch (err) {
+      alert('Failed to delete project. Please try again.');
+    }
+  };
+
+  const filteredProjects = projects.filter((project) =>
+    project.project_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="calc(100vh - 64px)"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Header */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box>
+          <Typography variant="h4" fontWeight={700} color={colorPalette.primary.darkGreen}>
+            Your Projects
+          </Typography>
+          <Typography variant="body2" color="text.secondary" mt={1}>
+            Manage your tailored resumes for different job applications
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenCreateDialog(true)}
+          sx={{
+            bgcolor: colorPalette.primary.brightGreen,
+            '&:hover': {
+              bgcolor: colorPalette.secondary.mediumGreen,
+            },
+          }}
+        >
+          New Project
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Search */}
+      <TextField
+        fullWidth
+        placeholder="Search projects..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      {/* Projects Grid */}
+      {filteredProjects.length === 0 ? (
+        <Box
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          minHeight="300px"
+          textAlign="center"
+        >
+          <DescriptionIcon
+            sx={{ fontSize: 80, color: colorPalette.secondary.mediumGreen, mb: 2 }}
+          />
+          <Typography variant="h6" color="text.secondary" mb={1}>
+            {projects.length === 0 ? 'No projects yet' : 'No projects found'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" mb={3}>
+            {projects.length === 0
+              ? 'Create your first project to start tailoring resumes'
+              : 'Try a different search term'}
+          </Typography>
+          {projects.length === 0 && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setOpenCreateDialog(true)}
+              sx={{ bgcolor: colorPalette.primary.brightGreen }}
+            >
+              Create Project
+            </Button>
+          )}
+        </Box>
+      ) : (
+        <Grid container spacing={3}>
+          {filteredProjects.map((project) => (
+            <Grid item xs={12} sm={6} md={4} key={project.id}>
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: 4,
+                  },
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography
+                    variant="h6"
+                    fontWeight={600}
+                    gutterBottom
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {project.project_name}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mb: 2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
+                    {project.job_description || 'No job description provided'}
+                  </Typography>
+                  <Chip
+                    label={new Date(project.updated_at).toLocaleDateString()}
+                    size="small"
+                    sx={{
+                      bgcolor: colorPalette.secondary.lightGreen,
+                      color: colorPalette.primary.darkGreen,
+                    }}
+                  />
+                </CardContent>
+                <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+                  <Button
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => navigate(`/project/${project.id}`)}
+                    sx={{ color: colorPalette.primary.brightGreen }}
+                  >
+                    Edit
+                  </Button>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleDeleteProject(project.id)}
+                    sx={{ color: 'error.main' }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      {/* Create Project Dialog */}
+      <Dialog
+        open={openCreateDialog}
+        onClose={() => setOpenCreateDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6" fontWeight={600}>
+            Create New Project
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Project Name"
+            value={newProjectData.project_name}
+            onChange={(e) =>
+              setNewProjectData({ ...newProjectData, project_name: e.target.value })
+            }
+            margin="normal"
+            required
+            autoFocus
+            placeholder="e.g., Frontend Developer at Google"
+          />
+          <TextField
+            fullWidth
+            label="Job Description (Optional)"
+            value={newProjectData.job_description}
+            onChange={(e) =>
+              setNewProjectData({ ...newProjectData, job_description: e.target.value })
+            }
+            margin="normal"
+            multiline
+            rows={4}
+            placeholder="Paste the job description here..."
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setOpenCreateDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateProject}
+            sx={{ bgcolor: colorPalette.primary.brightGreen }}
+          >
+            Create Project
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
+  );
+};
+
+export default Dashboard;
