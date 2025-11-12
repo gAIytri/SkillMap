@@ -395,3 +395,156 @@ tail -f logs/app.log
 
 ### Monitor OpenAI Usage
 Check OpenAI dashboard for API usage and costs.
+
+## Version Control
+
+### Repository
+- **GitHub**: https://github.com/gAIytri/SkillMap
+- **Branch**: main
+
+### Initial Setup (Already Done)
+```bash
+# Initialize git repository
+git init
+
+# Add remote
+git remote add origin https://github.com/gAIytri/SkillMap.git
+
+# Create .gitignore (already exists)
+# Push to GitHub
+git add .
+git commit -m "Initial commit"
+git push -u origin main
+```
+
+### .gitignore Configuration
+The `.gitignore` file excludes:
+- `.env` files (API keys, secrets)
+- `venv/` (Python virtual environment)
+- `node_modules/` (Node.js dependencies)
+- `*.db`, `*.sqlite` (Database files)
+- `__pycache__/`, `*.pyc` (Python cache)
+- `generated_pdfs/`, `generated_docx/` (Temporary files)
+- IDE files (`.vscode/`, `.idea/`)
+- System files (`.DS_Store`)
+
+### Best Practices
+1. **Never commit sensitive data**:
+   - API keys (use `.env.example` as template)
+   - Database files
+   - User data
+   - Generated files
+
+2. **Commit messages**:
+   - Use clear, descriptive messages
+   - Reference issue numbers if applicable
+   - Follow conventional commits format
+
+3. **Branching**:
+   - `main` - production-ready code
+   - `develop` - development branch
+   - `feature/*` - feature branches
+   - `bugfix/*` - bug fix branches
+
+4. **Pull Requests**:
+   - Create PR for all changes
+   - Request code review
+   - Run tests before merging
+   - Squash commits if needed
+
+### Working with the Repository
+
+```bash
+# Clone the repository
+git clone https://github.com/gAIytri/SkillMap.git
+cd SkillMap
+
+# Create .env files (not in repo)
+cp backend/.env.example backend/.env
+# Add your OPENAI_API_KEY to backend/.env
+
+# Install dependencies
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+cd ../frontend
+npm install
+
+# Start development servers (separate terminals)
+# Terminal 1 - Backend
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --port 8000
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Test thoroughly
+5. Commit: `git commit -m 'Add amazing feature'`
+6. Push: `git push origin feature/amazing-feature`
+7. Open a Pull Request
+
+## Recent Updates
+
+### Latest Changes (Current Version)
+
+**Enhanced AI Tailoring Service**:
+- Substantially improved tailoring prompt for more impactful changes
+- Professional summary rewritten to directly address job requirements
+- Work experience bullets transformed with technical depth and quantified impact
+- Projects reordered by relevance to job description
+- Skills reorganized to prioritize JD-matching skills first
+- Enhanced project descriptions within technology boundaries
+- Increased temperature to 0.4 for more creative enhancements
+- Increased max_tokens to 4096 for detailed responses
+
+**PDF Preview Improvements**:
+- LibreOffice integration for DOCX to PDF conversion
+- Inline browser preview instead of auto-downloads
+- Proper Content-Disposition headers for preview mode
+- Fallback to DOCX if LibreOffice unavailable
+
+**Database Schema**:
+- Made legacy fields nullable (tailored_latex_content, pdf_url, latex_content)
+- Core fields required (original_docx, resume_json, doc_metadata, original_filename)
+- Clean separation between active and legacy fields
+
+**Code Cleanup**:
+- Removed 6 unused services (convert_service, docx_service, extract_service, latex_service, llm_extractor, pdf_service)
+- Eliminated LaTeX dependencies completely
+- Simplified to DOCX + JSON workflow only
+- Consolidated documentation to 3 markdown files
+
+**Documentation**:
+- Comprehensive BACKEND.md with all service details
+- Complete FRONTEND.md with user flows and components
+- Clean README.md with quick start guide
+- Removed 10+ redundant markdown files
+
+**Version Control**:
+- Git repository initialized
+- Pushed to GitHub: https://github.com/gAIytri/SkillMap
+- Proper .gitignore configuration
+- Sensitive data excluded from repository
+
+### Future Improvements
+
+- [ ] Multiple file format support (PDF upload)
+- [ ] Collaborative editing
+- [ ] Template library
+- [ ] Analytics dashboard
+- [ ] Mobile app
+- [ ] Browser extension
+- [ ] ATS compatibility checker
+- [ ] Resume scoring system
+- [ ] Cover letter generation
+- [ ] LinkedIn profile optimization

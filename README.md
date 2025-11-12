@@ -258,6 +258,61 @@ npm run build
 - SQL injection prevention with SQLAlchemy
 - XSS protection with React
 
+## Repository
+
+**GitHub**: https://github.com/gAIytri/SkillMap
+
+### Clone and Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/gAIytri/SkillMap.git
+cd SkillMap
+
+# Setup backend
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Add your OPENAI_API_KEY to .env
+
+# Setup frontend (new terminal)
+cd frontend
+npm install
+cp .env.example .env
+# Update VITE_API_URL if needed
+```
+
+## Recent Updates
+
+### Latest Features (Current Version)
+
+**Enhanced AI Tailoring**:
+- Significantly improved tailoring with substantial content transformation
+- Work experience bullets rewritten with technical depth and quantified impact
+- Projects automatically reordered by relevance to job description
+- Skills reorganized to prioritize job-matching skills first
+- Professional summary completely rewritten to address job requirements
+
+**PDF Preview**:
+- LibreOffice integration for DOCX to PDF conversion
+- Inline browser preview (no auto-downloads)
+- Zoom controls (60% - 200%)
+- Clean viewer without toolbars
+
+**Workflow Improvements**:
+- Streamlined upload flow: upload → dashboard → create project → tailor
+- Fixed data loading and display issues
+- Real-time PDF updates after tailoring
+- Better error handling and user feedback
+
+**Code Quality**:
+- Removed 6 unused services
+- Eliminated LaTeX dependencies
+- Simplified to DOCX + JSON workflow
+- Comprehensive documentation in BACKEND.md and FRONTEND.md
+
 ## Contributing
 
 1. Fork the repository
@@ -265,6 +320,8 @@ npm run build
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
+
+See [BACKEND.md](./BACKEND.md#version-control) and [FRONTEND.md](./FRONTEND.md#version-control) for detailed contribution guidelines.
 
 ## License
 
@@ -275,7 +332,7 @@ This project is proprietary software. All rights reserved.
 For issues and questions:
 - Check [BACKEND.md](./BACKEND.md) for backend issues
 - Check [FRONTEND.md](./FRONTEND.md) for frontend issues
-- Open an issue on GitHub
+- Open an issue on [GitHub](https://github.com/gAIytri/SkillMap/issues)
 
 ## Roadmap
 

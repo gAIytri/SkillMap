@@ -611,3 +611,251 @@ npm run cypress
 - Test with screen readers
 - Maintain color contrast ratios
 - Provide text alternatives for images
+
+## Version Control
+
+### Repository
+- **GitHub**: https://github.com/gAIytri/SkillMap
+- **Branch**: main
+
+### .gitignore Configuration
+The frontend `.gitignore` excludes:
+- `node_modules/` (Dependencies)
+- `dist/`, `build/` (Build outputs)
+- `.env`, `.env.local` (Environment variables)
+- `.DS_Store` (System files)
+- `npm-debug.log`, `yarn-error.log` (Log files)
+
+### Working with the Repository
+
+```bash
+# Clone the repository
+git clone https://github.com/gAIytri/SkillMap.git
+cd SkillMap/frontend
+
+# Install dependencies
+npm install
+
+# Create .env file (not in repo)
+cp .env.example .env
+# Update VITE_API_URL if needed (defaults to http://localhost:8000)
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+### Contributing to Frontend
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/ui-improvement`
+3. Make your changes to components/pages
+4. Test in browser (Chrome, Firefox, Safari)
+5. Check for console errors
+6. Ensure responsive design works
+7. Commit: `git commit -m 'Add UI improvement'`
+8. Push: `git push origin feature/ui-improvement`
+9. Open a Pull Request
+
+### Code Style
+
+- Use functional components with hooks
+- Follow React best practices
+- Use Material-UI components when possible
+- Keep components small and focused
+- Use descriptive variable names
+- Add comments for complex logic
+- Use proper error handling
+
+## Recent Updates
+
+### Latest Changes (Current Version)
+
+**PDF Preview Enhancements**:
+- Fixed auto-download issue by installing LibreOffice
+- PDF now displays inline in browser instead of downloading
+- Added zoom controls (60% - 200%)
+- Proper iframe implementation with URL parameters
+- Clean PDF viewer without toolbars or navigation panes
+
+**Project Editor Improvements**:
+- Fixed data loading: project.resume_json loads on mount
+- Removed redundant base_resume fetching
+- Download button now uses project endpoint
+- PDF refreshes automatically after tailoring
+- Extracted data visible immediately upon entering project
+- Tailoring updates both JSON display and PDF preview
+
+**Upload Workflow**:
+- Direct navigation to dashboard after upload
+- Removed /resume-viewer route (no longer needed)
+- Streamlined user flow: upload → dashboard → create project → tailor
+
+**Tailoring Integration**:
+- Connected to enhanced backend tailoring service
+- Professional summary updates visible in UI
+- Work experience bullets show transformed content
+- Projects reorder by relevance to job description
+- Skills reorganize to prioritize JD matches
+- Real-time JSON updates in formatted/raw tabs
+
+**UI/UX Refinements**:
+- 3-column layout: Job Description | PDF Preview | Extracted Data
+- Tabs for Formatted/Raw JSON views
+- Compact professional header with action buttons
+- Color-coded sections with consistent styling
+- Loading states and error handling
+- Responsive design for different screen sizes
+
+**Service Architecture**:
+- Clean API service structure
+- Proper error handling in all services
+- Axios interceptors for authentication
+- Token management in localStorage
+- Auto-logout on 401 errors
+
+## Upcoming Features
+
+### Planned Improvements
+
+**User Experience**:
+- [ ] Dark mode toggle
+- [ ] Keyboard shortcuts
+- [ ] Drag-and-drop file upload improvements
+- [ ] Resume template selection
+- [ ] Side-by-side before/after comparison
+- [ ] Export to multiple formats (PDF, TXT, MD)
+
+**Editing Features**:
+- [ ] Inline JSON editing
+- [ ] Manual bullet point reordering
+- [ ] Skills filtering and tagging
+- [ ] Custom sections support
+- [ ] Multiple resume versions per project
+
+**Collaboration**:
+- [ ] Share project links
+- [ ] Comments and feedback
+- [ ] Version history
+- [ ] Collaborative editing
+
+**Analytics & Insights**:
+- [ ] Resume strength score
+- [ ] ATS compatibility check
+- [ ] Keyword density analysis
+- [ ] Job match percentage
+- [ ] Improvement suggestions
+
+**Performance**:
+- [ ] Lazy loading components
+- [ ] Code splitting by route
+- [ ] Image optimization
+- [ ] Service worker for offline support
+- [ ] Bundle size optimization
+
+**Mobile**:
+- [ ] Mobile-responsive improvements
+- [ ] Touch gestures for PDF viewer
+- [ ] Mobile-optimized forms
+- [ ] Progressive Web App (PWA)
+
+## Browser Compatibility
+
+### Supported Browsers
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- Opera 76+
+
+### Testing Checklist
+- [ ] PDF preview works in all browsers
+- [ ] File upload functions correctly
+- [ ] Authentication flow works
+- [ ] Responsive design on mobile (375px - 1920px)
+- [ ] Keyboard navigation accessible
+- [ ] No console errors
+- [ ] API calls successful
+- [ ] PDF zoom controls functional
+
+## Troubleshooting
+
+### Common Frontend Issues
+
+**Issue**: PDF not showing, seeing blank iframe
+**Solution**:
+1. Check backend is running on port 8000
+2. Verify LibreOffice is installed on backend
+3. Check browser console for errors
+4. Try different browser (some block inline PDFs)
+
+**Issue**: API calls failing with CORS errors
+**Solution**:
+1. Check `VITE_API_URL` in `.env` matches backend URL
+2. Verify backend `CORS_ORIGINS` includes frontend URL
+3. Restart both servers
+
+**Issue**: Login redirects not working
+**Solution**:
+1. Check `AuthContext` is wrapping App
+2. Verify token is stored in localStorage
+3. Check protected routes have `ProtectedRoute` wrapper
+
+**Issue**: Tailoring button disabled
+**Solution**:
+1. Ensure job description has at least 10 characters
+2. Verify project has resume_json data
+3. Check backend is responding (network tab)
+
+**Issue**: Download button not working
+**Solution**:
+1. Check using correct service method (projectService, not resumeService)
+2. Verify project ID is valid
+3. Check backend endpoint returns blob
+
+## Development Tips
+
+### Fast Development Workflow
+
+```bash
+# Terminal 1: Backend (auto-reloads on changes)
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --port 8000
+
+# Terminal 2: Frontend (hot module replacement)
+cd frontend
+npm run dev
+
+# Terminal 3: Quick tests
+cd frontend
+npm run build  # Test production build
+```
+
+### Debugging
+
+**React DevTools**: Install browser extension for component inspection
+**Redux DevTools**: Not used (Context API instead)
+**Network Tab**: Monitor API calls and responses
+**Console**: Check for warnings and errors
+
+### Quick Component Generation
+
+```bash
+# Create new page
+touch src/pages/NewPage.jsx
+
+# Create new component
+touch src/components/NewComponent.jsx
+
+# Add route in App.jsx
+# Import and add <Route> element
+```
+
+## License
+
+This project is proprietary software. All rights reserved.
