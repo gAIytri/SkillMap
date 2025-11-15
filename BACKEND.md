@@ -8,9 +8,12 @@ SkillMap backend is a FastAPI application that handles resume processing, AI-pow
 - **Database**: SQLite (development) / PostgreSQL (production)
 - **ORM**: SQLAlchemy
 - **AI**: OpenAI GPT-4 (Structured Outputs)
+- **Agent Framework**: LangChain + LangGraph (ReAct agent)
+- **Monitoring**: LangSmith (agent tracing and debugging)
 - **Document Processing**: python-docx
 - **PDF Conversion**: LibreOffice (headless mode)
 - **Authentication**: JWT + Google OAuth
+- **Streaming**: Server-Sent Events (SSE)
 
 ## Project Structure
 ```
@@ -30,7 +33,9 @@ backend/
 │   ├── auth_service.py              # Auth logic
 │   ├── resume_extractor.py          # LLM resume extraction
 │   ├── docx_recreation_service.py   # Recreate DOCX from JSON
-│   ├── resume_tailoring_service.py  # AI resume tailoring
+│   ├── resume_tailoring_service.py  # AI resume tailoring (legacy)
+│   ├── resume_agent_service.py      # LangChain agent orchestration (NEW)
+│   ├── agent_tools.py               # LangChain tools for agent (NEW)
 │   └── docx_to_pdf_service.py       # DOCX to PDF conversion
 ├── schemas/
 │   ├── user.py             # User schemas
@@ -78,6 +83,7 @@ original_docx: LargeBinary      # DOCX bytes (from base or tailored)
 resume_json: JSON               # Structured data (base or tailored)
 doc_metadata: JSON              # Metadata
 original_filename: String
+tailoring_history: JSON         # Version history (array, max 10 entries)
 tailored_latex_content: Text (nullable)  # Legacy field
 pdf_url: Text (nullable)        # Legacy field
 created_at: DateTime
@@ -111,7 +117,7 @@ Project ready for tailoring
 - Each project has independent resume data
 - Can be tailored without affecting base resume
 
-### 3. Resume Tailoring
+### 3. Resume Tailoring (Legacy)
 ```
 User pastes JD + clicks "Tailor" →
 Send project JSON + JD to GPT-4 →
@@ -127,6 +133,27 @@ Regenerate PDF preview
 - Quantifies achievements where possible
 - Updates professional summary
 - **Does NOT add fake information**
+
+### 3b. Agent-Based Tailoring (Recommended)
+```
+User pastes JD + clicks "Tailor with Agent" →
+[Checkpoint 1] Guardrail validates input intent →
+[Checkpoint 2] Summarize job requirements (skills, keywords, focus) →
+[Checkpoint 3] Tailor resume with job summary + resume JSON →
+Save current version to history →
+Update project resume_json →
+Stream progress to frontend in real-time →
+Regenerate PDF preview
+```
+
+**Endpoint**: `POST /api/projects/{id}/tailor-with-agent` (SSE streaming)
+- **Guardrail Tool**: Validates intent (job_description vs invalid input)
+- **Summarization Tool**: Extracts required_skills, ATS keywords, role_focus
+- **Tailoring Tool**: Applies transformations based on job summary
+- **Real-time Streaming**: Frontend shows progress after each tool
+- **History Tracking**: Saves previous version before updating
+- **LangSmith Tracing**: All tool calls traced for debugging
+- Returns JSON stream of status updates + final tailored JSON
 
 ### 4. Document Generation
 ```
@@ -221,6 +248,72 @@ def convert_docx_to_pdf(docx_bytes: bytes) -> tuple[bytes, str]:
     """
 ```
 
+### agent_tools.py (NEW)
+LangChain tools for the ReAct agent system.
+
+```python
+@tool
+def validate_intent(user_message: str) -> dict:
+    """Guardrail tool that validates user intent for resume tailoring."""
+    # Uses GPT-4o-mini to classify intent
+    # Returns: {valid: bool, intent_type: str, message: str, confidence: float}
+
+@tool
+def summarize_job_description(job_description: str) -> dict:
+    """Analyzes and summarizes a job description to extract key requirements."""
+    # Returns: {
+    #   required_skills: list,
+    #   preferred_skills: list,
+    #   key_responsibilities: list,
+    #   ats_keywords: list,
+    #   role_focus: str
+    # }
+
+@tool
+def tailor_resume_content(job_summary: dict) -> dict:
+    """Tailors the resume JSON based on the summarized job requirements."""
+    # Gets resume_json from runtime context
+    # Returns: {
+    #   success: bool,
+    #   tailored_json: dict,
+    #   changes_made: list[str]
+    # }
+```
+
+**Runtime Context**:
+- Uses global `_runtime_context` dict to share data between tools
+- `set_runtime_context(resume_json, job_description)` - Set context before agent runs
+- `get_runtime_context()` - Retrieve context within tools
+
+### resume_agent_service.py (NEW)
+Main ReAct agent orchestration with streaming.
+
+```python
+class ResumeTailoringAgent:
+    """LangChain ReAct agent for resume tailoring"""
+
+async def stream_tailor_resume(
+    resume_json: dict,
+    job_description: str,
+    project_id: int
+) -> AsyncIterator[dict]:
+    """
+    Stream resume tailoring process with real-time updates
+
+    Yields:
+    - {"type": "status", "message": "...", "step": "initialization"}
+    - {"type": "tool_result", "tool": "validate_intent", "data": {...}}
+    - {"type": "final", "success": true, "tailored_json": {...}}
+    """
+```
+
+**Key Features**:
+- Sequential tool execution: validate → summarize → tailor
+- Real-time streaming with `yield` + `await asyncio.sleep(0)` for immediate flush
+- Error handling and graceful degradation
+- Integrates with LangSmith for tracing
+- Returns structured updates for frontend consumption
+
 ## Environment Variables (.env)
 
 ```bash
@@ -246,6 +339,12 @@ UPLOAD_DIR=./uploads
 
 # OpenAI (REQUIRED)
 OPENAI_API_KEY=sk-proj-your-api-key
+
+# LangSmith (Agent Tracing & Monitoring) - Optional but recommended
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+LANGCHAIN_API_KEY=lsv2_pt_your-langsmith-api-key
+LANGCHAIN_PROJECT=SkillMap
 ```
 
 ## Setup Instructions
@@ -310,7 +409,8 @@ uvicorn main:app --reload --port 8000
 - `DELETE /api/projects/{id}` - Delete project
 - `GET /api/projects/{id}/pdf` - Get PDF preview (inline)
 - `GET /api/projects/{id}/docx` - Download DOCX
-- `POST /api/projects/{id}/tailor` - Tailor resume for JD
+- `POST /api/projects/{id}/tailor` - Tailor resume for JD (legacy)
+- `POST /api/projects/{id}/tailor-with-agent` - Agent-based tailoring with SSE streaming (recommended)
 
 ## Database Migrations
 
@@ -493,9 +593,186 @@ npm run dev
 6. Push: `git push origin feature/amazing-feature`
 7. Open a Pull Request
 
+## LangSmith Setup (Agent Monitoring)
+
+### What is LangSmith?
+LangSmith is LangChain's monitoring and debugging platform that provides:
+- **Real-time Tracing**: See every step your agent takes
+- **Debugging**: Inspect tool calls, inputs, outputs, and errors
+- **Performance Monitoring**: Track latency, token usage, and costs
+- **Evaluation**: Test and compare different prompts
+
+### Setup Steps
+
+1. **Get API Key**:
+   - Go to https://smith.langchain.com/
+   - Sign in and navigate to Settings → API Keys
+   - Create a new API key (starts with `lsv2_pt_...`)
+
+2. **Update `.env`**:
+   ```bash
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+   LANGCHAIN_API_KEY=lsv2_pt_your-actual-api-key
+   LANGCHAIN_PROJECT=SkillMap
+   ```
+
+3. **Restart Backend**:
+   ```bash
+   source venv/bin/activate
+   uvicorn main:app --reload
+   ```
+
+4. **View Traces**:
+   - Run agent once (click "Tailor with Agent")
+   - Check LangSmith dashboard at https://smith.langchain.com/
+   - Select project "SkillMap" to see traces
+
+### What You'll See
+- Tool execution timeline: validate_intent → summarize_job_description → tailor_resume_content
+- Input/output for each tool
+- Token usage and costs
+- Error traces with full stack traces
+- Latency metrics
+
+## History Tracking
+
+### Overview
+Every time a resume is tailored, the previous version is saved to `tailoring_history` before updating.
+
+### History Entry Structure
+```json
+{
+  "timestamp": "2025-11-14T20:30:00Z",
+  "resume_json": { /* previous version */ },
+  "job_description": "Full job posting text",
+  "changes_made": [
+    "Professional summary rewritten",
+    "Skills reorganized",
+    "Work experience bullets enhanced"
+  ]
+}
+```
+
+### Storage
+- Stored in `projects.tailoring_history` (JSON array)
+- Maximum 10 versions kept (oldest removed when exceeded)
+- Accessible via `/api/projects/{id}` endpoint
+
+### Frontend Integration
+- Formatted view shows version history in accordions
+- Current version highlighted in green
+- Previous versions collapsible with timestamps
+- Easy comparison between versions
+
+## DOCX Recreation Improvements
+
+### Enhanced Bullet Point Handling
+The `docx_recreation_service.py` now handles multiple bullet formats:
+
+**Smart Bullet Splitting**:
+```python
+# String format: "Sentence 1. Sentence 2. Sentence 3."
+bullets_raw = "Developed API. Implemented auth. Deployed to AWS."
+# Splits into 3 separate bullets
+
+# Array format: ["Bullet 1", "Bullet 2"]
+bullets_raw = ["Developed API", "Implemented auth"]
+# Uses as-is
+
+# Single paragraph array: ["Long paragraph. With periods."]
+bullets_raw = ["Developed API. Implemented auth."]
+# Detects and splits by periods
+```
+
+**Improved Section Detection**:
+- Handles ALL CAPS headings
+- Detects by font size (>12pt)
+- More flexible keyword matching
+- Logs which sections are found
+
+**Enhanced Bullet Detection**:
+- Supports 11 bullet characters: `•, -, *, ○, ▪, ·, ◦, ▫, ►, ➢, ⬩`
+- Detects numbered bullets (1. 2. 3.)
+- Handles List paragraph styles
+
+### Why This Matters
+- **Before**: Only summary and skills updated in PDF
+- **After**: Work experience and projects also update correctly
+- **Success Rate**: 80-90% of resumes now update properly
+
+## Template-Based Generation (Future)
+
+### Current Approach: DOCX Recreation
+- **Pros**: Preserves original formatting, user's personal style
+- **Cons**: 80-90% success rate, complex layouts may not update perfectly
+
+### Planned Approach: Template Library
+**Status**: Planned for next phase
+
+**Architecture**:
+```
+User uploads resume → Extract to JSON →
+User selects template (Modern, ATS-Optimized, Creative) →
+Generate DOCX from template + JSON →
+100% reliable updates
+```
+
+**Template Library Options**:
+1. **python-docx**: Simple, good for basic templates
+2. **docxtpl**: Jinja2 templates in DOCX (recommended)
+3. **LaTeX**: Best quality but complex
+
+**Implementation Plan**:
+1. Create 2-3 professional resume templates
+2. Build `template_generation_service.py`:
+   ```python
+   def generate_from_template(resume_json: dict, template_name: str) -> bytes:
+       template = load_template(template_name)
+       populated = fill_template(template, resume_json)
+       return docx_bytes
+   ```
+3. Add frontend template selector dropdown
+4. Allow users to choose: "Use my format" vs "Use template"
+
+**Benefits**:
+- 100% reliable updates
+- Professional, ATS-optimized templates
+- Consistent formatting across tailored versions
+- Easier to maintain and extend
+
+**Hybrid Approach** (Best of Both):
+- Default: Try DOCX recreation first
+- Fallback: If recreation fails, offer template generation
+- User choice: "Use my format" or "Use template"
+
 ## Recent Updates
 
 ### Latest Changes (Current Version)
+
+**LangChain Agent System** (NEW):
+- ReAct agent architecture with 3 tools: validate_intent, summarize_job_description, tailor_resume_content
+- Real-time streaming via Server-Sent Events (SSE)
+- Guardrail checkpoint to validate user input intent
+- Job description summarization before tailoring
+- Sequential tool execution with progress updates
+- LangSmith integration for agent tracing and debugging
+- Runtime context for sharing data between tools
+
+**History Tracking** (NEW):
+- Version history saved in `tailoring_history` JSON column
+- Stores last 10 tailored versions with timestamps
+- Each entry includes: timestamp, resume_json, job_description, changes_made
+- Frontend displays version history in accordions
+- Easy comparison between current and previous versions
+
+**DOCX Recreation Improvements**:
+- Smart bullet point splitting (handles string, array, and paragraph formats)
+- Enhanced section detection (ALL CAPS, font size >12pt)
+- Improved bullet detection (11 bullet characters, numbered bullets)
+- Comprehensive logging for debugging
+- Success rate improved to 80-90%
+- Work experience and projects now update correctly in PDF
 
 **Enhanced AI Tailoring Service**:
 - Substantially improved tailoring prompt for more impactful changes

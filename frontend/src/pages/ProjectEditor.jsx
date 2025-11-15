@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -11,9 +12,21 @@ import {
   TextField,
   Tabs,
   Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  LinearProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
+  Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DownloadIcon from '@mui/icons-material/Download';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import HistoryIcon from '@mui/icons-material/History';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
@@ -37,11 +50,20 @@ const ProjectEditor = () => {
   const [activeTab, setActiveTab] = useState(0); // 0 = formatted, 1 = raw JSON
   const [pdfZoom, setPdfZoom] = useState(100);
   const [tailoring, setTailoring] = useState(false);
+  const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
   const iframeRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     loadProject();
   }, [projectId]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [agentMessages]);
 
   const loadProject = async () => {
     try {
@@ -253,21 +275,71 @@ const ProjectEditor = () => {
 
     setTailoring(true);
     setError('');
+    setAgentMessages([]); // Clear previous messages
 
     try {
-      // Call project-specific tailoring API
-      const response = await resumeService.tailorProjectResume(projectId, jobDescription);
+      // Call agent-based tailoring with streaming updates
+      const finalResult = await resumeService.tailorProjectResumeWithAgent(
+        projectId,
+        jobDescription,
+        (message) => {
+          // This callback is called for each SSE message
+          console.log('Agent message:', message);
 
-      // Update extracted data with tailored JSON
-      setExtractedData(response.tailored_json);
+          // Force immediate render for each message using flushSync
+          flushSync(() => {
+            setAgentMessages(prev => [...prev, message]);
+          });
 
-      // Reload PDF preview to show tailored version
-      await loadPdfPreview();
+          // Show real-time updates in console
+          if (message.type === 'status') {
+            console.log(`[${message.step}] ${message.message}`);
+          } else if (message.type === 'tool_result') {
+            console.log(`[Tool: ${message.tool}] ${message.message}`);
+          }
+        }
+      );
 
-      alert('Resume tailored successfully! Check the PDF preview and extracted data on the right.');
+      console.log('Final result:', finalResult);
+
+      // Handle final result
+      if (finalResult && finalResult.success && finalResult.tailored_json) {
+        // Update extracted data with tailored JSON
+        setExtractedData(finalResult.tailored_json);
+
+        // Reload PDF preview to show tailored version
+        await loadPdfPreview();
+
+        // Show success message with changes made
+        const changes = finalResult.changes_made || [];
+        let successMsg = 'Resume tailored successfully!\n\nChanges Made:\n';
+        changes.forEach((change, idx) => {
+          successMsg += `${idx + 1}. ${change}\n`;
+        });
+        alert(successMsg);
+      } else {
+        const errorMsg = finalResult?.message || 'Failed to tailor resume - no result';
+        console.error('Tailoring failed:', finalResult);
+        setError(errorMsg);
+        alert(`Error: ${errorMsg}`);
+      }
     } catch (err) {
-      console.error('Tailoring error:', err);
-      setError('Failed to tailor resume. Please try again.');
+      console.error('Tailoring error (full):', err);
+      console.error('Error message:', err.message);
+      console.error('Error stack:', err.stack);
+
+      const errorMsg = err.message || 'Failed to tailor resume. Please try again.';
+      setError(errorMsg);
+
+      // If it's an auth error, redirect to login
+      if (errorMsg.includes('authentication') || errorMsg.includes('Session expired') || errorMsg.includes('login again')) {
+        alert(`${errorMsg}\n\nRedirecting to login...`);
+        setTimeout(() => {
+          navigate('/login');
+        }, 1500);
+      } else {
+        alert(`Error: ${errorMsg}\n\nCheck console for details.`);
+      }
     } finally {
       setTailoring(false);
     }
@@ -540,7 +612,7 @@ const ProjectEditor = () => {
                   borderWidth: '2px',
                 },
               }}
-              rows={25}
+              rows={15}
             />
           </Box>
         </Box>
@@ -771,154 +843,255 @@ const ProjectEditor = () => {
                 </Typography>
               </Box>
             ) : activeTab === 0 ? (
-              /* Formatted View */
+              /* Formatted View with Version History */
               <Box>
-                {/* Personal Info */}
-                {extractedData.personal_info && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Personal Information
-                    </Typography>
-                    <Box sx={{ fontSize: '12px', fontFamily: 'monospace' }}>
-                      {extractedData.personal_info.name && (
-                        <div><strong>Name:</strong> {extractedData.personal_info.name}</div>
-                      )}
-                      {extractedData.personal_info.email && (
-                        <div><strong>Email:</strong> {extractedData.personal_info.email}</div>
-                      )}
-                      {extractedData.personal_info.phone && (
-                        <div><strong>Phone:</strong> {extractedData.personal_info.phone}</div>
-                      )}
-                      {extractedData.personal_info.location && (
-                        <div><strong>Location:</strong> {extractedData.personal_info.location}</div>
-                      )}
-                      {extractedData.personal_info.linkedin && (
-                        <div><strong>LinkedIn:</strong> {extractedData.personal_info.linkedin}</div>
-                      )}
-                      {extractedData.personal_info.github && (
-                        <div><strong>GitHub:</strong> {extractedData.personal_info.github}</div>
-                      )}
-                    </Box>
-                  </Paper>
-                )}
+                {/* Helper function to format timestamp */}
+                {(() => {
+                  const formatTimestamp = (isoString) => {
+                    if (!isoString) return 'Current';
+                    const date = new Date(isoString);
+                    return date.toLocaleString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+                  };
 
-                {/* Professional Summary */}
-                {extractedData.professional_summary && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Professional Summary
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: '12px' }}>
-                      {extractedData.professional_summary}
-                    </Typography>
-                  </Paper>
-                )}
+                  const history = project?.tailoring_history || [];
 
-                {/* Experience */}
-                {extractedData.experience && extractedData.experience.length > 0 && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Experience ({extractedData.experience.length})
-                    </Typography>
-                    {extractedData.experience.map((exp, idx) => (
-                      <Box key={idx} sx={{ mb: 2, fontSize: '12px' }}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {exp.title} at {exp.company}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {exp.start_date} - {exp.end_date}
-                          {exp.location && ` | ${exp.location}`}
-                        </Typography>
-                        {exp.bullets && exp.bullets.length > 0 && (
-                          <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                            {exp.bullets.map((bullet, bidx) => (
-                              <li key={bidx} style={{ fontSize: '11px' }}>{bullet}</li>
+                  return (
+                    <>
+                      {/* Professional Summary Accordion */}
+                      {extractedData.professional_summary && (
+                        <Accordion defaultExpanded sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Box display="flex" alignItems="center" gap={1} width="100%">
+                              <Typography variant="subtitle2" fontWeight={700}>
+                                Professional Summary
+                              </Typography>
+                              {history.length > 0 && (
+                                <Chip
+                                  icon={<HistoryIcon />}
+                                  label={`${history.length} versions`}
+                                  size="small"
+                                  sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
+                                />
+                              )}
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            {/* Current Version */}
+                            <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                              <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                                <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px' }} />
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatTimestamp(project?.updated_at)}
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" sx={{ fontSize: '12px' }}>
+                                {extractedData.professional_summary}
+                              </Typography>
+                            </Paper>
+
+                            {/* Previous Versions */}
+                            {history.map((version, idx) => (
+                              <Accordion key={idx} sx={{ mb: 0.5, '&:before': { display: 'none' } }}>
+                                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: '36px', '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+                                  <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                                    <Typography variant="caption" fontWeight={600}>
+                                      Version {idx + 1}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                                      {formatTimestamp(version.timestamp)}
+                                    </Typography>
+                                  </Box>
+                                </AccordionSummary>
+                                <AccordionDetails sx={{ py: 1 }}>
+                                  <Typography variant="body2" sx={{ fontSize: '11px', color: '#666' }}>
+                                    {version.resume_json?.professional_summary || 'No summary available'}
+                                  </Typography>
+                                </AccordionDetails>
+                              </Accordion>
                             ))}
-                          </ul>
-                        )}
-                      </Box>
-                    ))}
-                  </Paper>
-                )}
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
 
-                {/* Education */}
-                {extractedData.education && extractedData.education.length > 0 && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Education ({extractedData.education.length})
-                    </Typography>
-                    {extractedData.education.map((edu, idx) => (
-                      <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {edu.degree}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {edu.institution}
-                          {edu.graduation_date && ` | ${edu.graduation_date}`}
-                          {edu.gpa && ` | GPA: ${edu.gpa}`}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Paper>
-                )}
+                      {/* Experience Accordion */}
+                      {extractedData.experience && extractedData.experience.length > 0 && (
+                        <Accordion defaultExpanded sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Box display="flex" alignItems="center" gap={1} width="100%">
+                              <Typography variant="subtitle2" fontWeight={700}>
+                                Experience ({extractedData.experience.length})
+                              </Typography>
+                              {history.length > 0 && (
+                                <Chip
+                                  icon={<HistoryIcon />}
+                                  label={`${history.length} versions`}
+                                  size="small"
+                                  sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
+                                />
+                              )}
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            {/* Current Version */}
+                            <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                              <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
+                              {extractedData.experience.map((exp, idx) => (
+                                <Box key={idx} sx={{ mb: 1.5, fontSize: '12px' }}>
+                                  <Typography variant="body2" fontWeight={600}>
+                                    {exp.title} at {exp.company}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {exp.start_date} - {exp.end_date}
+                                    {exp.location && ` | ${exp.location}`}
+                                  </Typography>
+                                  {exp.bullets && exp.bullets.length > 0 && (
+                                    <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                                      {exp.bullets.map((bullet, bidx) => (
+                                        <li key={bidx} style={{ fontSize: '11px' }}>{bullet}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </Box>
+                              ))}
+                            </Paper>
 
-                {/* Skills */}
-                {extractedData.skills && extractedData.skills.length > 0 && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Skills
-                    </Typography>
-                    {extractedData.skills.map((skillCat, idx) => (
-                      <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
-                        <Typography variant="caption" fontWeight={600}>
-                          {skillCat.category}:
-                        </Typography>
-                        <Typography variant="caption" sx={{ ml: 1 }}>
-                          {skillCat.skills.join(', ')}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Paper>
-                )}
+                            {/* Previous Versions */}
+                            {history.map((version, idx) => (
+                              <Accordion key={idx} sx={{ mb: 0.5, '&:before': { display: 'none' } }}>
+                                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: '36px', '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+                                  <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                                    <Typography variant="caption" fontWeight={600}>
+                                      Version {idx + 1}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                                      {formatTimestamp(version.timestamp)}
+                                    </Typography>
+                                  </Box>
+                                </AccordionSummary>
+                                <AccordionDetails sx={{ py: 1 }}>
+                                  {version.resume_json?.experience?.map((exp, eidx) => (
+                                    <Box key={eidx} sx={{ mb: 1, fontSize: '11px' }}>
+                                      <Typography variant="caption" fontWeight={600}>
+                                        {exp.title} at {exp.company}
+                                      </Typography>
+                                      {exp.bullets && exp.bullets.length > 0 && (
+                                        <ul style={{ margin: '2px 0', paddingLeft: '18px', fontSize: '10px' }}>
+                                          {exp.bullets.map((bullet, bidx) => (
+                                            <li key={bidx}>{bullet}</li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </Box>
+                                  ))}
+                                </AccordionDetails>
+                              </Accordion>
+                            ))}
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
 
-                {/* Projects */}
-                {extractedData.projects && extractedData.projects.length > 0 && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Projects ({extractedData.projects.length})
-                    </Typography>
-                    {extractedData.projects.map((proj, idx) => (
-                      <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {proj.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {proj.description}
-                        </Typography>
-                        {proj.technologies && proj.technologies.length > 0 && (
-                          <Typography variant="caption" display="block" sx={{ fontStyle: 'italic' }}>
-                            Tech: {proj.technologies.join(', ')}
-                          </Typography>
-                        )}
-                      </Box>
-                    ))}
-                  </Paper>
-                )}
+                      {/* Skills, Projects, Education (same pattern) - Collapsed for brevity */}
+                      {/* You can expand these similarly */}
 
-                {/* Certifications */}
-                {extractedData.certifications && extractedData.certifications.length > 0 && (
-                  <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: '#ffffff' }}>
-                    <Typography variant="subtitle2" fontWeight={700} color="#2c3e50" mb={1}>
-                      Certifications ({extractedData.certifications.length})
-                    </Typography>
-                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
-                      {extractedData.certifications.map((cert, idx) => (
-                        <li key={idx}>{cert}</li>
-                      ))}
-                    </ul>
-                  </Paper>
-                )}
+                      {/* Simple view for other sections without detailed history */}
+                      {extractedData.education && extractedData.education.length > 0 && (
+                        <Accordion sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              Education ({extractedData.education.length})
+                            </Typography>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            {extractedData.education.map((edu, idx) => (
+                              <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
+                                <Typography variant="body2" fontWeight={600}>{edu.degree}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {edu.institution}
+                                  {edu.graduation_date && ` | ${edu.graduation_date}`}
+                                  {edu.gpa && ` | GPA: ${edu.gpa}`}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
 
+                      {extractedData.skills && extractedData.skills.length > 0 && (
+                        <Accordion sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography variant="subtitle2" fontWeight={700}>Skills</Typography>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            {extractedData.skills.map((skillCat, idx) => (
+                              <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
+                                <Typography variant="caption" fontWeight={600}>{skillCat.category}:</Typography>
+                                <Typography variant="caption" sx={{ ml: 1 }}>{skillCat.skills.join(', ')}</Typography>
+                              </Box>
+                            ))}
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
+
+                      {extractedData.projects && extractedData.projects.length > 0 && (
+                        <Accordion sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Box display="flex" alignItems="center" gap={1} width="100%">
+                              <Typography variant="subtitle2" fontWeight={700}>
+                                Projects ({extractedData.projects.length})
+                              </Typography>
+                              {history.length > 0 && (
+                                <Chip
+                                  icon={<HistoryIcon />}
+                                  label={`${history.length} versions`}
+                                  size="small"
+                                  sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
+                                />
+                              )}
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                              <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
+                              {extractedData.projects.map((proj, idx) => (
+                                <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
+                                  <Typography variant="body2" fontWeight={600}>{proj.name}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{proj.description}</Typography>
+                                  {proj.technologies && proj.technologies.length > 0 && (
+                                    <Typography variant="caption" display="block" sx={{ fontStyle: 'italic' }}>
+                                      Tech: {proj.technologies.join(', ')}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ))}
+                            </Paper>
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
+
+                      {extractedData.certifications && extractedData.certifications.length > 0 && (
+                        <Accordion sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              Certifications ({extractedData.certifications.length})
+                            </Typography>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
+                              {extractedData.certifications.map((cert, idx) => (
+                                <li key={idx}>{cert}</li>
+                              ))}
+                            </ul>
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
+                    </>
+                  );
+                })()}
               </Box>
             ) : (
               /* Raw JSON View */
@@ -942,6 +1115,146 @@ const ProjectEditor = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Agent Tailoring Modal */}
+      <Dialog
+        open={tailoring}
+        maxWidth="sm"
+        fullWidth
+        disableEscapeKeyDown
+        sx={{
+          '& .MuiDialog-paper': {
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            bgcolor: colorPalette.primary.darkGreen,
+            color: 'white',
+            pb: 2,
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={1.5}>
+            <CircularProgress size={24} sx={{ color: 'white' }} />
+            <Typography variant="h6" fontWeight={600}>
+              Tailoring Resume
+            </Typography>
+          </Box>
+          <LinearProgress
+            sx={{
+              mt: 2,
+              bgcolor: 'rgba(255, 255, 255, 0.2)',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: '#ffffff',
+              },
+            }}
+          />
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, minHeight: '250px', maxHeight: '500px', overflow: 'auto' }}>
+          {agentMessages.length === 0 && (
+            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4}>
+              <CircularProgress size={40} sx={{ color: colorPalette.primary.darkGreen }} />
+              <Typography variant="body2" color="text.secondary" mt={2}>
+                Initializing agent...
+              </Typography>
+            </Box>
+          )}
+
+          {agentMessages.map((msg, idx) => (
+            <Box
+              key={idx}
+              sx={{
+                mb: 2,
+                p: 2,
+                bgcolor:
+                  msg.type === 'final' && msg.success
+                    ? 'rgba(76, 175, 80, 0.08)'
+                    : msg.type === 'final'
+                    ? 'rgba(244, 67, 54, 0.08)'
+                    : '#f5f5f5',
+                borderRadius: '8px',
+                borderLeft: '4px solid',
+                borderColor:
+                  msg.type === 'status'
+                    ? '#2196f3'
+                    : msg.type === 'tool_result'
+                    ? '#4caf50'
+                    : msg.type === 'final' && msg.success
+                    ? '#29B770'
+                    : msg.type === 'final'
+                    ? '#f44336'
+                    : '#ff9800',
+                animation: 'fadeIn 0.3s ease-in',
+                '@keyframes fadeIn': {
+                  from: { opacity: 0, transform: 'translateY(-10px)' },
+                  to: { opacity: 1, transform: 'translateY(0)' },
+                },
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                {msg.type === 'final' && msg.success && (
+                  <CheckCircleIcon sx={{ color: '#29B770', fontSize: 20 }} />
+                )}
+                <Typography variant="caption" fontWeight={700} color="#555" textTransform="uppercase">
+                  {msg.type === 'status' && `${msg.step}`}
+                  {msg.type === 'tool_result' && `${msg.tool}`}
+                  {msg.type === 'final' && 'Complete'}
+                  {msg.type === 'db_update' && 'Database Update'}
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ fontSize: '14px', color: '#333', fontWeight: 500 }}>
+                {msg.message}
+              </Typography>
+              {msg.data && msg.type === 'tool_result' && (
+                <Box sx={{ mt: 1, ml: 1 }}>
+                  {msg.data.role_focus && (
+                    <Typography variant="caption" display="block" sx={{ fontSize: '12px', color: '#666' }}>
+                      Role: <strong>{msg.data.role_focus}</strong>
+                    </Typography>
+                  )}
+                  {msg.data.required_skills_count !== undefined && (
+                    <Typography variant="caption" display="block" sx={{ fontSize: '12px', color: '#666' }}>
+                      Skills identified: <strong>{msg.data.required_skills_count}</strong>
+                    </Typography>
+                  )}
+                  {msg.data.changes_made && msg.data.changes_made.length > 0 && (
+                    <Box sx={{ mt: 0.5 }}>
+                      <Typography variant="caption" fontWeight={600} sx={{ fontSize: '12px', color: '#555' }}>
+                        Changes:
+                      </Typography>
+                      {msg.data.changes_made.map((change, cidx) => (
+                        <Typography
+                          key={cidx}
+                          variant="caption"
+                          display="block"
+                          sx={{ fontSize: '11px', color: '#666', ml: 1 }}
+                        >
+                          • {change}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Box>
+          ))}
+
+          {/* Show current step at the bottom if in progress */}
+          {agentMessages.length > 0 && !agentMessages.some((m) => m.type === 'final') && (
+            <Box display="flex" alignItems="center" gap={1} mt={2} p={2} bgcolor="#e3f2fd" borderRadius="8px">
+              <CircularProgress size={20} sx={{ color: '#2196f3' }} />
+              <Typography variant="body2" color="#1976d2" fontWeight={500}>
+                Processing...
+              </Typography>
+            </Box>
+          )}
+
+          {/* Auto-scroll anchor */}
+          <div ref={messagesEndRef} />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

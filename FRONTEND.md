@@ -36,7 +36,7 @@ frontend/
 │   │   ├── api.js
 │   │   ├── authService.js
 │   │   ├── projectService.js
-│   │   └── resumeService.js
+│   │   └── resumeService.js              # Includes agent streaming method
 │   ├── styles/
 │   │   ├── theme.js
 │   │   └── globalStyles.js
@@ -128,12 +128,107 @@ Enter project →
   Load project.resume_json →
   Show base resume JSON on right →
   Show base resume PDF in middle →
-User pastes JD + clicks "Tailor" →
-  Call /api/projects/{id}/tailor →
+User pastes JD + clicks "Tailor with Agent" →
+  Open streaming modal →
+  Call /api/projects/{id}/tailor-with-agent →
+  Stream progress messages in real-time →
   Update JSON on right →
+  Close modal, show success alert →
   Reload PDF with tailored content →
 User downloads DOCX/PDF
 ```
+
+**Agent Streaming Modal**:
+```javascript
+// State for streaming
+const [tailoring, setTailoring] = useState(false);
+const [agentMessages, setAgentMessages] = useState([]);
+
+// Handle tailor with agent
+const handleTailorResume = async () => {
+  setTailoring(true);
+  setAgentMessages([]);
+
+  const finalResult = await resumeService.tailorProjectResumeWithAgent(
+    projectId,
+    jobDescription,
+    (message) => {
+      // Force immediate render using flushSync
+      flushSync(() => {
+        setAgentMessages(prev => [...prev, message]);
+      });
+    }
+  );
+
+  if (finalResult?.success) {
+    setTailoring(false);
+    // Reload project data and PDF
+  }
+};
+
+// Modal UI
+<Dialog open={tailoring} maxWidth="sm" fullWidth disableEscapeKeyDown>
+  <DialogTitle>
+    <CircularProgress size={24} />
+    Tailoring Resume
+    <LinearProgress />
+  </DialogTitle>
+  <DialogContent>
+    {agentMessages.map((msg, idx) => (
+      <Box key={idx} sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5' }}>
+        <Typography>{msg.message}</Typography>
+      </Box>
+    ))}
+  </DialogContent>
+</Dialog>
+```
+
+**Message Types**:
+- `{type: "status", message: "...", step: "initialization"}` - Progress update
+- `{type: "tool_result", tool: "validate_intent", data: {...}}` - Tool completion
+- `{type: "final", success: true, tailored_json: {...}}` - Final result
+
+**History UI (Accordion Cards)**:
+```javascript
+// Formatted view with version history
+const history = project?.tailoring_history || [];
+
+<Accordion defaultExpanded>
+  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+    <Typography>Professional Summary</Typography>
+    {history.length > 0 && (
+      <Chip icon={<HistoryIcon />} label={`${history.length} versions`} />
+    )}
+  </AccordionSummary>
+  <AccordionDetails>
+    {/* Current Version */}
+    <Paper sx={{ bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+      <Chip label="CURRENT" color="success" />
+      <Typography>{extractedData.professional_summary}</Typography>
+    </Paper>
+
+    {/* Previous Versions */}
+    {history.map((version, idx) => (
+      <Accordion key={idx}>
+        <AccordionSummary>
+          <Typography>Version {idx + 1}</Typography>
+          <Typography>{formatTimestamp(version.timestamp)}</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Typography>{version.resume_json?.professional_summary}</Typography>
+        </AccordionDetails>
+      </Accordion>
+    ))}
+  </AccordionDetails>
+</Accordion>
+```
+
+**History Features**:
+- Collapsible sections for each resume part
+- Current version highlighted in green
+- Previous versions show timestamp
+- Easy comparison between versions
+- Version count badge (e.g., "2 versions")
 
 ## Services
 
@@ -190,9 +285,52 @@ const resumeService = {
   uploadResume: async (file) => {...},
   getBaseResume: async () => {...},
   downloadRecreatedDOCX: async () => {...},
-  tailorProjectResume: async (projectId, jobDescription) => {...}
+  tailorProjectResume: async (projectId, jobDescription) => {...},  // Legacy
+
+  // NEW: Agent-based streaming tailoring
+  tailorProjectResumeWithAgent: async (projectId, jobDescription, onMessage) => {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${baseURL}/api/projects/${projectId}/tailor-with-agent`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ job_description: jobDescription }),
+    });
+
+    // Stream SSE messages
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = JSON.parse(line.slice(6));
+          if (onMessage) onMessage(data);  // Call callback for each message
+          if (data.type === 'final') finalResult = data;
+        }
+      }
+    }
+
+    return finalResult;
+  }
 };
 ```
+
+**Key Features**:
+- Server-Sent Events (SSE) for real-time updates
+- Callback function for each message
+- Handles connection buffering and line parsing
+- Returns final result after stream completes
 
 ### projectService.js
 Project management API calls.
@@ -675,6 +813,29 @@ npm run preview
 ## Recent Updates
 
 ### Latest Changes (Current Version)
+
+**Agent Streaming Modal** (NEW):
+- Real-time progress updates during resume tailoring
+- Shows each tool execution: validate → summarize → tailor
+- Uses flushSync() for immediate rendering
+- Material-UI Dialog with LinearProgress
+- Auto-scrolls to show latest messages
+- Disables closing during processing
+
+**History UI with Accordions** (NEW):
+- Collapsible cards for each resume section
+- Current version highlighted in green with "CURRENT" badge
+- Previous versions shown as nested accordions
+- Timestamps in readable format (e.g., "Nov 14, 08:30 PM")
+- Version count badges (e.g., "2 versions")
+- Easy comparison between versions
+
+**Agent Integration**:
+- New `tailorProjectResumeWithAgent()` method in resumeService
+- Server-Sent Events (SSE) streaming
+- Callback-based message handling
+- Automatic token authentication
+- Error handling and recovery
 
 **PDF Preview Enhancements**:
 - Fixed auto-download issue by installing LibreOffice

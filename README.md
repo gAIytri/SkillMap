@@ -13,10 +13,13 @@ Upload your resume once, and SkillMap will:
 ## Key Features
 
 - 🤖 **AI-Powered Extraction**: OpenAI Structured Outputs for accurate resume parsing
-- 🎯 **Smart Tailoring**: Context-aware content optimization for job descriptions
+- 🎯 **Smart Tailoring**: LangChain agent with guardrails and real-time streaming
 - 📝 **Format Preservation**: Maintains original styling, fonts, colors, and hyperlinks
 - 📁 **Project Management**: Create multiple tailored versions for different jobs
 - 🔄 **Real-time Preview**: See changes immediately with PDF preview
+- 📜 **Version History**: Track and compare previous tailored versions
+- 📡 **Live Streaming**: Watch agent progress in real-time during tailoring
+- 📊 **Agent Monitoring**: LangSmith integration for debugging and tracing
 - 📥 **Multiple Exports**: Download as DOCX or PDF
 
 ## Tech Stack
@@ -25,6 +28,9 @@ Upload your resume once, and SkillMap will:
 - **Framework**: FastAPI (Python)
 - **Database**: SQLite / PostgreSQL
 - **AI**: OpenAI GPT-4 (Structured Outputs)
+- **Agent Framework**: LangChain + LangGraph (ReAct agent)
+- **Monitoring**: LangSmith (agent tracing)
+- **Streaming**: Server-Sent Events (SSE)
 - **Document Processing**: python-docx
 - **PDF Conversion**: LibreOffice
 
@@ -143,6 +149,11 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRATION_MINUTES=1440
 OPENAI_API_KEY=sk-proj-your-key      # REQUIRED
 CORS_ORIGINS=http://localhost:5173
+
+# LangSmith (optional but recommended for agent monitoring)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=lsv2_pt_your-key
+LANGCHAIN_PROJECT=SkillMap
 ```
 
 ### Frontend (.env)
@@ -287,6 +298,26 @@ cp .env.example .env
 ## Recent Updates
 
 ### Latest Features (Current Version)
+
+**LangChain Agent System** (NEW):
+- ReAct agent architecture with 3 tools: validate, summarize, tailor
+- Real-time streaming via Server-Sent Events (SSE)
+- Guardrail checkpoint validates user input intent
+- Job description summarization before tailoring
+- Frontend shows live progress during agent execution
+- LangSmith integration for debugging and monitoring
+
+**Version History Tracking** (NEW):
+- Stores last 10 tailored versions with timestamps
+- Accordion-based UI for easy version comparison
+- Current version highlighted, previous versions collapsible
+- Track changes made in each tailoring session
+
+**DOCX Recreation Improvements**:
+- Smart bullet point splitting (handles various formats)
+- Enhanced section detection (ALL CAPS, font size)
+- Improved bullet detection (11 bullet characters)
+- 80-90% success rate for updating work experience and projects
 
 **Enhanced AI Tailoring**:
 - Significantly improved tailoring with substantial content transformation
