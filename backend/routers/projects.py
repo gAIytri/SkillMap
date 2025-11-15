@@ -1,7 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
+import asyncio
+import json
 
 from config.database import get_db
 from schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectList
@@ -11,6 +13,7 @@ from models.project import Project
 from models.base_resume import BaseResume
 from services.docx_recreation_service import recreate_docx_from_json
 from services.resume_tailoring_service import tailor_resume
+from services.resume_agent_service import tailor_resume_with_agent
 from services.docx_to_pdf_service import convert_docx_to_pdf
 from schemas.resume import ResumeTailorRequest
 from fastapi.responses import Response
@@ -280,7 +283,7 @@ async def tailor_project_resume(
     db: Session = Depends(get_db)
 ):
     """
-    Tailor project resume for a specific job description
+    Tailor project resume for a specific job description (Legacy - non-streaming)
 
     Process:
     1. Fetch project resume JSON
@@ -330,3 +333,132 @@ async def tailor_project_resume(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to tailor resume: {str(e)}"
         )
+
+
+@router.post("/{project_id}/tailor-with-agent")
+async def tailor_project_resume_with_agent(
+    project_id: int,
+    request: ResumeTailorRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Tailor project resume using LangChain Agent with streaming updates
+
+    This endpoint uses a ReAct agent with:
+    1. Guardrail to validate intent (job description or resume modification)
+    2. Job summarization tool to extract requirements
+    3. Resume tailoring tool to apply changes
+    4. Streaming responses after each tool execution
+
+    Process Flow:
+    - User clicks "Tailor Resume" with job description
+    - Agent validates intent (guardrail)
+    - If valid: Agent summarizes job → tailors resume
+    - Updates sent after each step
+    - Final tailored JSON returned and saved to database
+
+    Returns:
+        StreamingResponse with Server-Sent Events (SSE) format
+        Each event contains JSON with status updates
+    """
+    # Validate project exists
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.resume_json:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume JSON not found for this project"
+        )
+
+    async def event_generator():
+        """Generate Server-Sent Events for streaming"""
+        try:
+            # Stream from the agent
+            final_result = None
+            async for update in tailor_resume_with_agent(
+                resume_json=project.resume_json,
+                job_description=request.job_description,
+                project_id=project_id
+            ):
+                # Send update as SSE
+                event_data = json.dumps(update)
+                yield f"data: {event_data}\n\n"
+
+                # Store final result
+                if update.get("type") == "final":
+                    final_result = update
+
+            # Update database if tailoring succeeded
+            if final_result and final_result.get("success") and final_result.get("tailored_json"):
+                logger.info(f"Saving tailored resume to database for project {project_id}")
+
+                # Create a new database session for saving
+                # (The original session might be detached after streaming)
+                from config.database import SessionLocal
+                db_new = SessionLocal()
+                try:
+                    # Fetch the project fresh from the database
+                    project_to_update = db_new.query(Project).filter(
+                        Project.id == project_id,
+                        Project.user_id == current_user.id
+                    ).first()
+
+                    if project_to_update:
+                        # Save current version to history before updating
+                        from datetime import datetime
+
+                        history_entry = {
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "resume_json": project_to_update.resume_json,
+                            "job_description": request.job_description,
+                            "changes_made": final_result.get("changes_made", [])
+                        }
+
+                        # Initialize history if it doesn't exist
+                        if project_to_update.tailoring_history is None:
+                            project_to_update.tailoring_history = []
+
+                        # Add to history (keep last 10 versions)
+                        project_to_update.tailoring_history.insert(0, history_entry)
+                        if len(project_to_update.tailoring_history) > 10:
+                            project_to_update.tailoring_history = project_to_update.tailoring_history[:10]
+
+                        # Update with new tailored resume
+                        project_to_update.resume_json = final_result["tailored_json"]
+                        db_new.commit()
+                        logger.info(f"Successfully saved tailored resume and history for project {project_id}")
+
+                        # Send database update confirmation
+                        yield f"data: {json.dumps({'type': 'db_update', 'message': 'Resume saved to database with version history'})}\n\n"
+                except Exception as db_error:
+                    logger.error(f"Database save failed: {db_error}")
+                    db_new.rollback()
+                finally:
+                    db_new.close()
+
+        except Exception as e:
+            logger.error(f"Agent streaming failed for project {project_id}: {e}")
+            error_event = json.dumps({
+                "type": "error",
+                "message": f"Streaming failed: {str(e)}"
+            })
+            yield f"data: {error_event}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )

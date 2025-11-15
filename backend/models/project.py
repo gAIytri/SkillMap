@@ -19,6 +19,9 @@ class Project(Base):
     doc_metadata = Column(JSON, nullable=True)  # Metadata
     original_filename = Column(String(255), nullable=False)  # Filename
 
+    # History tracking for resume tailoring
+    tailoring_history = Column(JSON, nullable=True)  # Array of previous versions with timestamps
+
     # Legacy fields (keep for backward compatibility, but make nullable)
     tailored_latex_content = Column(Text, nullable=True)  # Deprecated
     pdf_url = Column(Text, nullable=True)  # Deprecated

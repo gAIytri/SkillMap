@@ -11,6 +11,7 @@ from io import BytesIO
 from typing import Dict, Any, List, Optional
 import logging
 import re
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -119,18 +120,27 @@ def update_professional_summary(doc: Document, summary: Optional[str]):
 def update_experience(doc: Document, experience_list: List[Dict[str, Any]]):
     """Update experience section with bullet points"""
     if not experience_list:
+        logger.warning("No experience data to update")
         return
+
+    # Debug: Log the structure of experience data
+    logger.info(f"Experience list structure: {json.dumps(experience_list[:1], indent=2)[:500]}...")
 
     # Find experience section
     exp_start_idx = find_section_start(doc, ['experience', 'work history', 'employment', 'professional experience'])
     if exp_start_idx == -1:
+        logger.warning("Could not find experience section in document")
         return
+
+    logger.info(f"Found experience section at index {exp_start_idx}")
 
     # Find where experience section ends
     exp_end_idx = find_next_section(doc, exp_start_idx)
+    logger.info(f"Experience section ends at index {exp_end_idx}")
 
     # Get the experience paragraphs
     exp_paragraphs = doc.paragraphs[exp_start_idx + 1:exp_end_idx]
+    logger.info(f"Processing {len(exp_paragraphs)} paragraphs in experience section")
 
     # Group paragraphs by job (company/title lines followed by bullets)
     current_exp_idx = 0
@@ -146,6 +156,7 @@ def update_experience(doc: Document, experience_list: List[Dict[str, Any]]):
             new_text = f"{exp_data['title']} at {exp_data['company']}"
             if exp_data.get('location'):
                 new_text += f" | {exp_data['location']}"
+            logger.info(f"Updating job title: {new_text}")
             update_paragraph_text(para, new_text)
 
             # Next line might be dates
@@ -160,14 +171,53 @@ def update_experience(doc: Document, experience_list: List[Dict[str, Any]]):
 
             # Update bullets
             bullet_idx = 0
-            while i < len(exp_paragraphs) and is_bullet_point(exp_paragraphs[i]) and bullet_idx < len(exp_data.get('bullets', [])):
-                update_paragraph_text(exp_paragraphs[i], exp_data['bullets'][bullet_idx])
+            bullets_raw = exp_data.get('bullets', [])
+
+            # Handle different bullet formats
+            bullets_to_update = []
+
+            if isinstance(bullets_raw, str):
+                # String format - split by sentence delimiters
+                logger.info(f"Bullets is string format, splitting...")
+                # Try newlines first
+                if '\n' in bullets_raw:
+                    bullets_to_update = [b.strip() for b in bullets_raw.split('\n') if b.strip()]
+                # Otherwise split by periods
+                elif '. ' in bullets_raw:
+                    bullets_to_update = [b.strip() for b in bullets_raw.split('. ') if b.strip()]
+                else:
+                    bullets_to_update = [bullets_raw.strip()]
+
+            elif isinstance(bullets_raw, list):
+                if len(bullets_raw) == 1 and isinstance(bullets_raw[0], str) and '. ' in bullets_raw[0]:
+                    # Single element array containing paragraph - split it
+                    logger.info(f"Bullets is single-element array with paragraph, splitting...")
+                    single_text = bullets_raw[0]
+                    bullets_to_update = [b.strip() for b in single_text.split('. ') if b.strip()]
+                else:
+                    # Normal array of bullets
+                    bullets_to_update = [b.strip() if isinstance(b, str) else str(b) for b in bullets_raw]
+
+            logger.info(f"Processing {len(bullets_to_update)} bullets for {exp_data['company']}")
+            logger.info(f"First bullet preview: {bullets_to_update[0][:80] if bullets_to_update else 'N/A'}...")
+
+            while i < len(exp_paragraphs) and is_bullet_point(exp_paragraphs[i]) and bullet_idx < len(bullets_to_update):
+                bullet_text = bullets_to_update[bullet_idx].strip()
+                # Remove trailing period if exists (will be added back by formatting)
+                if bullet_text.endswith('.'):
+                    bullet_text = bullet_text[:-1]
+
+                logger.info(f"Updating bullet {bullet_idx + 1}: {bullet_text[:50]}...")
+                update_paragraph_text(exp_paragraphs[i], bullet_text)
                 bullet_idx += 1
                 i += 1
 
+            logger.info(f"Updated {bullet_idx} bullets for {exp_data['company']}")
             current_exp_idx += 1
         else:
             i += 1
+
+    logger.info(f"Completed updating {current_exp_idx} experience entries")
 
 
 def update_education(doc: Document, education_list: List[Dict[str, Any]]):
@@ -234,14 +284,19 @@ def update_skills(doc: Document, skills_list: List[Dict[str, Any]]):
 def update_projects(doc: Document, projects_list: List[Dict[str, Any]]):
     """Update projects section"""
     if not projects_list:
+        logger.warning("No projects data to update")
         return
 
     proj_start_idx = find_section_start(doc, ['projects', 'personal projects', 'portfolio'])
     if proj_start_idx == -1:
+        logger.warning("Could not find projects section in document")
         return
+
+    logger.info(f"Found projects section at index {proj_start_idx}")
 
     proj_end_idx = find_next_section(doc, proj_start_idx)
     proj_paragraphs = doc.paragraphs[proj_start_idx + 1:proj_end_idx]
+    logger.info(f"Processing {len(proj_paragraphs)} paragraphs in projects section")
 
     current_proj_idx = 0
     i = 0
@@ -252,13 +307,46 @@ def update_projects(doc: Document, projects_list: List[Dict[str, Any]]):
 
         if not is_bullet_point(para):
             # Update project name
+            logger.info(f"Updating project name: {proj_data['name']}")
             update_paragraph_text(para, proj_data['name'])
             i += 1
 
-            # Update description
+            # Update description (or bullets)
             if i < len(proj_paragraphs):
-                update_paragraph_text(proj_paragraphs[i], proj_data['description'])
-                i += 1
+                # Check if next paragraphs are bullets (some resumes have bullet points for projects)
+                if is_bullet_point(proj_paragraphs[i]):
+                    # Project has bullet points - split description appropriately
+                    description = proj_data['description']
+                    project_bullets = []
+
+                    # Handle different description formats
+                    if '\n' in description:
+                        # Split by newlines
+                        project_bullets = [b.strip() for b in description.split('\n') if b.strip()]
+                    elif '. ' in description and len(description) > 100:
+                        # Long paragraph - split by periods
+                        project_bullets = [b.strip() for b in description.split('. ') if b.strip()]
+                    else:
+                        # Single description
+                        project_bullets = [description]
+
+                    logger.info(f"Updating {len(project_bullets)} bullets for project {proj_data['name']}")
+                    logger.info(f"First project bullet: {project_bullets[0][:80] if project_bullets else 'N/A'}...")
+
+                    bullet_idx = 0
+                    while i < len(proj_paragraphs) and is_bullet_point(proj_paragraphs[i]) and bullet_idx < len(project_bullets):
+                        bullet_text = project_bullets[bullet_idx].strip()
+                        # Remove trailing period if exists
+                        if bullet_text.endswith('.'):
+                            bullet_text = bullet_text[:-1]
+                        update_paragraph_text(proj_paragraphs[i], bullet_text)
+                        bullet_idx += 1
+                        i += 1
+                else:
+                    # Single description paragraph
+                    logger.info(f"Updating project description: {proj_data['description'][:50]}...")
+                    update_paragraph_text(proj_paragraphs[i], proj_data['description'])
+                    i += 1
 
             # Update technologies
             if proj_data.get('technologies') and i < len(proj_paragraphs):
@@ -269,6 +357,8 @@ def update_projects(doc: Document, projects_list: List[Dict[str, Any]]):
             current_proj_idx += 1
         else:
             i += 1
+
+    logger.info(f"Completed updating {current_proj_idx} project entries")
 
 
 def update_certifications(doc: Document, certifications_list: List[str]):
@@ -331,12 +421,23 @@ def update_paragraph_simple(para, new_text: str):
     underline = first_run.underline
     color = first_run.font.color.rgb if first_run.font.color.rgb else None
 
+    # Check if this is a bullet point - preserve bullet character
+    is_bullet = is_bullet_point(para)
+    bullet_char = ''
+    if is_bullet:
+        # Extract bullet character (•, -, *, etc.)
+        text = para.text.strip()
+        if text and text[0] in ['•', '-', '*', '○', '▪']:
+            bullet_char = text[0] + ' '
+
     # Remove all runs
     for run in list(para.runs):
         run._element.getparent().remove(run._element)
 
     # Add new run with preserved formatting
-    new_run = para.add_run(new_text)
+    # Add bullet character back if it was a bullet point
+    final_text = bullet_char + new_text if is_bullet and bullet_char else new_text
+    new_run = para.add_run(final_text)
     new_run.font.name = font_name
     if font_size:
         new_run.font.size = font_size
@@ -348,15 +449,28 @@ def update_paragraph_simple(para, new_text: str):
 
 
 def find_section_start(doc: Document, keywords: List[str]) -> int:
-    """Find the index of paragraph that starts a section"""
+    """Find the index of paragraph that starts a section - improved matching"""
     for i, para in enumerate(doc.paragraphs):
         text = para.text.lower().strip()
-        if any(keyword in text for keyword in keywords) and len(text) < 50:
-            # Check if it's a heading (bold, larger font, or heading style)
-            if (para.style.name.startswith('Heading') or
-                (para.runs and para.runs[0].bold) or
-                para.style.name == 'Title'):
+
+        # More flexible matching - check if ANY keyword appears in text
+        has_keyword = any(keyword.lower() in text for keyword in keywords)
+
+        if has_keyword and len(text) < 100:  # Increased from 50 to handle longer headings
+            # Multiple ways a heading can be identified
+            is_heading = (
+                para.style.name.startswith('Heading') or
+                para.style.name == 'Title' or
+                (para.runs and len(para.runs) > 0 and para.runs[0].bold) or
+                (para.runs and len(para.runs) > 0 and para.runs[0].font.size and para.runs[0].font.size.pt > 12) or
+                text.isupper()  # All caps headings
+            )
+
+            if is_heading:
+                logger.info(f"Found section '{text}' at index {i} (style: {para.style.name})")
                 return i
+
+    logger.warning(f"Could not find section with keywords: {keywords}")
     return -1
 
 
@@ -373,10 +487,23 @@ def find_next_section(doc: Document, start_idx: int) -> int:
 
 
 def is_bullet_point(para) -> bool:
-    """Check if paragraph is a bullet point"""
-    # Check for list style or bullet character
-    return (para.style.name.startswith('List') or
-            para.text.strip().startswith('•') or
-            para.text.strip().startswith('-') or
-            para.text.strip().startswith('*') or
-            para.text.strip().startswith('○'))
+    """Check if paragraph is a bullet point - improved detection"""
+    if not para.text or not para.text.strip():
+        return False
+
+    text_start = para.text.strip()[:3]
+
+    # Check for list style
+    if para.style.name.startswith('List'):
+        return True
+
+    # Check for bullet characters at start
+    bullet_chars = ['•', '-', '*', '○', '▪', '·', '◦', '▫', '►', '➢', '⬩']
+    if any(text_start.startswith(char) for char in bullet_chars):
+        return True
+
+    # Check for numbered bullets (1. 2. etc.)
+    if len(text_start) >= 2 and text_start[0].isdigit() and text_start[1] in ['.', ')', ':']:
+        return True
+
+    return False

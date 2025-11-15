@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 
@@ -21,6 +21,9 @@ class ProjectResponse(BaseModel):
     resume_json: Optional[Dict[str, Any]] = None
     doc_metadata: Optional[Dict[str, Any]] = None
     original_filename: Optional[str] = None
+
+    # History tracking
+    tailoring_history: Optional[List[Dict[str, Any]]] = None
 
     created_at: datetime
     updated_at: datetime

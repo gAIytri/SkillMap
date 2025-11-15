@@ -1,7 +1,7 @@
 # FastAPI and server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-pydantic==2.5.3
+pydantic==2.12.4
 pydantic-settings==2.1.0
 
 # Database
@@ -24,7 +24,15 @@ PyLaTeX==1.4.2
 pypandoc==1.12
 
 # AI/LLM Integration
-openai==2.7.2
+openai==1.109.1
+
+# LangChain and LangGraph for Agents
+langchain==0.3.13
+langchain-openai==0.2.14
+langchain-core==0.3.28
+langgraph==0.2.62
+langgraph-checkpoint==2.0.12
+langsmith==0.1.147
 
 # PDF generation
 reportlab==4.0.9

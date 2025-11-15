@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -37,9 +38,26 @@ class Settings(BaseSettings):
     # OpenAI (for LLM extraction and tailoring)
     OPENAI_API_KEY: Optional[str] = None
 
+    # LangSmith (for agent tracing and monitoring)
+    LANGCHAIN_TRACING_V2: Optional[str] = None
+    LANGCHAIN_ENDPOINT: Optional[str] = None
+    LANGCHAIN_API_KEY: Optional[str] = None
+    LANGCHAIN_PROJECT: Optional[str] = None
+
     class Config:
         env_file = ".env"
         case_sensitive = True
 
 
 settings = Settings()
+
+# Set LangSmith environment variables for LangChain tracing
+# LangChain reads these directly from os.environ, not from settings object
+if settings.LANGCHAIN_TRACING_V2:
+    os.environ["LANGCHAIN_TRACING_V2"] = settings.LANGCHAIN_TRACING_V2
+if settings.LANGCHAIN_ENDPOINT:
+    os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGCHAIN_ENDPOINT
+if settings.LANGCHAIN_API_KEY:
+    os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
+if settings.LANGCHAIN_PROJECT:
+    os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
