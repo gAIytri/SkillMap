@@ -813,11 +813,408 @@ Generate DOCX from template + JSON →
 - Proper .gitignore configuration
 - Sensitive data excluded from repository
 
+## Credit System (NEW - Latest)
+
+### Overview
+Token-based credit system where users consume credits based on actual LLM token usage during resume tailoring.
+
+### Pricing Model
+- **2000 tokens = 1 credit**
+- **Rounding**: To nearest 0.5 (e.g., 7150 tokens → 3.5 credits, 7550 tokens → 4.0 credits)
+- **Default**: 100 free credits for new users (testing phase)
+- **Minimum**: 5 credits required to start tailoring
+
+### Database Schema
+
+**Users Table** (updated):
+```python
+credits: Float (default=100.0)  # User's credit balance
+```
+
+**Credit Transactions Table** (new):
+```python
+id: Integer (PK)
+user_id: Integer (FK -> users.id)
+project_id: Integer (FK -> projects.id, nullable)
+amount: Float  # Negative for deduction, positive for grant
+balance_after: Float  # User's balance after transaction
+transaction_type: Enum (TAILOR, GRANT, PURCHASE, REFUND, BONUS)
+tokens_used: Integer (nullable)  # Total tokens consumed
+prompt_tokens: Integer (nullable)
+completion_tokens: Integer (nullable)
+description: String (nullable)
+created_at: DateTime
+```
+
+### Implementation
+
+**Credit Check** (routers/projects.py:397-407):
+```python
+# Before tailoring starts
+if current_user.credits < 5.0:
+    raise HTTPException(
+        status_code=HTTP_402_PAYMENT_REQUIRED,
+        detail=f"Insufficient credits. You have {current_user.credits} credits."
+    )
+```
+
+**Token Tracking** (services/agent_tools.py):
+- All tools now use LangChain's `ChatOpenAI` instead of raw OpenAI client
+- Token usage extracted from `response.response_metadata['token_usage']`
+- Each tool returns `token_usage` in response dict
+- Agent aggregates tokens from all tool calls
+
+**Credit Deduction** (routers/projects.py:480-527):
+```python
+# After successful tailoring
+token_usage = final_result.get("token_usage", {})
+total_tokens = token_usage.get("total_tokens", 0)
+
+# Calculate credits: 2000 tokens = 1 credit, round to nearest 0.5
+raw_credits = total_tokens / 2000.0
+credits_to_deduct = round(raw_credits * 2) / 2
+
+# Deduct from user balance
+user_to_update.credits -= credits_to_deduct
+
+# Create transaction record
+transaction = CreditTransaction(
+    user_id=current_user.id,
+    project_id=project_id,
+    amount=-credits_to_deduct,
+    balance_after=user_to_update.credits,
+    transaction_type=TransactionType.TAILOR,
+    tokens_used=total_tokens,
+    prompt_tokens=prompt_tokens,
+    completion_tokens=completion_tokens
+)
+db.add(transaction)
+```
+
+**UserResponse Schema** (schemas/user.py):
+```python
+credits: float = 100.0  # Included in /api/users/me response
+```
+
+### LangSmith Integration (Fixed)
+
+**Problem**: LangSmith showed "0 tokens" even with large inputs/outputs.
+
+**Root Cause**: Tools used raw `OpenAI()` client which bypasses LangChain tracing.
+
+**Solution**:
+1. Converted all tools to use `ChatOpenAI` from `langchain_openai`
+2. Added `@traceable` decorators to each tool function
+3. Created shared LLM instances that LangSmith automatically traces
+4. Token usage now visible in LangSmith dashboard with full trace details
+
+**Code** (services/agent_tools.py:1-25):
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langsmith import traceable
+
+# Shared LLM instances (traced by LangSmith)
+_llm_mini = ChatOpenAI(
+    model="gpt-4o-mini",
+    api_key=settings.OPENAI_API_KEY,
+    temperature=0.0
+)
+
+_llm_gpt4o = ChatOpenAI(
+    model="gpt-4o",
+    api_key=settings.OPENAI_API_KEY,
+    temperature=0.2
+)
+
+@tool
+@traceable(name="validate_intent")
+def validate_intent(user_message: str) -> dict:
+    # Uses _llm_mini, automatically traced
+    messages = [SystemMessage(...), HumanMessage(...)]
+    response = _llm_mini.bind(response_format={"type": "json_object"}).invoke(messages)
+
+    # Extract token usage
+    token_usage = response.response_metadata.get("token_usage", {})
+    return {..., "token_usage": token_usage}
+```
+
+### Token Usage Averages
+Based on real testing:
+- **validate_intent**: 500-1200 tokens (gpt-4o-mini)
+- **summarize_job_description**: 1000-2000 tokens (gpt-4o)
+- **tailor_resume_content**: 4000-6000 tokens (gpt-4o)
+- **Total per tailor**: 5500-9000 tokens (~3.5-4.5 credits)
+
+### Migration Script
+
+**File**: `migrations/add_credits_system.py`
+
+**Features**:
+- Adds `credits` column to users table (default 100.0)
+- Updates existing users with 100 credits
+- Creates `credit_transactions` table
+- Uses SQLAlchemy + raw SQL for compatibility
+- Transaction-safe with rollback on error
+
+**Usage**:
+```bash
+cd backend
+source venv/bin/activate
+python migrations/add_credits_system.py
+```
+
+## DOCX Generation Service (NEW - Latest)
+
+### Overview
+Programmatic DOCX generation from JSON without templates, preserving exact formatting from base resume.
+
+### Why Not Templates?
+- **User's Personal Style**: Preserves their original formatting, fonts, colors, spacing
+- **No Template Selection**: Users don't have to choose/learn templates
+- **Exact Replication**: Maintains document margins, styles, and structure from base resume
+
+### Architecture
+
+**File**: `services/docx_generation_service.py`
+
+**Main Function**:
+```python
+def generate_resume_from_json(
+    resume_json: Dict[str, Any],
+    base_resume_docx: bytes = None,
+    section_order: List[str] = None
+) -> bytes:
+    """
+    Generate DOCX from JSON, preserving base resume's styles
+
+    Args:
+        resume_json: Extracted resume data
+        base_resume_docx: Original DOCX bytes (for style reference)
+        section_order: Custom section order (optional)
+
+    Returns:
+        bytes: Generated DOCX file
+    """
+```
+
+**Process**:
+1. Load base resume DOCX (to preserve styles)
+2. Clear all existing content
+3. Save and reload to refresh document structure
+4. Add header (name, email, phone, location, links)
+5. Add sections in custom order (or default order)
+6. Return as bytes
+
+### Key Features
+
+**Style Preservation**:
+- Loads original DOCX to inherit all styles
+- Preserves margins, fonts, and page setup
+- Clears content but keeps style definitions
+
+**Section Rendering**:
+```python
+section_builders = {
+    'professional_summary': lambda: add_professional_summary(doc, ...),
+    'education': lambda: add_education_section(doc, ...),
+    'experience': lambda: add_experience_section(doc, ...),
+    'projects': lambda: add_projects_section(doc, ...),
+    'skills': lambda: add_skills_section(doc, ...),
+    'certifications': lambda: add_certifications_section(doc, ...),
+}
+
+for section_name in section_order:
+    if section_name in section_builders:
+        section_builders[section_name]()
+```
+
+**Header Formatting**:
+```python
+def add_header_section(doc: Document, personal_info: dict):
+    """Add resume header with name, contact, links"""
+    # Name: 18pt, bold, centered
+    name_para = doc.add_paragraph()
+    name_run = name_para.add_run(personal_info.get('name', ''))
+    name_run.font.size = Pt(18)
+    name_run.font.bold = True
+    name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Contact line: email | phone | location
+    contact_para = doc.add_paragraph()
+    contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Add contact items with pipes
+
+    # Links: LinkedIn, GitHub, etc. (blue, underlined)
+    if personal_info.get('header_links'):
+        links_para = doc.add_paragraph()
+        for link in personal_info['header_links']:
+            add_hyperlink(links_para, link['text'], link['url'])
+```
+
+**Section Headers**:
+```python
+def add_section_header(doc: Document, title: str):
+    """Add section header with underline"""
+    para = doc.add_paragraph(title, style='Heading1')
+    para.paragraph_format.left_indent = Inches(0)
+    para.paragraph_format.space_before = Pt(6)
+    para.paragraph_format.space_after = Pt(3)
+```
+
+**Experience Formatting**:
+- Company name + location (bold, 10pt)
+- Job title (bold, 10pt)
+- Dates on right with tab stop at 7.2"
+- Bullets with proper indentation
+
+**Education Formatting**:
+- School name + location (bold, 10pt)
+- Graduation date on right (same line as school)
+- Degree + GPA (italic, 10pt)
+
+### Text Box Extraction (Fixed)
+
+**Problem**: Headers in text boxes weren't being extracted (common in resumes).
+
+**Solution** (services/resume_extractor.py:146-191):
+```python
+def extract_text_from_docx(self, docx_bytes: bytes) -> str:
+    """Extract text including text boxes and tables"""
+    doc = Document(BytesIO(docx_bytes))
+    text_parts = []
+
+    # 1. Extract from text boxes (often contains headers)
+    for element in doc.element.body:
+        for shape in element.findall('.//{...}txbxContent'):
+            for p_elem in shape.findall('.//{...}p'):
+                para = Paragraph(p_elem, doc)
+                text_parts.append(para.text.strip())
+
+    # 2. Extract from paragraphs
+    for para in doc.paragraphs:
+        text_parts.append(para.text.strip())
+
+    # 3. Extract from tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text_parts.append(cell.text.strip())
+
+    return '\n'.join(text_parts)
+```
+
+**Benefits**:
+- Now extracts headers from text boxes (name, email, phone, LinkedIn)
+- Handles resumes with complex layouts (tables, text boxes, shapes)
+- More robust extraction for various resume formats
+
+### Fixes Applied
+
+**Title Style Error**:
+- **Problem**: `"no style with name 'Title'"` - style doesn't exist in fresh documents
+- **Solution**: Manually format name (18pt, bold, centered) instead of using style
+
+**RGBColor Tuple Access**:
+- **Problem**: `'RGBColor' object has no attribute 'r'` in hyperlink function
+- **Solution**: RGBColor is a tuple, use `color[0], color[1], color[2]` instead of `color.r, color.g, color.b`
+
+**Section Reordering Validation**:
+- **Problem**: Backend rejected `'personal_info'` in section order
+- **Solution**: Added to `valid_sections` set in section-order endpoint
+
+### Default Section Order
+```python
+def get_default_section_order() -> List[str]:
+    return [
+        'professional_summary',
+        'experience',
+        'projects',
+        'education',
+        'skills',
+        'certifications'
+    ]
+```
+
+**Note**: `personal_info` is ALWAYS rendered first (header), not part of section loop.
+
+### Section Ordering Endpoint
+
+**Endpoint**: `PUT /api/projects/{project_id}/section-order`
+
+**Schema**:
+```python
+class SectionOrderUpdate(BaseModel):
+    section_order: List[str]  # Valid sections including 'personal_info'
+```
+
+**Validation**:
+```python
+valid_sections = {
+    'personal_info',  # Added for frontend compatibility
+    'professional_summary',
+    'experience',
+    'projects',
+    'education',
+    'skills',
+    'certifications'
+}
+```
+
+**Storage**: Saved in `project.resume_json['section_order']`
+
+### Replace Resume Functionality (Fixed)
+
+**Problem**: Replacing resume in project didn't update project's resume_json.
+
+**Solution**:
+1. Added `resume_json` to `ProjectUpdate` schema
+2. Updated `PUT /api/projects/{id}` endpoint to handle resume_json updates
+3. Frontend now sends `resume_json` when replacing resume
+4. Uses `flag_modified()` to ensure SQLAlchemy detects JSON changes
+
+**Code** (routers/projects.py:128-132):
+```python
+if project_update.resume_json is not None:
+    project.resume_json = project_update.resume_json
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(project, 'resume_json')
+```
+
+## Monitoring & Debugging
+
+### LangSmith Dashboard
+After fixes, LangSmith now shows:
+- ✅ Real token counts (not 0!)
+- ✅ Individual tool traces: validate_intent → summarize_job_description → tailor_resume_content
+- ✅ Input/output for each step
+- ✅ Latency and performance metrics
+- ✅ Error traces with full context
+
+### Credit Transaction History
+Query credit usage:
+```python
+# Get all transactions for a user
+transactions = db.query(CreditTransaction).filter(
+    CreditTransaction.user_id == user_id
+).order_by(CreditTransaction.created_at.desc()).all()
+
+# Get tailoring transactions only
+tailor_transactions = db.query(CreditTransaction).filter(
+    CreditTransaction.user_id == user_id,
+    CreditTransaction.transaction_type == TransactionType.TAILOR
+).all()
+```
+
 ### Future Improvements
 
+- [ ] Credit purchase flow (Stripe integration)
+- [ ] Admin panel for granting credits
+- [ ] Credit usage analytics dashboard
+- [ ] Email notifications for low credits
 - [ ] Multiple file format support (PDF upload)
 - [ ] Collaborative editing
-- [ ] Template library
+- [ ] Template library (alternative to programmatic generation)
 - [ ] Analytics dashboard
 - [ ] Mobile app
 - [ ] Browser extension

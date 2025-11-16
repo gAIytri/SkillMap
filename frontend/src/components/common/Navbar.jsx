@@ -1,8 +1,10 @@
-import { AppBar, Toolbar, Typography, Button, Box, Avatar, IconButton, Menu, MenuItem } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, Avatar, IconButton, Menu, MenuItem, Chip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useState } from 'react';
 import { colorPalette } from '../../styles/theme';
+import faviconSvg from '../../assets/favicon.svg';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 const Navbar = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -24,31 +26,70 @@ const Navbar = () => {
   };
 
   return (
-    <AppBar position="static" elevation={1} >
-      <Toolbar>
-        <Typography
-          variant="h6"
-          component="div"
+    <AppBar
+      position="static"
+      elevation={1}
+      sx={{
+        background: 'linear-gradient(135deg, #072D1F 0%, #29B770 100%)',
+        minHeight: '48px',
+      }}
+    >
+      <Toolbar sx={{ minHeight: '48px !important', py: 0.5 }}>
+        <Box
           sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
             flexGrow: 1,
-            fontWeight: 700,
-            color: colorPalette.primary.darkGreen,
             cursor: 'pointer',
           }}
           onClick={() => navigate(isAuthenticated ? '/dashboard' : '/')}
         >
-          SkillMap
-        </Typography>
+          <img
+            src={faviconSvg}
+            alt="SkillMap Logo"
+            style={{ width: '28px', height: '28px' }}
+          />
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              fontWeight: 700,
+              color: '#ffffff',
+              fontSize: '1.1rem',
+            }}
+          >
+            SkillMap
+          </Typography>
+        </Box>
 
         {isAuthenticated ? (
           <Box display="flex" alignItems="center" gap={2}>
             <Button
               color="inherit"
               onClick={() => navigate('/dashboard')}
-              sx={{ color: colorPalette.text.primary }}
+              sx={{
+                color: '#ffffff',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                },
+              }}
             >
               Dashboard
             </Button>
+            <Chip
+              icon={<AccountBalanceWalletIcon sx={{ color: '#ffffff !important' }} />}
+              label={`${user?.credits?.toFixed(1) || '0.0'} Credits`}
+              sx={{
+                bgcolor: 'rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                '& .MuiChip-icon': {
+                  color: '#ffffff',
+                },
+              }}
+            />
             <IconButton onClick={handleMenu} sx={{ p: 0 }}>
               <Avatar
                 alt={user?.full_name}
@@ -83,8 +124,12 @@ const Navbar = () => {
               variant="outlined"
               onClick={() => navigate('/login')}
               sx={{
-                borderColor: colorPalette.primary.darkGreen,
-                color: colorPalette.primary.darkGreen,
+                borderColor: '#ffffff',
+                color: '#ffffff',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  borderColor: '#ffffff',
+                },
               }}
             >
               Login
@@ -93,7 +138,11 @@ const Navbar = () => {
               variant="contained"
               onClick={() => navigate('/register')}
               sx={{
-                bgcolor: colorPalette.primary.brightGreen,
+                bgcolor: '#ffffff',
+                color: '#072D1F',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.9)',
+                },
               }}
             >
               Sign Up

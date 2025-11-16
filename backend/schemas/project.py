@@ -36,6 +36,7 @@ class ProjectUpdate(BaseModel):
     """Schema for updating a project"""
     project_name: Optional[str] = Field(None, min_length=1, max_length=255)
     job_description: Optional[str] = None
+    resume_json: Optional[Dict[str, Any]] = None
 
 
 class ProjectList(BaseModel):
@@ -47,3 +48,12 @@ class ProjectList(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SectionOrderUpdate(BaseModel):
+    """Schema for updating section order"""
+    section_order: List[str] = Field(
+        ...,
+        min_items=1,
+        description="Order of sections (e.g., ['experience', 'projects', 'education', 'skills', 'certifications', 'professional_summary'])"
+    )

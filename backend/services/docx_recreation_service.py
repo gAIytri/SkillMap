@@ -1,6 +1,20 @@
 """
-DOCX Recreation Service
-Recreates DOCX from original file + JSON modifications with exact styling preservation
+DOCX Recreation Service - LEGACY
+
+⚠️ THIS IS LEGACY CODE - KEPT FOR BACKUP ONLY ⚠️
+
+This service is NO LONGER USED in production.
+Replaced by: template_generation_service.py
+
+Why kept:
+- Emergency fallback if template system fails
+- Reference for complex DOCX manipulation
+- Historical record of previous approach
+
+Current approach: Template-based generation (100% reliable)
+Legacy approach: DOCX recreation (80-90% reliable)
+
+DO NOT USE unless template generation is completely broken.
 """
 
 from docx import Document

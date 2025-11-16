@@ -6,7 +6,7 @@ Clean, simple, reliable.
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 from docx import Document
 from io import BytesIO
 import logging
@@ -20,15 +20,19 @@ logger = logging.getLogger(__name__)
 # SCHEMA DEFINITIONS (Pydantic Models)
 # ============================================================================
 
+class HeaderLink(BaseModel):
+    """Generic header link - can be any type (LinkedIn, GitHub, etc.)"""
+    text: str  # Display text (e.g., "LinkedIn", "Portfolio")
+    url: Optional[str] = None  # Actual URL if available
+
+
 class PersonalInfo(BaseModel):
     """Personal information"""
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
-    linkedin: Optional[str] = None
-    github: Optional[str] = None
-    portfolio: Optional[str] = None
+    header_links: List[HeaderLink] = []  # Generic dynamic links
 
 
 class ExperienceEntry(BaseModel):
@@ -100,13 +104,67 @@ class ResumeExtractor:
 
         self.client = OpenAI(api_key=self.api_key)
 
+    def extract_hyperlinks_from_para(self, para) -> List[Dict[str, str]]:
+        """Extract hyperlinks from a paragraph"""
+        links = []
+        try:
+            # Check if paragraph has hyperlinks
+            for run in para.runs:
+                # Check if run is part of a hyperlink
+                if run._element.tag.endswith('hyperlink'):
+                    continue
+
+            # Get all hyperlink relationships
+            rels = para.part.rels
+            for rel in rels.values():
+                if "hyperlink" in rel.reltype:
+                    # Found a hyperlink - extract text and URL
+                    pass
+
+            # Alternative: Parse hyperlinks from XML
+            from docx.oxml import parse_xml
+            for hyperlink in para._element.findall('.//w:hyperlink', namespaces={
+                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+            }):
+                # Get hyperlink text
+                text = ''.join(node.text for node in hyperlink.iter() if node.text)
+
+                # Get hyperlink URL (r:id attribute)
+                r_id = hyperlink.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                url = None
+                if r_id and para.part.rels.get(r_id):
+                    url = para.part.rels[r_id].target_ref
+
+                if text:
+                    links.append({"text": text.strip(), "url": url})
+
+        except Exception as e:
+            logger.warning(f"Failed to extract hyperlinks: {e}")
+
+        return links
+
     def extract_text_from_docx(self, docx_bytes: bytes) -> str:
-        """Extract plain text from DOCX"""
+        """Extract plain text from DOCX including text boxes and shapes"""
         try:
             doc = Document(BytesIO(docx_bytes))
 
-            # Extract all paragraphs preserving structure
             text_parts = []
+
+            # 1. Extract text from shapes and text boxes first (often contains header)
+            from docx.text.paragraph import Paragraph
+
+            # Search for text boxes in the document
+            for element in doc.element.body:
+                # Check if element contains text box content (txbxContent)
+                for shape in element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}txbxContent'):
+                    # Extract paragraphs from text box
+                    for p_elem in shape.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p'):
+                        para = Paragraph(p_elem, doc)
+                        text = para.text.strip()
+                        if text:
+                            text_parts.append(text)
+
+            # 2. Extract all paragraphs preserving structure
             for para in doc.paragraphs:
                 text = para.text.strip()
                 if text:
@@ -118,11 +176,42 @@ class ResumeExtractor:
 
                     text_parts.append(text)
 
+            # 3. Extract text from tables (some resumes use tables)
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        cell_text = cell.text.strip()
+                        if cell_text:
+                            text_parts.append(cell_text)
+
             return '\n'.join(text_parts)
 
         except Exception as e:
             logger.error(f"DOCX text extraction failed: {e}")
             raise
+
+    def extract_header_links(self, docx_bytes: bytes) -> List[Dict[str, str]]:
+        """Extract header links with actual URLs from DOCX"""
+        try:
+            doc = Document(BytesIO(docx_bytes))
+
+            # Look for header links in first few paragraphs
+            header_links = []
+            for idx, para in enumerate(doc.paragraphs[:5]):
+                # Skip name and contact line
+                if idx <= 1:
+                    continue
+
+                # Extract hyperlinks from this paragraph
+                links = self.extract_hyperlinks_from_para(para)
+                if links:
+                    header_links.extend(links)
+
+            return header_links
+
+        except Exception as e:
+            logger.warning(f"Failed to extract header links: {e}")
+            return []
 
     def extract(self, docx_bytes: bytes) -> dict:
         """
@@ -138,11 +227,15 @@ class ResumeExtractor:
             Exception: If extraction fails
         """
         try:
-            # Step 1: Extract text from DOCX
+            # Step 1: Extract header links with actual URLs from DOCX
+            logger.info("Extracting header links from DOCX...")
+            header_links = self.extract_header_links(docx_bytes)
+
+            # Step 2: Extract text from DOCX
             logger.info("Extracting text from DOCX...")
             resume_text = self.extract_text_from_docx(docx_bytes)
 
-            # Step 2: Send to OpenAI with structured output
+            # Step 3: Send to OpenAI with structured output
             logger.info("Sending to OpenAI for parsing...")
 
             prompt = f"""
@@ -154,6 +247,9 @@ INSTRUCTIONS:
 - Maintain chronological order (newest first)
 - For skills, group by logical categories
 - Preserve dates exactly (e.g., "Sept 2025", "Present")
+- For header_links: Extract any links/text in the header (LinkedIn, GitHub, Portfolio, etc.)
+  * Extract the display text (e.g., "LinkedIn", "GitHub", "Medium")
+  * These will be matched with actual URLs separately
 
 RESUME:
 {resume_text}
@@ -175,13 +271,19 @@ RESUME:
                 temperature=0.1  # Low temperature for consistent extraction
             )
 
-            # Step 3: Get structured output (guaranteed valid!)
+            # Step 4: Get structured output (guaranteed valid!)
             resume_data = completion.choices[0].message.parsed
+            result = resume_data.model_dump()
+
+            # Step 5: Merge actual URLs from DOCX into header_links
+            logger.info("Merging header links with extracted URLs...")
+            if header_links:
+                # Use the URLs from DOCX hyperlinks
+                result['personal_info']['header_links'] = header_links
 
             logger.info("Resume extracted successfully")
 
-            # Convert to dict
-            return resume_data.model_dump()
+            return result
 
         except Exception as e:
             logger.error(f"Resume extraction failed: {e}")

@@ -6,12 +6,13 @@ import asyncio
 import json
 
 from config.database import get_db
-from schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectList
+from schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectList, SectionOrderUpdate
 from middleware.auth_middleware import get_current_user
 from models.user import User
 from models.project import Project
 from models.base_resume import BaseResume
-from services.docx_recreation_service import recreate_docx_from_json
+from services.docx_recreation_service import recreate_docx_from_json  # Legacy - keeping for backup
+from services.docx_generation_service import generate_resume_from_json, get_default_section_order
 from services.resume_tailoring_service import tailor_resume
 from services.resume_agent_service import tailor_resume_with_agent
 from services.docx_to_pdf_service import convert_docx_to_pdf
@@ -124,8 +125,11 @@ async def update_project(
     if project_update.job_description is not None:
         project.job_description = project_update.job_description
 
-    if project_update.tailored_latex_content is not None:
-        project.tailored_latex_content = project_update.tailored_latex_content
+    if project_update.resume_json is not None:
+        project.resume_json = project_update.resume_json
+        # Mark JSON column as modified for SQLAlchemy to detect the change
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(project, 'resume_json')
 
     db.commit()
     db.refresh(project)
@@ -180,11 +184,26 @@ async def download_project_pdf(
         )
 
     try:
-        # Step 1: Recreate DOCX from original + JSON
-        logger.info(f"Recreating DOCX for project {project_id} PDF preview...")
-        recreated_docx_bytes = recreate_docx_from_json(
-            project.original_docx,
-            project.resume_json
+        # Step 1: Generate DOCX programmatically with custom section order
+        logger.info(f"Generating DOCX for project {project_id} PDF preview...")
+
+        # Get section order (priority: resume_json > user preference > default)
+        section_order = None
+        if project.resume_json and 'section_order' in project.resume_json:
+            section_order = project.resume_json['section_order']
+            logger.info(f"Using project-specific section order: {section_order}")
+        elif current_user.section_order:
+            section_order = current_user.section_order
+            logger.info(f"Using user preference section order")
+        else:
+            section_order = get_default_section_order()
+            logger.info(f"Using default section order")
+
+        # Generate resume from JSON using original DOCX as style reference
+        recreated_docx_bytes = generate_resume_from_json(
+            resume_json=project.resume_json,
+            base_resume_docx=project.original_docx,
+            section_order=section_order
         )
 
         # Step 2: Convert DOCX to PDF (or return DOCX if conversion fails)
@@ -196,11 +215,15 @@ async def download_project_pdf(
         file_ext = "pdf" if is_pdf else "docx"
 
         # Return file with inline disposition for browser preview
+        # IMPORTANT: No-cache headers to prevent stale PDF after tailoring
         return Response(
             content=file_bytes,
             media_type=media_type,
             headers={
-                "Content-Disposition": f'inline; filename="{project.project_name.replace(" ", "_")}_preview.{file_ext}"'
+                "Content-Disposition": f'inline; filename="{project.project_name.replace(" ", "_")}_preview.{file_ext}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
             }
         )
 
@@ -244,11 +267,26 @@ async def download_project_docx(
         )
 
     try:
-        # Recreate DOCX from original + JSON
-        logger.info(f"Recreating DOCX for project {project_id}...")
-        recreated_docx_bytes = recreate_docx_from_json(
-            project.original_docx,
-            project.resume_json
+        # Generate DOCX programmatically with section order priority
+        logger.info(f"Generating DOCX for project {project_id}...")
+
+        # Get section order (priority: resume_json > user preference > default)
+        section_order = None
+        if project.resume_json and 'section_order' in project.resume_json:
+            section_order = project.resume_json['section_order']
+            logger.info(f"Using project-specific section order: {section_order}")
+        elif current_user.section_order:
+            section_order = current_user.section_order
+            logger.info(f"Using user preference section order")
+        else:
+            section_order = get_default_section_order()
+            logger.info(f"Using default section order")
+
+        # Generate resume from JSON using original DOCX as style reference
+        recreated_docx_bytes = generate_resume_from_json(
+            resume_json=project.resume_json,
+            base_resume_docx=project.original_docx,
+            section_order=section_order
         )
 
         # Save to temporary file for download
@@ -362,6 +400,13 @@ async def tailor_project_resume_with_agent(
         StreamingResponse with Server-Sent Events (SSE) format
         Each event contains JSON with status updates
     """
+    # Check user has sufficient credits (minimum 5 credits)
+    if current_user.credits < 5.0:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Insufficient credits. You have {current_user.credits} credits. Minimum 5 credits required to tailor resume."
+        )
+
     # Validate project exists
     project = db.query(Project).filter(
         Project.id == project_id,
@@ -405,6 +450,8 @@ async def tailor_project_resume_with_agent(
                 # Create a new database session for saving
                 # (The original session might be detached after streaming)
                 from config.database import SessionLocal
+                from models import CreditTransaction, TransactionType
+                from math import ceil
                 db_new = SessionLocal()
                 try:
                     # Fetch the project fresh from the database
@@ -435,11 +482,55 @@ async def tailor_project_resume_with_agent(
 
                         # Update with new tailored resume
                         project_to_update.resume_json = final_result["tailored_json"]
-                        db_new.commit()
-                        logger.info(f"Successfully saved tailored resume and history for project {project_id}")
 
-                        # Send database update confirmation
-                        yield f"data: {json.dumps({'type': 'db_update', 'message': 'Resume saved to database with version history'})}\n\n"
+                        # Deduct credits based on actual token usage
+                        token_usage = final_result.get("token_usage", {})
+                        total_tokens = token_usage.get("total_tokens", 0)
+                        prompt_tokens = token_usage.get("prompt_tokens", 0)
+                        completion_tokens = token_usage.get("completion_tokens", 0)
+
+                        # Calculate credits: 2000 tokens = 1 credit, round to nearest 0.5
+                        raw_credits = total_tokens / 2000.0
+                        credits_to_deduct = round(raw_credits * 2) / 2  # Round to nearest 0.5
+
+                        logger.info(f"Tokens used: {total_tokens}, Credits to deduct: {credits_to_deduct}")
+
+                        # Fetch user fresh from the database
+                        user_to_update = db_new.query(User).filter(User.id == current_user.id).first()
+                        balance_after = 0.0  # Default value
+
+                        if not user_to_update:
+                            logger.error(f"User {current_user.id} not found for credit deduction!")
+                        else:
+                            # Deduct credits
+                            user_to_update.credits -= credits_to_deduct
+                            balance_after = user_to_update.credits
+
+                            # Create credit transaction record
+                            transaction = CreditTransaction(
+                                user_id=current_user.id,
+                                project_id=project_id,
+                                amount=-credits_to_deduct,  # Negative for deduction
+                                balance_after=balance_after,
+                                transaction_type=TransactionType.TAILOR,
+                                tokens_used=total_tokens,
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                description=f"Resume tailored for project {project_id}"
+                            )
+                            db_new.add(transaction)
+
+                            logger.info(
+                                f"✓ Credits deducted: {credits_to_deduct} (from {balance_after + credits_to_deduct} to {balance_after})"
+                            )
+
+                        db_new.commit()
+                        if user_to_update:
+                            db_new.refresh(user_to_update)
+                        logger.info(f"✓ Successfully saved tailored resume, history, and credits for project {project_id}")
+
+                        # Send database update confirmation with credit info
+                        yield f"data: {json.dumps({'type': 'db_update', 'message': 'Resume saved to database with version history', 'credits_deducted': credits_to_deduct, 'credits_remaining': balance_after})}\n\n"
                 except Exception as db_error:
                     logger.error(f"Database save failed: {db_error}")
                     db_new.rollback()
@@ -462,3 +553,64 @@ async def tailor_project_resume_with_agent(
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         }
     )
+
+
+@router.put("/{project_id}/section-order", response_model=ProjectResponse)
+async def update_section_order(
+    project_id: int,
+    order_update: SectionOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update section order for a project
+
+    The section order is stored inside resume_json and used when generating PDF/DOCX.
+    When user reorders sections in the UI, call this endpoint to save the new order.
+    """
+    # Get project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.resume_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project has no resume data"
+        )
+
+    # Validate section order contains valid sections
+    valid_sections = {'personal_info', 'professional_summary', 'experience', 'projects', 'education', 'skills', 'certifications'}
+    provided_sections = set(order_update.section_order)
+
+    if not provided_sections.issubset(valid_sections):
+        invalid = provided_sections - valid_sections
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sections: {invalid}"
+        )
+
+    # Update section_order in resume_json
+    project.resume_json['section_order'] = order_update.section_order
+
+    # IMPORTANT: Mark JSON column as modified for SQLAlchemy to detect the change
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(project, 'resume_json')
+
+    # Mark as updated
+    from sqlalchemy import func
+    project.updated_at = func.now()
+
+    db.commit()
+    db.refresh(project)
+
+    logger.info(f"Updated section order for project {project_id}: {order_update.section_order}")
+
+    return project

@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     profile_picture_url: Optional[str] = None
+    credits: float = 100.0
     created_at: datetime
     last_login: Optional[datetime] = None
 

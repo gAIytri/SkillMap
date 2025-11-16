@@ -13,7 +13,7 @@ class ResumeResponse(BaseModel):
     id: int
     user_id: int
     original_filename: str
-    latex_content: str
+    latex_content: Optional[str] = None  # Deprecated, nullable
     doc_metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime

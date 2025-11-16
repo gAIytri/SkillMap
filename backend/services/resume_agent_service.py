@@ -7,6 +7,8 @@ from typing import Dict, Any, AsyncIterator
 from langchain.agents import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 import logging
@@ -32,6 +34,49 @@ class TailoringContext(BaseModel):
     project_id: int = Field(description="The project ID being tailored")
 
 
+class TokenTrackingCallback(BaseCallbackHandler):
+    """Custom callback handler to track token usage for LangSmith"""
+
+    def __init__(self, agent_instance):
+        """
+        Initialize callback with reference to agent instance
+
+        Args:
+            agent_instance: The ResumeTailoringAgent instance to update token counts
+        """
+        super().__init__()
+        self.agent = agent_instance
+
+    def on_llm_end(self, response: LLMResult, **kwargs) -> None:
+        """
+        Called when LLM completes - capture token usage
+
+        Args:
+            response: LLMResult containing token usage information
+        """
+        try:
+            # Extract token usage from response
+            if hasattr(response, 'llm_output') and response.llm_output:
+                token_usage = response.llm_output.get('token_usage', {})
+
+                prompt_tokens = token_usage.get('prompt_tokens', 0)
+                completion_tokens = token_usage.get('completion_tokens', 0)
+                total_tokens = token_usage.get('total_tokens', 0)
+
+                # Update agent instance token counts
+                self.agent.prompt_tokens_used += prompt_tokens
+                self.agent.completion_tokens_used += completion_tokens
+                self.agent.total_tokens_used += total_tokens
+
+                logger.info(
+                    f"LLM call completed - Prompt: {prompt_tokens}, "
+                    f"Completion: {completion_tokens}, Total: {total_tokens} | "
+                    f"Running total: {self.agent.total_tokens_used}"
+                )
+        except Exception as e:
+            logger.error(f"Failed to track token usage: {e}")
+
+
 class ResumeTailoringAgent:
     """
     ReAct agent for resume tailoring with guardrails and streaming
@@ -46,11 +91,25 @@ class ResumeTailoringAgent:
 
     def __init__(self):
         """Initialize the agent with tools and configuration"""
+        # Token usage tracking - initialize before creating model
+        self.total_tokens_used = 0
+        self.prompt_tokens_used = 0
+        self.completion_tokens_used = 0
+
+        # Create callback handler for token tracking
+        self.token_callback = TokenTrackingCallback(self)
+
+        # Create LLM with token tracking callback
         self.model = ChatOpenAI(
             model="gpt-4o",
             api_key=settings.OPENAI_API_KEY,
             temperature=0.3,
-            streaming=True
+            streaming=True,
+            model_kwargs={
+                "seed": 42  # For consistency
+            },
+            callbacks=[self.token_callback],  # Add token tracking callback
+            verbose=True  # Enable verbose logging for LangSmith
         )
 
         # Agent tools
@@ -149,6 +208,11 @@ You have access to the user's resume JSON and job description through the runtim
             }
         """
         try:
+            # Reset token counters for this run
+            self.total_tokens_used = 0
+            self.prompt_tokens_used = 0
+            self.completion_tokens_used = 0
+
             # Set runtime context for tools to access
             set_runtime_context(resume_json, job_description)
 
@@ -169,6 +233,14 @@ You have access to the user's resume JSON and job description through the runtim
             await asyncio.sleep(0)  # Force flush
 
             intent_result = validate_intent.invoke(job_description)
+
+            # Track tokens from validate_intent
+            if "token_usage" in intent_result:
+                usage = intent_result["token_usage"]
+                self.prompt_tokens_used += usage.get("prompt_tokens", 0)
+                self.completion_tokens_used += usage.get("completion_tokens", 0)
+                self.total_tokens_used += usage.get("total_tokens", 0)
+                logger.info(f"Cumulative tokens after validate_intent: {self.total_tokens_used}")
 
             yield {
                 "type": "tool_result",
@@ -198,6 +270,14 @@ You have access to the user's resume JSON and job description through the runtim
             await asyncio.sleep(0)  # Force flush
 
             summary_result = summarize_job_description.invoke(job_description)
+
+            # Track tokens from summarize_job_description
+            if "token_usage" in summary_result:
+                usage = summary_result["token_usage"]
+                self.prompt_tokens_used += usage.get("prompt_tokens", 0)
+                self.completion_tokens_used += usage.get("completion_tokens", 0)
+                self.total_tokens_used += usage.get("total_tokens", 0)
+                logger.info(f"Cumulative tokens after summarize_job_description: {self.total_tokens_used}")
 
             yield {
                 "type": "tool_result",
@@ -232,6 +312,14 @@ You have access to the user's resume JSON and job description through the runtim
             # Pass the entire summary_result as the tool expects it
             tailor_result = tailor_resume_content.invoke({"job_summary": summary_result})
 
+            # Track tokens from tailor_resume_content
+            if "token_usage" in tailor_result:
+                usage = tailor_result["token_usage"]
+                self.prompt_tokens_used += usage.get("prompt_tokens", 0)
+                self.completion_tokens_used += usage.get("completion_tokens", 0)
+                self.total_tokens_used += usage.get("total_tokens", 0)
+                logger.info(f"Cumulative tokens after tailor_resume_content: {self.total_tokens_used}")
+
             yield {
                 "type": "tool_result",
                 "tool": "tailor_resume_content",
@@ -247,18 +335,33 @@ You have access to the user's resume JSON and job description through the runtim
                     "type": "final",
                     "success": False,
                     "message": "Failed to tailor resume",
-                    "tailored_json": None
+                    "tailored_json": None,
+                    "token_usage": {
+                        "prompt_tokens": self.prompt_tokens_used,
+                        "completion_tokens": self.completion_tokens_used,
+                        "total_tokens": self.total_tokens_used
+                    }
                 }
                 await asyncio.sleep(0)  # Force flush
                 return
 
-            # Final result
+            # Final result with token usage
+            logger.info(
+                f"Resume tailoring completed - Total tokens used: {self.total_tokens_used} "
+                f"(Prompt: {self.prompt_tokens_used}, Completion: {self.completion_tokens_used})"
+            )
+
             yield {
                 "type": "final",
                 "success": True,
                 "message": "Resume tailored successfully!",
                 "tailored_json": tailor_result.get("tailored_json", {}),
-                "changes_made": tailor_result.get("changes_made", [])
+                "changes_made": tailor_result.get("changes_made", []),
+                "token_usage": {
+                    "prompt_tokens": self.prompt_tokens_used,
+                    "completion_tokens": self.completion_tokens_used,
+                    "total_tokens": self.total_tokens_used
+                }
             }
             await asyncio.sleep(0)  # Force flush
 
@@ -268,7 +371,12 @@ You have access to the user's resume JSON and job description through the runtim
                 "type": "final",
                 "success": False,
                 "message": f"Agent execution failed: {str(e)}",
-                "tailored_json": None
+                "tailored_json": None,
+                "token_usage": {
+                    "prompt_tokens": self.prompt_tokens_used,
+                    "completion_tokens": self.completion_tokens_used,
+                    "total_tokens": self.total_tokens_used
+                }
             }
             await asyncio.sleep(0)  # Force flush
 

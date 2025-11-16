@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from config.database import Base
@@ -13,6 +13,8 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     google_id = Column(String(255), unique=True, nullable=True, index=True)
     profile_picture_url = Column(Text, nullable=True)
+    section_order = Column(JSON, nullable=True)  # Custom section order for resume template
+    credits = Column(Float, nullable=False, default=100.0)  # User credits for AI operations
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
@@ -20,6 +22,7 @@ class User(Base):
     # Relationships
     base_resume = relationship("BaseResume", back_populates="user", uselist=False, cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
+    credit_transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, name={self.full_name})>"

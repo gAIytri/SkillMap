@@ -5,7 +5,9 @@ Tools for LangChain agent to handle resume tailoring workflow
 
 from typing import Dict, Any, Literal, Optional
 from langchain_core.tools import tool
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langsmith import traceable
 from config.settings import settings
 import logging
 import json
@@ -15,8 +17,22 @@ logger = logging.getLogger(__name__)
 # Global context storage for runtime data
 _runtime_context = {}
 
+# Shared LLM instances for tools (will be traced by LangSmith)
+_llm_mini = ChatOpenAI(
+    model="gpt-4o-mini",
+    api_key=settings.OPENAI_API_KEY,
+    temperature=0.0
+)
+
+_llm_gpt4o = ChatOpenAI(
+    model="gpt-4o",
+    api_key=settings.OPENAI_API_KEY,
+    temperature=0.2
+)
+
 
 @tool
+@traceable(name="validate_intent")
 def validate_intent(user_message: str) -> dict:
     """
     Guardrail tool that validates user intent for resume tailoring.
@@ -40,15 +56,9 @@ def validate_intent(user_message: str) -> dict:
     try:
         logger.info("Validating user intent...")
 
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-        # Use LLM to classify the intent
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are a guardrail that validates user intent for a resume tailoring system.
+        # Use LangChain ChatOpenAI for LangSmith tracing
+        messages = [
+            SystemMessage(content="""You are a guardrail that validates user intent for a resume tailoring system.
 
 Classify the user's message into one of these categories:
 1. "job_description" - User has provided a job posting/description to tailor resume against
@@ -60,28 +70,37 @@ Return your response as JSON with:
     "intent_type": "job_description" | "resume_modification" | "invalid",
     "confidence": 0.0-1.0,
     "reasoning": "brief explanation"
-}"""
-                },
-                {
-                    "role": "user",
-                    "content": f"Classify this message: {user_message}"
-                }
-            ],
-            temperature=0.0,
-            response_format={"type": "json_object"}
-        )
+}"""),
+            HumanMessage(content=f"Classify this message: {user_message}")
+        ]
 
-        result = json.loads(response.choices[0].message.content)
+        # Create a structured output LLM
+        structured_llm = _llm_mini.bind(response_format={"type": "json_object"})
+
+        # Invoke and get response
+        response = structured_llm.invoke(messages)
+
+        # Parse the JSON response
+        result = json.loads(response.content)
         intent_type = result.get("intent_type", "invalid")
         confidence = result.get("confidence", 0.0)
         reasoning = result.get("reasoning", "")
+
+        # Extract token usage from response metadata
+        token_usage = {
+            "prompt_tokens": response.response_metadata.get("token_usage", {}).get("prompt_tokens", 0),
+            "completion_tokens": response.response_metadata.get("token_usage", {}).get("completion_tokens", 0),
+            "total_tokens": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
+        logger.info(f"validate_intent token usage: {token_usage}")
 
         if intent_type == "invalid":
             return {
                 "valid": False,
                 "intent_type": "invalid",
                 "message": "Please provide a job description to tailor your resume, or specify changes you want to make to your resume.",
-                "details": reasoning
+                "details": reasoning,
+                "token_usage": token_usage
             }
 
         # Valid intent
@@ -90,7 +109,8 @@ Return your response as JSON with:
             "intent_type": intent_type,
             "message": f"Intent validated: {intent_type}",
             "details": reasoning,
-            "confidence": confidence
+            "confidence": confidence,
+            "token_usage": token_usage
         }
 
     except Exception as e:
@@ -103,6 +123,7 @@ Return your response as JSON with:
 
 
 @tool
+@traceable(name="summarize_job_description")
 def summarize_job_description(job_description: str) -> dict:
     """
     Analyzes and summarizes a job description to extract key requirements.
@@ -136,14 +157,9 @@ def summarize_job_description(job_description: str) -> dict:
     try:
         logger.info("Summarizing job description...")
 
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are an expert job description analyzer for technical roles.
+        # Use LangChain ChatOpenAI for LangSmith tracing
+        messages = [
+            SystemMessage(content="""You are an expert job description analyzer for technical roles.
 
 Analyze the job description and extract:
 1. Required technical skills (programming languages, frameworks, tools)
@@ -163,25 +179,34 @@ Return as JSON:
     "nice_to_have": ["qual1", "qual2", ...],
     "ats_keywords": ["keyword1", "keyword2", ...],
     "role_focus": "primary focus of the role"
-}"""
-                },
-                {
-                    "role": "user",
-                    "content": f"Analyze this job description:\n\n{job_description}"
-                }
-            ],
-            temperature=0.2,
-            response_format={"type": "json_object"}
-        )
+}"""),
+            HumanMessage(content=f"Analyze this job description:\n\n{job_description}")
+        ]
 
-        summary = json.loads(response.choices[0].message.content)
+        # Create a structured output LLM
+        structured_llm = _llm_gpt4o.bind(response_format={"type": "json_object"})
+
+        # Invoke and get response
+        response = structured_llm.invoke(messages)
+
+        # Parse the JSON response
+        summary = json.loads(response.content)
+
+        # Extract token usage from response metadata
+        token_usage = {
+            "prompt_tokens": response.response_metadata.get("token_usage", {}).get("prompt_tokens", 0),
+            "completion_tokens": response.response_metadata.get("token_usage", {}).get("completion_tokens", 0),
+            "total_tokens": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
+        logger.info(f"summarize_job_description token usage: {token_usage}")
 
         logger.info("Job description summarized successfully")
 
         return {
             "success": True,
             "summary": summary,
-            "message": f"Job description analyzed. Role focus: {summary.get('role_focus', 'N/A')}"
+            "message": f"Job description analyzed. Role focus: {summary.get('role_focus', 'N/A')}",
+            "token_usage": token_usage
         }
 
     except Exception as e:
@@ -208,6 +233,7 @@ def get_runtime_context() -> dict:
 
 
 @tool
+@traceable(name="tailor_resume_content")
 def tailor_resume_content(job_summary: dict) -> dict:
     """
     Tailors the resume JSON based on the summarized job requirements.
@@ -247,8 +273,6 @@ def tailor_resume_content(job_summary: dict) -> dict:
 
         # Extract summary data
         summary_data = job_summary.get("summary", {}) if isinstance(job_summary, dict) else job_summary
-
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
         # Create tailoring prompt with job summary
         system_prompt = """You are an expert technical resume tailoring assistant specializing in software engineering and tech roles.
@@ -314,21 +338,38 @@ OUTPUT REQUIREMENTS:
 
 Make the changes SUBSTANTIAL and IMPACTFUL."""
 
-        # Call OpenAI for tailoring
-        logger.info("Calling OpenAI for tailoring...")
-        response = client.chat.completions.create(
+        # Use LangChain ChatOpenAI for LangSmith tracing
+        logger.info("Calling LLM for tailoring...")
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+
+        # Create tailoring LLM with higher temperature and max_tokens
+        tailoring_llm = ChatOpenAI(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
+            api_key=settings.OPENAI_API_KEY,
             temperature=0.4,
-            max_tokens=4096,
-            response_format={"type": "json_object"}
+            max_tokens=4096
         )
 
+        # Bind JSON response format
+        structured_llm = tailoring_llm.bind(response_format={"type": "json_object"})
+
+        # Invoke and get response
+        response = structured_llm.invoke(messages)
+
+        # Extract token usage from response metadata
+        token_usage = {
+            "prompt_tokens": response.response_metadata.get("token_usage", {}).get("prompt_tokens", 0),
+            "completion_tokens": response.response_metadata.get("token_usage", {}).get("completion_tokens", 0),
+            "total_tokens": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
+        logger.info(f"tailor_resume_content token usage: {token_usage}")
+
         # Parse tailored JSON
-        tailored_json = json.loads(response.choices[0].message.content)
+        tailored_json = json.loads(response.content)
 
         # Identify changes made (simplified)
         changes_made = [
@@ -345,7 +386,8 @@ Make the changes SUBSTANTIAL and IMPACTFUL."""
             "success": True,
             "tailored_json": tailored_json,
             "message": "Resume successfully tailored to job requirements",
-            "changes_made": changes_made
+            "changes_made": changes_made,
+            "token_usage": token_usage
         }
 
     except Exception as e:

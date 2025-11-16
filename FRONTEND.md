@@ -1017,6 +1017,585 @@ touch src/components/NewComponent.jsx
 # Import and add <Route> element
 ```
 
+## Credit System UI (NEW - Latest)
+
+### Navbar Credit Display
+
+**Location**: `components/common/Navbar.jsx`
+
+**Features**:
+- Displays user's current credit balance
+- Updates in real-time after tailoring
+- Styled chip with wallet icon
+- Format: "93.5 Credits" (1 decimal place)
+
+**Implementation**:
+```javascript
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+
+<Chip
+  icon={<AccountBalanceWalletIcon sx={{ color: '#ffffff !important' }} />}
+  label={`${user?.credits?.toFixed(1) || '0.0'} Credits`}
+  sx={{
+    bgcolor: 'rgba(255, 255, 255, 0.15)',
+    color: '#ffffff',
+    fontWeight: 600,
+    fontSize: '0.875rem',
+  }}
+/>
+```
+
+**Design**:
+- Semi-transparent white background on gradient navbar
+- White text and icon
+- Positioned between Dashboard button and user avatar
+- Always visible to authenticated users
+
+### Credit Validation Before Tailoring
+
+**Location**: `pages/ProjectEditor.jsx`
+
+**Check Before Starting**:
+```javascript
+// Check if user has sufficient credits
+if (user && user.credits < 5.0) {
+  alert(
+    `Insufficient credits to tailor resume.\n\n` +
+    `You have ${user.credits.toFixed(1)} credits.\n` +
+    `Minimum 5 credits required to tailor resume.`
+  );
+  return;
+}
+```
+
+**Features**:
+- Prevents tailoring if credits < 5.0
+- Shows current balance in error message
+- Clear explanation of requirement
+- Stops before calling backend
+
+### Credit Refresh After Tailoring
+
+**Location**: `pages/ProjectEditor.jsx:370-373`
+
+**Auto-Refresh**:
+```javascript
+// After successful tailoring
+if (finalResult && finalResult.success) {
+  // ... update extracted data, reload PDF ...
+
+  // Refresh user data to update credits in navbar
+  if (refreshUser) {
+    await refreshUser();
+  }
+}
+```
+
+**Flow**:
+1. Tailoring completes successfully
+2. Call `refreshUser()` from AuthContext
+3. Fetch `/api/users/me` endpoint
+4. Update user state with new credit balance
+5. Navbar automatically re-renders with new credits
+
+### Navbar Redesign
+
+**Height**: 64px → 48px (more compact)
+
+**Gradient Background**:
+```javascript
+background: 'linear-gradient(135deg, #072D1F 0%, #29B770 100%)'
+```
+
+**Logo**: Added favicon.svg before "SkillMap" text (28px × 28px)
+
+**Colors**: All text and buttons changed to white for dark background
+
+## Personal Information Section (NEW - Latest)
+
+### Overview
+Added "Personal Information" as a draggable section in the formatted view to display name, email, phone, location, and links.
+
+### Implementation
+
+**State** (`pages/ProjectEditor.jsx:76-92`):
+```javascript
+const [sectionOrder, setSectionOrder] = useState([
+  'personal_info',  // NEW
+  'professional_summary',
+  'experience',
+  'projects',
+  'education',
+  'skills',
+  'certifications',
+]);
+
+const [expandedSections, setExpandedSections] = useState({
+  personal_info: false,  // NEW
+  professional_summary: false,
+  // ... other sections ...
+});
+```
+
+**Rendering** (`pages/ProjectEditor.jsx:532-584`):
+```javascript
+case 'personal_info':
+  return extractedData.personal_info ? (
+    <SortableSection key={sectionKey} id={sectionKey}>
+      <Accordion
+        expanded={expandedSections[sectionKey] || false}
+        onChange={() => handleToggleSection(sectionKey)}
+      >
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            Personal Information
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Paper sx={{ p: 1.5, bgcolor: '#e8f5e9' }}>
+            <Chip label="CURRENT" color="success" />
+            <Box>
+              <Typography fontWeight={600}>
+                {extractedData.personal_info.name}
+              </Typography>
+              {extractedData.personal_info.email && (
+                <Typography variant="caption">
+                  Email: {extractedData.personal_info.email}
+                </Typography>
+              )}
+              {extractedData.personal_info.phone && (
+                <Typography variant="caption">
+                  Phone: {extractedData.personal_info.phone}
+                </Typography>
+              )}
+              {extractedData.personal_info.location && (
+                <Typography variant="caption">
+                  Location: {extractedData.personal_info.location}
+                </Typography>
+              )}
+              {extractedData.personal_info.header_links?.map((link, idx) => (
+                <Typography key={idx} variant="caption">
+                  • {link.text} {link.url && `(${link.url})`}
+                </Typography>
+              ))}
+            </Box>
+          </Paper>
+        </AccordionDetails>
+      </Accordion>
+    </SortableSection>
+  ) : null;
+```
+
+**Features**:
+- Collapsible accordion like other sections
+- Shows name in bold
+- Displays email, phone, location if available
+- Lists header links (LinkedIn, GitHub, etc.)
+- Green "CURRENT" badge
+- Drag-and-drop reorderable with @dnd-kit
+
+## Section Reordering Improvements (NEW - Latest)
+
+### Drag-and-Drop with @dnd-kit
+
+**Library**: `@dnd-kit/core`, `@dnd-kit/sortable`
+
+**Setup**:
+```javascript
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+
+const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 5, // 5px movement required to start drag
+    },
+  })
+);
+```
+
+**SortableSection Component**:
+```javascript
+const SortableSection = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+};
+```
+
+**Drag End Handler**:
+```javascript
+const handleDragEnd = async (event) => {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  const oldIndex = sectionOrder.indexOf(active.id);
+  const newIndex = sectionOrder.indexOf(over.id);
+
+  // Update local state immediately for smooth UX
+  const newOrder = arrayMove(sectionOrder, oldIndex, newIndex);
+  setSectionOrder(newOrder);
+
+  try {
+    setReorderingPdf(true);
+
+    // Update backend
+    await projectService.updateSectionOrder(projectId, newOrder);
+
+    // Force PDF reload
+    if (pdfUrl) {
+      URL.revokeObjectURL(pdfUrl);
+    }
+
+    setTimeout(async () => {
+      await loadPdfPreview();
+      setReorderingPdf(false);
+    }, 500);
+  } catch (err) {
+    console.error('Failed to update section order:', err);
+    setSectionOrder(sectionOrder); // Revert on error
+    alert('Failed to update section order. Please try again.');
+  }
+};
+```
+
+**Features**:
+- Optimistic UI update (instant visual feedback)
+- Backend persistence via API call
+- Auto PDF regeneration with new order
+- Loading spinner during reorder
+- Error handling with state revert
+- Requires 5px drag distance to prevent accidental drags
+
+### PDF Reload After Reorder
+
+**Issue**: PDF showed "Failed to preview" briefly during reorder.
+
+**Solution**:
+- Added `reorderingPdf` state
+- Shows "Reordering..." spinner instead of error
+- Small delay (500ms) ensures backend generated new PDF
+- Revokes old PDF URL and loads new one
+
+### Accordion State Management
+
+**Problem**: Sections kept expanding after drag-drop.
+
+**Solution**:
+- Changed from `defaultExpanded` to controlled `expanded` prop
+- Track expansion state in `expandedSections` object
+- Each section toggles independently
+- State preserved during reorder
+- All sections start collapsed by default
+
+```javascript
+const handleToggleSection = (sectionKey) => {
+  setExpandedSections(prev => ({
+    ...prev,
+    [sectionKey]: !prev[sectionKey]
+  }));
+};
+
+<Accordion
+  expanded={expandedSections[sectionKey] || false}
+  onChange={() => handleToggleSection(sectionKey)}
+>
+```
+
+## Layout Redesign (NEW - Latest)
+
+### 2-Column Layout
+
+**Previous**: 3 columns (Job Desc | PDF | Extracted Data)
+**Current**: 2 columns (PDF 60% | Extracted Data 40%) + Drawer for Job Desc
+
+**Reason**: PDF was cut off at 100% zoom with 3-column layout.
+
+**Implementation**:
+```javascript
+<Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+  {/* PDF Viewer - 60% */}
+  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+    {/* PDF Preview */}
+  </Box>
+
+  {/* Extracted Data - 40% */}
+  <Box sx={{ width: '40%', display: 'flex', flexDirection: 'column' }}>
+    {/* Formatted/Raw tabs */}
+  </Box>
+</Box>
+```
+
+### Job Description Drawer
+
+**Position**: Slides in from left
+**Width**: 450px
+**Trigger**: "Tailor Resume" button in header
+
+**Implementation**:
+```javascript
+const [jobDescDrawerOpen, setJobDescDrawerOpen] = useState(false);
+
+<Drawer
+  anchor="left"
+  open={jobDescDrawerOpen}
+  onClose={() => setJobDescDrawerOpen(false)}
+  sx={{ '& .MuiDrawer-paper': { width: '450px' } }}
+>
+  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    {/* Header */}
+    <Box sx={{ px: 2, py: 2, borderBottom: '2px solid #072D1F' }}>
+      <Typography variant="h6">Job Description</Typography>
+    </Box>
+
+    {/* TextField */}
+    <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+      <TextField
+        fullWidth
+        multiline
+        rows={20}
+        value={jobDescription}
+        onChange={(e) => setJobDescription(e.target.value)}
+      />
+    </Box>
+
+    {/* Footer */}
+    <Box sx={{ p: 2, display: 'flex', gap: 1 }}>
+      <Button onClick={() => setJobDescDrawerOpen(false)}>
+        Cancel
+      </Button>
+      <Button
+        variant="contained"
+        onClick={() => {
+          handleTailorResume();
+          setJobDescDrawerOpen(false);
+        }}
+      >
+        Tailor Resume
+      </Button>
+    </Box>
+  </Box>
+</Drawer>
+```
+
+**Benefits**:
+- PDF gets full 60% width (no more cutoff)
+- Job description accessible via button click
+- Clean, focused interface
+- More space for PDF preview
+
+## Replace Resume Functionality (Fixed)
+
+**Location**: `pages/ProjectEditor.jsx:178-230`
+
+**Previous Issue**: Replace resume didn't update project's JSON or PDF.
+
+**Fixed Implementation**:
+```javascript
+const handleResumeUpload = async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setUploading(true);
+
+  try {
+    // Step 1: Upload and extract resume
+    const convertedData = await resumeService.uploadResume(file);
+
+    // Step 2: Get extracted JSON
+    const resumeJson = convertedData.metadata?.resume_json;
+    if (!resumeJson) {
+      throw new Error('Failed to extract resume data.');
+    }
+
+    setExtractedData(resumeJson);
+
+    // Step 3: Update project with new resume JSON
+    await projectService.updateProject(projectId, {
+      resume_json: resumeJson,  // NEW: Now updates project
+      job_description: jobDescription,
+    });
+
+    // Step 4: Reload PDF
+    await loadPdfPreview();
+
+    alert('Resume replaced successfully!');
+  } catch (err) {
+    console.error('Resume upload error:', err);
+    const errorMsg = err.response?.data?.detail || err.message;
+    alert(`Error: ${errorMsg}`);
+  } finally {
+    setUploading(false);
+  }
+};
+```
+
+**Changes**:
+- Now sends `resume_json` to backend in update call
+- Backend `PUT /api/projects/{id}` endpoint accepts `resume_json`
+- PDF regenerates with new content
+- Better error handling showing actual error message
+
+## API Service Updates
+
+### Project Service
+
+**File**: `services/projectService.js`
+
+**New Method**:
+```javascript
+// Update section order
+updateSectionOrder: async (projectId, sectionOrder) => {
+  const response = await api.put(`/api/projects/${projectId}/section-order`, {
+    section_order: sectionOrder,
+  });
+  return response.data;
+},
+```
+
+**Updated Method**:
+```javascript
+// Update project (now accepts resume_json)
+updateProject: async (projectId, projectData) => {
+  const response = await api.put(`/api/projects/${projectId}`, projectData);
+  return response.data;
+},
+```
+
+### Auth Context
+
+**File**: `context/AuthContext.jsx`
+
+**New Method**:
+```javascript
+const refreshUser = async () => {
+  try {
+    const userData = await authService.getCurrentUser();
+    setUser(userData);
+  } catch (error) {
+    console.error('Failed to refresh user:', error);
+  }
+};
+
+return (
+  <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    {children}
+  </AuthContext.Provider>
+);
+```
+
+**Usage**: Called after tailoring to update credits in navbar.
+
+## Recent UI/UX Improvements
+
+### Formatted View Enhancements
+- ✅ Personal Information section added
+- ✅ All sections start collapsed by default
+- ✅ Independent accordion expansion (no auto-expand on reorder)
+- ✅ Drag-and-drop reordering with smooth animations
+- ✅ "CURRENT" badge on active version (green background)
+- ✅ Version count chips showing tailoring history
+- ✅ Clean, compact design
+
+### Navbar Improvements
+- ✅ Reduced height (64px → 48px)
+- ✅ Gradient background (#072D1F → #29B770)
+- ✅ Favicon added before "SkillMap" text
+- ✅ Credit display with wallet icon
+- ✅ Real-time credit updates
+- ✅ White text/buttons for dark background
+
+### Layout Improvements
+- ✅ 2-column layout (PDF 60%, Data 40%)
+- ✅ Job description in slide-out drawer
+- ✅ PDF no longer cut off at 100% zoom
+- ✅ More spacious, focused interface
+- ✅ Better use of screen real estate
+
+### Error Handling
+- ✅ Credit validation before tailoring
+- ✅ Clear error messages with actual error text
+- ✅ Failed state handling for section reorder
+- ✅ Revert to previous state on error
+- ✅ User-friendly alerts
+
+## Testing Checklist (Updated)
+
+### Credit System
+- [ ] Credits display correctly in navbar (1 decimal)
+- [ ] Credits prevent tailoring when < 5
+- [ ] Credits update after successful tailor
+- [ ] Alert shows current credit balance
+- [ ] refreshUser() called after tailoring
+
+### Personal Information
+- [ ] Section appears in formatted view
+- [ ] Shows name, email, phone, location
+- [ ] Displays header links correctly
+- [ ] Can be dragged and reordered
+- [ ] Collapses/expands independently
+
+### Section Reordering
+- [ ] All sections draggable except header
+- [ ] Smooth drag animations
+- [ ] PDF regenerates after reorder
+- [ ] "Reordering..." spinner shows
+- [ ] State reverts on error
+- [ ] No accidental drags (5px threshold)
+
+### Replace Resume
+- [ ] File upload works
+- [ ] Extracted data updates
+- [ ] PDF refreshes with new content
+- [ ] Error messages show properly
+- [ ] File input resets after upload
+
+### Layout
+- [ ] PDF displays at full width (60%)
+- [ ] Extracted data takes 40% width
+- [ ] Job description drawer opens from left
+- [ ] Drawer closes properly
+- [ ] No horizontal scroll at 100% zoom
+
+## Browser Compatibility (Updated)
+
+### Tested Features
+- ✅ Drag-and-drop (@dnd-kit) in Chrome, Firefox, Safari
+- ✅ MUI Drawer animations smooth
+- ✅ PDF iframe rendering correct
+- ✅ Gradient backgrounds display properly
+- ✅ Credit chip displays correctly
+
+### Known Issues
+None reported as of latest version.
+
 ## License
 
 This project is proprietary software. All rights reserved.

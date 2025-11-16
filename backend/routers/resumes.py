@@ -10,7 +10,8 @@ from middleware.auth_middleware import get_current_user
 from models.user import User
 from models.base_resume import BaseResume
 from services.resume_extractor import extract_resume  # LLM extraction
-from services.docx_recreation_service import recreate_docx_from_json  # DOCX recreation
+from services.docx_recreation_service import recreate_docx_from_json  # Legacy - keeping for backup
+from services.docx_generation_service import generate_resume_from_json, get_default_section_order
 from services.resume_tailoring_service import tailor_resume  # Resume tailoring
 from utils.helpers import validate_file_extension, save_upload_file
 import logging
@@ -268,11 +269,17 @@ async def get_recreated_docx(
         )
 
     try:
-        # Recreate DOCX from original + JSON
-        logger.info("Recreating DOCX from stored data...")
-        recreated_docx_bytes = recreate_docx_from_json(
-            resume.original_docx,
-            resume.resume_json
+        # Generate DOCX programmatically with user's section order
+        logger.info("Generating DOCX for base resume...")
+
+        # Get user's section order (or use default)
+        section_order = current_user.section_order if current_user.section_order else get_default_section_order()
+
+        # Generate resume from JSON using original DOCX as style reference
+        recreated_docx_bytes = generate_resume_from_json(
+            resume_json=resume.resume_json,
+            base_resume_docx=resume.original_docx,
+            section_order=section_order
         )
 
         # Save to temporary file for download

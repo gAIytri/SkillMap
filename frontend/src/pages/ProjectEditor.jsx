@@ -21,19 +21,39 @@ import {
   AccordionDetails,
   Chip,
   Divider,
+  Drawer,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DownloadIcon from '@mui/icons-material/Download';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryIcon from '@mui/icons-material/History';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
+import { useAuth } from '../context/AuthContext';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const ProjectEditor = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const { user, refreshUser } = useAuth();
   const fileInputRef = useRef(null);
   const [project, setProject] = useState(null);
   const [latexContent, setLatexContent] = useState('');
@@ -44,6 +64,8 @@ const ProjectEditor = () => {
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [reorderingPdf, setReorderingPdf] = useState(false);
+  const [jobDescDrawerOpen, setJobDescDrawerOpen] = useState(false);
   const [error, setError] = useState('');
   const [extractedData, setExtractedData] = useState(null); // LLM extracted JSON
   const [downloadingRecreated, setDownloadingRecreated] = useState(false);
@@ -51,8 +73,34 @@ const ProjectEditor = () => {
   const [pdfZoom, setPdfZoom] = useState(100);
   const [tailoring, setTailoring] = useState(false);
   const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
+  const [sectionOrder, setSectionOrder] = useState([
+    'personal_info',
+    'professional_summary',
+    'experience',
+    'projects',
+    'education',
+    'skills',
+    'certifications',
+  ]);
+  const [expandedSections, setExpandedSections] = useState({
+    personal_info: false,
+    professional_summary: false,
+    experience: false,
+    projects: false,
+    education: false,
+    skills: false,
+    certifications: false,
+  }); // Track which sections are expanded (all collapsed by default)
   const iframeRef = useRef(null);
   const messagesEndRef = useRef(null);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     loadProject();
@@ -75,6 +123,11 @@ const ProjectEditor = () => {
       // Load project's resume JSON (not base_resume)
       if (projectData.resume_json) {
         setExtractedData(projectData.resume_json);
+
+        // Load section order from resume_json if available
+        if (projectData.resume_json.section_order) {
+          setSectionOrder(projectData.resume_json.section_order);
+        }
       }
 
       setLoading(false);
@@ -147,25 +200,29 @@ const ProjectEditor = () => {
       const convertedData = await resumeService.uploadResume(file);
 
       // Step 2: Extract JSON data from metadata (LLM extraction)
-      if (convertedData.metadata && convertedData.metadata.resume_json) {
-        setExtractedData(convertedData.metadata.resume_json);
+      const resumeJson = convertedData.metadata?.resume_json;
+
+      if (!resumeJson) {
+        throw new Error('Failed to extract resume data. Please try again.');
       }
 
-      // Step 3: Update the project with the new LaTeX content
+      setExtractedData(resumeJson);
+
+      // Step 3: Update the project with the new resume JSON
       await projectService.updateProject(projectId, {
-        tailored_latex_content: convertedData.latex_content,
+        resume_json: resumeJson,
         job_description: jobDescription,
       });
 
-      // Step 4: Update state with new content
-      setLatexContent(convertedData.latex_content);
-
-      // Step 5: Reload PDF
+      // Step 4: Reload PDF preview with new data
       await loadPdfPreview();
 
       alert('Resume replaced successfully!');
     } catch (err) {
-      setError('Failed to upload and replace resume. Please try again.');
+      console.error('Resume upload error:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to upload and replace resume. Please try again.';
+      setError(errorMsg);
+      alert(`Error: ${errorMsg}`);
     } finally {
       setUploading(false);
       // Reset file input
@@ -273,6 +330,12 @@ const ProjectEditor = () => {
       return;
     }
 
+    // Check if user has sufficient credits
+    if (user && user.credits < 5.0) {
+      alert(`Insufficient credits to tailor resume.\n\nYou have ${user.credits.toFixed(1)} credits.\nMinimum 5 credits required to tailor resume.`);
+      return;
+    }
+
     setTailoring(true);
     setError('');
     setAgentMessages([]); // Clear previous messages
@@ -310,6 +373,11 @@ const ProjectEditor = () => {
         // Reload PDF preview to show tailored version
         await loadPdfPreview();
 
+        // Refresh user data to update credits in navbar
+        if (refreshUser) {
+          await refreshUser();
+        }
+
         // Show success message with changes made
         const changes = finalResult.changes_made || [];
         let successMsg = 'Resume tailored successfully!\n\nChanges Made:\n';
@@ -342,6 +410,439 @@ const ProjectEditor = () => {
       }
     } finally {
       setTailoring(false);
+    }
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = sectionOrder.indexOf(active.id);
+    const newIndex = sectionOrder.indexOf(over.id);
+
+    // Update local state immediately for smooth UX
+    const newOrder = arrayMove(sectionOrder, oldIndex, newIndex);
+    setSectionOrder(newOrder);
+
+    try {
+      console.log('Updating section order to:', newOrder);
+
+      // Show reordering state
+      setReorderingPdf(true);
+
+      // Update backend
+      const response = await projectService.updateSectionOrder(projectId, newOrder);
+      console.log('Backend response:', response);
+
+      // Force PDF reload by revoking old URL and loading new one
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+
+      // Small delay to ensure backend has generated new PDF
+      setTimeout(async () => {
+        await loadPdfPreview();
+        setReorderingPdf(false);
+        console.log('PDF reloaded with new section order');
+      }, 500);
+
+    } catch (err) {
+      console.error('Failed to update section order:', err);
+      setReorderingPdf(false);
+      // Revert on error
+      setSectionOrder(sectionOrder);
+      alert('Failed to update section order. Please try again.');
+    }
+  };
+
+  // Toggle section expansion
+  const handleToggleSection = (sectionKey) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  };
+
+  // SortableSection component for drag and drop
+  const SortableSection = ({ id, children }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <Box ref={setNodeRef} style={style} sx={{ position: 'relative', mb: 1 }}>
+        {/* Drag Handle */}
+        <IconButton
+          {...attributes}
+          {...listeners}
+          size="small"
+          sx={{
+            position: 'absolute',
+            left: -8,
+            top: 8,
+            zIndex: 10,
+            cursor: 'grab',
+            color: colorPalette.primary.darkGreen,
+            '&:active': {
+              cursor: 'grabbing',
+            },
+            '&:hover': {
+              bgcolor: 'rgba(76, 175, 80, 0.1)',
+            },
+          }}
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </IconButton>
+        {children}
+      </Box>
+    );
+  };
+
+  // Helper function to format timestamp
+  const formatTimestamp = (isoString) => {
+    if (!isoString) return 'Current';
+    const date = new Date(isoString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Helper to render each section
+  const renderSection = (sectionKey) => {
+    const history = project?.tailoring_history || [];
+
+    switch (sectionKey) {
+      case 'personal_info':
+        return extractedData.personal_info ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Personal Information
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Paper elevation={0} sx={{ p: 1.5, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                  <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
+                  <Box sx={{ fontSize: '12px' }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                      {extractedData.personal_info.name}
+                    </Typography>
+                    {extractedData.personal_info.email && (
+                      <Typography variant="caption" display="block">
+                        Email: {extractedData.personal_info.email}
+                      </Typography>
+                    )}
+                    {extractedData.personal_info.phone && (
+                      <Typography variant="caption" display="block">
+                        Phone: {extractedData.personal_info.phone}
+                      </Typography>
+                    )}
+                    {extractedData.personal_info.location && (
+                      <Typography variant="caption" display="block">
+                        Location: {extractedData.personal_info.location}
+                      </Typography>
+                    )}
+                    {extractedData.personal_info.header_links && extractedData.personal_info.header_links.length > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" fontWeight={600} display="block">
+                          Links:
+                        </Typography>
+                        {extractedData.personal_info.header_links.map((link, idx) => (
+                          <Typography key={idx} variant="caption" display="block" sx={{ ml: 1 }}>
+                            • {link.text} {link.url && `(${link.url})`}
+                          </Typography>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                </Paper>
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      case 'professional_summary':
+        return extractedData.professional_summary ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={1} width="100%">
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Professional Summary
+                  </Typography>
+                  {history.length > 0 && (
+                    <Chip
+                      icon={<HistoryIcon />}
+                      label={`${history.length} versions`}
+                      size="small"
+                      sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
+                    />
+                  )}
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                    <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      {formatTimestamp(project?.updated_at)}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ fontSize: '12px' }}>
+                    {extractedData.professional_summary}
+                  </Typography>
+                </Paper>
+                {history.map((version, idx) => (
+                  <Accordion key={idx} sx={{ mb: 0.5, '&:before': { display: 'none' } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: '36px', '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                        <Typography variant="caption" fontWeight={600}>
+                          Version {idx + 1}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                          {formatTimestamp(version.timestamp)}
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ py: 1 }}>
+                      <Typography variant="body2" sx={{ fontSize: '11px', color: '#666' }}>
+                        {version.resume_json?.professional_summary || 'No summary available'}
+                      </Typography>
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      case 'experience':
+        return extractedData.experience && extractedData.experience.length > 0 ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={1} width="100%">
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Experience ({extractedData.experience.length})
+                  </Typography>
+                  {history.length > 0 && (
+                    <Chip
+                      icon={<HistoryIcon />}
+                      label={`${history.length} versions`}
+                      size="small"
+                      sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
+                    />
+                  )}
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                  <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
+                  {extractedData.experience.map((exp, idx) => (
+                    <Box key={idx} sx={{ mb: 1.5, fontSize: '12px' }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {exp.title} at {exp.company}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {exp.start_date} - {exp.end_date}
+                        {exp.location && ` | ${exp.location}`}
+                      </Typography>
+                      {exp.bullets && exp.bullets.length > 0 && (
+                        <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                          {exp.bullets.map((bullet, bidx) => (
+                            <li key={bidx} style={{ fontSize: '11px' }}>{bullet}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </Box>
+                  ))}
+                </Paper>
+                {history.map((version, idx) => (
+                  <Accordion key={idx} sx={{ mb: 0.5, '&:before': { display: 'none' } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: '36px', '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                        <Typography variant="caption" fontWeight={600}>
+                          Version {idx + 1}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                          {formatTimestamp(version.timestamp)}
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ py: 1 }}>
+                      {version.resume_json?.experience?.map((exp, eidx) => (
+                        <Box key={eidx} sx={{ mb: 1, fontSize: '11px' }}>
+                          <Typography variant="caption" fontWeight={600}>
+                            {exp.title} at {exp.company}
+                          </Typography>
+                          {exp.bullets && exp.bullets.length > 0 && (
+                            <ul style={{ margin: '2px 0', paddingLeft: '18px', fontSize: '10px' }}>
+                              {exp.bullets.map((bullet, bidx) => (
+                                <li key={bidx}>{bullet}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </Box>
+                      ))}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      case 'projects':
+        return extractedData.projects && extractedData.projects.length > 0 ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box display="flex" alignItems="center" gap={1} width="100%">
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Projects ({extractedData.projects.length})
+                  </Typography>
+                  {history.length > 0 && (
+                    <Chip
+                      icon={<HistoryIcon />}
+                      label={`${history.length} versions`}
+                      size="small"
+                      sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
+                    />
+                  )}
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+                  <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
+                  {extractedData.projects.map((proj, idx) => (
+                    <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
+                      <Typography variant="body2" fontWeight={600}>{proj.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{proj.description}</Typography>
+                      {proj.technologies && proj.technologies.length > 0 && (
+                        <Typography variant="caption" display="block" sx={{ fontStyle: 'italic' }}>
+                          Tech: {proj.technologies.join(', ')}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Paper>
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      case 'education':
+        return extractedData.education && extractedData.education.length > 0 ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Education ({extractedData.education.length})
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {extractedData.education.map((edu, idx) => (
+                  <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
+                    <Typography variant="body2" fontWeight={600}>{edu.degree}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {edu.institution}
+                      {edu.graduation_date && ` | ${edu.graduation_date}`}
+                      {edu.gpa && ` | GPA: ${edu.gpa}`}
+                    </Typography>
+                  </Box>
+                ))}
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      case 'skills':
+        return extractedData.skills && extractedData.skills.length > 0 ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>Skills</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {extractedData.skills.map((skillCat, idx) => (
+                  <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
+                    <Typography variant="caption" fontWeight={600}>{skillCat.category}:</Typography>
+                    <Typography variant="caption" sx={{ ml: 1 }}>{skillCat.skills.join(', ')}</Typography>
+                  </Box>
+                ))}
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      case 'certifications':
+        return extractedData.certifications && extractedData.certifications.length > 0 ? (
+          <SortableSection key={sectionKey} id={sectionKey}>
+            <Accordion
+              expanded={expandedSections[sectionKey] || false}
+              onChange={() => handleToggleSection(sectionKey)}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Certifications ({extractedData.certifications.length})
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
+                  {extractedData.certifications.map((cert, idx) => (
+                    <li key={idx}>{cert}</li>
+                  ))}
+                </ul>
+              </AccordionDetails>
+            </Accordion>
+          </SortableSection>
+        ) : null;
+
+      default:
+        return null;
     }
   };
 
@@ -499,6 +1000,33 @@ const ProjectEditor = () => {
             DOCX
           </Button>
 
+          {/* Tailor Resume Button */}
+          <Button
+            onClick={() => setJobDescDrawerOpen(true)}
+            disabled={tailoring || !extractedData}
+            size="small"
+            variant="contained"
+            sx={{
+              bgcolor: colorPalette.primary.darkGreen,
+              color: '#ffffff',
+              textTransform: 'none',
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: '0.75rem',
+              minWidth: 'auto',
+              px: 1.5,
+              py: 0.5,
+              '&:hover': {
+                bgcolor: '#1a8050',
+              },
+              '&:disabled': {
+                bgcolor: '#cccccc',
+                color: '#666666',
+              },
+            }}
+          >
+            Tailor Resume
+          </Button>
+
           {/* Save Button */}
           <Button
             variant="contained"
@@ -532,92 +1060,9 @@ const ProjectEditor = () => {
         </Alert>
       )}
 
-      {/* 3-Column Professional Layout */}
+      {/* 2-Column Layout: PDF Preview (flex) + Extracted Data (fixed) */}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', bgcolor: '#f5f7fa' }}>
-        {/* Left: Job Description Panel - Fixed 300px */}
-        <Box
-          sx={{
-            width: '300px',
-            borderRight: '2px solid #101111ff',
-            bgcolor: '#ffffff',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '2px 0 4px rgba(0,0,0,0.03)',
-          }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1,
-              border: '2px solid',
-              borderColor: colorPalette.primary.darkGreen,
-              bgcolor: 'rgba(76, 175, 80, 0.04)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
-              Job Description
-            </Typography>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleTailorResume}
-              disabled={tailoring || !jobDescription || !extractedData}
-              sx={{
-                bgcolor: colorPalette.primary.darkGreen,
-                color: '#ffffff',
-                textTransform: 'none',
-                fontSize: '0.75rem',
-                px: 1.5,
-                py: 0.5,
-                boxShadow: 'none',
-                '&:hover': {
-                  bgcolor: '#1a8050',
-                  boxShadow: '0 2px 8px rgba(76, 175, 80, 0.3)',
-                },
-                '&:disabled': {
-                  bgcolor: '#cccccc',
-                  color: '#666666',
-                },
-              }}
-            >
-              {tailoring ? 'Tailoring...' : 'Tailor'}
-            </Button>
-          </Box>
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2, bgcolor: '#fafbfc' }}>
-            <TextField
-              fullWidth
-              multiline
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Paste the job description here to reference while tailoring your resume..."
-              sx={{
-                '& .MuiInputBase-root': {
-                  fontSize: '13px',
-                  lineHeight: '1.6',
-                  bgcolor: '#ffffff',
-                  borderRadius: '6px',
-                },
-                '& fieldset': {
-                  borderColor: '#d1d9e0',
-                },
-                '& .MuiInputBase-root:hover fieldset': {
-                  borderColor: colorPalette.primary.darkGreen,
-                },
-                '& .MuiInputBase-root.Mui-focused fieldset': {
-                  borderColor: colorPalette.primary.darkGreen,
-                  borderWidth: '2px',
-                },
-              }}
-              rows={15}
-            />
-          </Box>
-        </Box>
-
-        {/* Middle: PDF Viewer - Flex */}
+        {/* Left: PDF Viewer - Takes remaining space */}
         <Box
           sx={{
             flex: 1,
@@ -631,7 +1076,7 @@ const ProjectEditor = () => {
           <Box
             sx={{
               px: 2,
-              py: 1,
+        
               border: '2px solid',
               borderColor: colorPalette.primary.darkGreen,
               bgcolor: 'rgba(76, 175, 80, 0.04)',
@@ -643,7 +1088,7 @@ const ProjectEditor = () => {
             <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
               PDF Preview
             </Typography>
-            <Box display="flex" alignItems="center" gap={0.5}>
+            <Box display="flex" alignItems="center">
               <Button
                 variant="outlined"
                 size="small"
@@ -651,13 +1096,13 @@ const ProjectEditor = () => {
                 disabled={pdfZoom <= 60}
                 sx={{
                   color: '#2c3e50',
-                  borderColor: '#2c3e50',
+                  borderColor: 'transparent',
                   textTransform: 'none',
                   fontSize: '0.85rem',
                   fontWeight: 'bold',
                   minWidth: '30px',
-                  px: 0.5,
-                  py: 0.25,
+                  px: 0,
+                  py: 0,
                   '&:hover': {
                     bgcolor: 'rgba(76, 175, 80, 0.1)',
                     borderColor: colorPalette.primary.darkGreen,
@@ -676,13 +1121,13 @@ const ProjectEditor = () => {
                 disabled={pdfZoom >= 200}
                 sx={{
                   color: '#2c3e50',
-                  borderColor: '#2c3e50',
+                  borderColor: 'transparent',
                   textTransform: 'none',
                   fontSize: '0.85rem',
                   fontWeight: 'bold',
                   minWidth: '30px',
-                  px: 0.5,
-                  py: 0.25,
+                  px: 0,
+                  py: 0,
                   '&:hover': {
                     bgcolor: 'rgba(76, 175, 80, 0.1)',
                     borderColor: colorPalette.primary.darkGreen,
@@ -704,11 +1149,11 @@ const ProjectEditor = () => {
               p: 0.5,
             }}
           >
-            {pdfLoading ? (
+            {pdfLoading || reorderingPdf ? (
               <Box textAlign="center" sx={{ alignSelf: 'center' }}>
                 <CircularProgress sx={{ color: colorPalette.primary.darkGreen }} />
                 <Typography variant="body2" color="text.secondary" mt={2}>
-                  Generating PDF preview...
+                  {reorderingPdf ? 'Reordering sections...' : 'Generating PDF preview...'}
                 </Typography>
               </Box>
             ) : pdfUrl ? (
@@ -750,10 +1195,10 @@ const ProjectEditor = () => {
           </Box>
         </Box>
 
-        {/* Right: Extracted Data with Tabs - Flex */}
+        {/* Right: Extracted Data with Tabs - 40% Width */}
         <Box
           sx={{
-            flex: 1,
+            width: '40%',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -763,7 +1208,7 @@ const ProjectEditor = () => {
           <Box
             sx={{
               px: 2,
-              py: 1,
+              py:0.4,
               border: '2px solid',
               borderColor: colorPalette.primary.darkGreen,
               bgcolor: 'rgba(76, 175, 80, 0.04)',
@@ -775,25 +1220,7 @@ const ProjectEditor = () => {
             <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
               Extracted Data (LLM)
             </Typography>
-            <Button
-              size="small"
-              startIcon={<DownloadIcon />}
-              onClick={handleDownloadRecreatedDOCX}
-              disabled={downloadingRecreated}
-              sx={{
-                textTransform: 'none',
-                fontSize: '11px',
-                color: colorPalette.primary.darkGreen,
-                border: `1px solid ${colorPalette.primary.darkGreen}`,
-                px: 1,
-                py: 0.5,
-                '&:hover': {
-                  bgcolor: 'rgba(76, 175, 80, 0.1)',
-                },
-              }}
-            >
-              {downloadingRecreated ? 'Downloading...' : 'Test Download DOCX'}
-            </Button>
+
           </Box>
 
           {/* Tabs for Formatted / Raw JSON */}
@@ -843,256 +1270,21 @@ const ProjectEditor = () => {
                 </Typography>
               </Box>
             ) : activeTab === 0 ? (
-              /* Formatted View with Version History */
-              <Box>
-                {/* Helper function to format timestamp */}
-                {(() => {
-                  const formatTimestamp = (isoString) => {
-                    if (!isoString) return 'Current';
-                    const date = new Date(isoString);
-                    return date.toLocaleString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    });
-                  };
-
-                  const history = project?.tailoring_history || [];
-
-                  return (
-                    <>
-                      {/* Professional Summary Accordion */}
-                      {extractedData.professional_summary && (
-                        <Accordion defaultExpanded sx={{ mb: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box display="flex" alignItems="center" gap={1} width="100%">
-                              <Typography variant="subtitle2" fontWeight={700}>
-                                Professional Summary
-                              </Typography>
-                              {history.length > 0 && (
-                                <Chip
-                                  icon={<HistoryIcon />}
-                                  label={`${history.length} versions`}
-                                  size="small"
-                                  sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
-                                />
-                              )}
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            {/* Current Version */}
-                            <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
-                              <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
-                                <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px' }} />
-                                <Typography variant="caption" color="text.secondary">
-                                  {formatTimestamp(project?.updated_at)}
-                                </Typography>
-                              </Box>
-                              <Typography variant="body2" sx={{ fontSize: '12px' }}>
-                                {extractedData.professional_summary}
-                              </Typography>
-                            </Paper>
-
-                            {/* Previous Versions */}
-                            {history.map((version, idx) => (
-                              <Accordion key={idx} sx={{ mb: 0.5, '&:before': { display: 'none' } }}>
-                                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: '36px', '& .MuiAccordionSummary-content': { my: 0.5 } }}>
-                                  <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
-                                    <Typography variant="caption" fontWeight={600}>
-                                      Version {idx + 1}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                                      {formatTimestamp(version.timestamp)}
-                                    </Typography>
-                                  </Box>
-                                </AccordionSummary>
-                                <AccordionDetails sx={{ py: 1 }}>
-                                  <Typography variant="body2" sx={{ fontSize: '11px', color: '#666' }}>
-                                    {version.resume_json?.professional_summary || 'No summary available'}
-                                  </Typography>
-                                </AccordionDetails>
-                              </Accordion>
-                            ))}
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-
-                      {/* Experience Accordion */}
-                      {extractedData.experience && extractedData.experience.length > 0 && (
-                        <Accordion defaultExpanded sx={{ mb: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box display="flex" alignItems="center" gap={1} width="100%">
-                              <Typography variant="subtitle2" fontWeight={700}>
-                                Experience ({extractedData.experience.length})
-                              </Typography>
-                              {history.length > 0 && (
-                                <Chip
-                                  icon={<HistoryIcon />}
-                                  label={`${history.length} versions`}
-                                  size="small"
-                                  sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
-                                />
-                              )}
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            {/* Current Version */}
-                            <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
-                              <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
-                              {extractedData.experience.map((exp, idx) => (
-                                <Box key={idx} sx={{ mb: 1.5, fontSize: '12px' }}>
-                                  <Typography variant="body2" fontWeight={600}>
-                                    {exp.title} at {exp.company}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {exp.start_date} - {exp.end_date}
-                                    {exp.location && ` | ${exp.location}`}
-                                  </Typography>
-                                  {exp.bullets && exp.bullets.length > 0 && (
-                                    <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                                      {exp.bullets.map((bullet, bidx) => (
-                                        <li key={bidx} style={{ fontSize: '11px' }}>{bullet}</li>
-                                      ))}
-                                    </ul>
-                                  )}
-                                </Box>
-                              ))}
-                            </Paper>
-
-                            {/* Previous Versions */}
-                            {history.map((version, idx) => (
-                              <Accordion key={idx} sx={{ mb: 0.5, '&:before': { display: 'none' } }}>
-                                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: '36px', '& .MuiAccordionSummary-content': { my: 0.5 } }}>
-                                  <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
-                                    <Typography variant="caption" fontWeight={600}>
-                                      Version {idx + 1}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                                      {formatTimestamp(version.timestamp)}
-                                    </Typography>
-                                  </Box>
-                                </AccordionSummary>
-                                <AccordionDetails sx={{ py: 1 }}>
-                                  {version.resume_json?.experience?.map((exp, eidx) => (
-                                    <Box key={eidx} sx={{ mb: 1, fontSize: '11px' }}>
-                                      <Typography variant="caption" fontWeight={600}>
-                                        {exp.title} at {exp.company}
-                                      </Typography>
-                                      {exp.bullets && exp.bullets.length > 0 && (
-                                        <ul style={{ margin: '2px 0', paddingLeft: '18px', fontSize: '10px' }}>
-                                          {exp.bullets.map((bullet, bidx) => (
-                                            <li key={bidx}>{bullet}</li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                    </Box>
-                                  ))}
-                                </AccordionDetails>
-                              </Accordion>
-                            ))}
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-
-                      {/* Skills, Projects, Education (same pattern) - Collapsed for brevity */}
-                      {/* You can expand these similarly */}
-
-                      {/* Simple view for other sections without detailed history */}
-                      {extractedData.education && extractedData.education.length > 0 && (
-                        <Accordion sx={{ mb: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              Education ({extractedData.education.length})
-                            </Typography>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            {extractedData.education.map((edu, idx) => (
-                              <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
-                                <Typography variant="body2" fontWeight={600}>{edu.degree}</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {edu.institution}
-                                  {edu.graduation_date && ` | ${edu.graduation_date}`}
-                                  {edu.gpa && ` | GPA: ${edu.gpa}`}
-                                </Typography>
-                              </Box>
-                            ))}
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-
-                      {extractedData.skills && extractedData.skills.length > 0 && (
-                        <Accordion sx={{ mb: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Typography variant="subtitle2" fontWeight={700}>Skills</Typography>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            {extractedData.skills.map((skillCat, idx) => (
-                              <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
-                                <Typography variant="caption" fontWeight={600}>{skillCat.category}:</Typography>
-                                <Typography variant="caption" sx={{ ml: 1 }}>{skillCat.skills.join(', ')}</Typography>
-                              </Box>
-                            ))}
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-
-                      {extractedData.projects && extractedData.projects.length > 0 && (
-                        <Accordion sx={{ mb: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box display="flex" alignItems="center" gap={1} width="100%">
-                              <Typography variant="subtitle2" fontWeight={700}>
-                                Projects ({extractedData.projects.length})
-                              </Typography>
-                              {history.length > 0 && (
-                                <Chip
-                                  icon={<HistoryIcon />}
-                                  label={`${history.length} versions`}
-                                  size="small"
-                                  sx={{ ml: 'auto', fontSize: '10px', height: '20px' }}
-                                />
-                              )}
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            <Paper elevation={0} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
-                              <Chip label="CURRENT" size="small" color="success" sx={{ fontSize: '10px', height: '18px', mb: 1 }} />
-                              {extractedData.projects.map((proj, idx) => (
-                                <Box key={idx} sx={{ mb: 1, fontSize: '12px' }}>
-                                  <Typography variant="body2" fontWeight={600}>{proj.name}</Typography>
-                                  <Typography variant="caption" color="text.secondary">{proj.description}</Typography>
-                                  {proj.technologies && proj.technologies.length > 0 && (
-                                    <Typography variant="caption" display="block" sx={{ fontStyle: 'italic' }}>
-                                      Tech: {proj.technologies.join(', ')}
-                                    </Typography>
-                                  )}
-                                </Box>
-                              ))}
-                            </Paper>
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-
-                      {extractedData.certifications && extractedData.certifications.length > 0 && (
-                        <Accordion sx={{ mb: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              Certifications ({extractedData.certifications.length})
-                            </Typography>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
-                              {extractedData.certifications.map((cert, idx) => (
-                                <li key={idx}>{cert}</li>
-                              ))}
-                            </ul>
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-                    </>
-                  );
-                })()}
-              </Box>
+              /* Formatted View with Drag-and-Drop Reordering */
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sectionOrder}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <Box sx={{ pl: 1 }}>
+                    {sectionOrder.map((sectionKey) => renderSection(sectionKey))}
+                  </Box>
+                </SortableContext>
+              </DndContext>
             ) : (
               /* Raw JSON View */
               <Box
@@ -1255,6 +1447,119 @@ const ProjectEditor = () => {
           <div ref={messagesEndRef} />
         </DialogContent>
       </Dialog>
+
+      {/* Job Description Drawer - Slides from Left */}
+      <Drawer
+        anchor="left"
+        open={jobDescDrawerOpen}
+        onClose={() => setJobDescDrawerOpen(false)}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: '450px',
+            boxSizing: 'border-box',
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            bgcolor: '#ffffff',
+          }}
+        >
+          {/* Header */}
+          <Box
+            sx={{
+              px: 2,
+              py: 2,
+              borderBottom: '2px solid',
+              borderColor: colorPalette.primary.darkGreen,
+              bgcolor: 'rgba(76, 175, 80, 0.04)',
+            }}
+          >
+            <Typography variant="h6" fontWeight={700} color="#2c3e50" gutterBottom>
+              Job Description
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Paste the job description below and click "Tailor" to optimize your resume
+            </Typography>
+          </Box>
+
+          {/* Job Description TextField */}
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3, bgcolor: '#fafbfc' }}>
+            <TextField
+              fullWidth
+              multiline
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              placeholder="Paste the job description here..."
+              sx={{
+                '& .MuiInputBase-root': {
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  bgcolor: '#ffffff',
+                  borderRadius: '8px',
+                },
+                '& fieldset': {
+                  borderColor: '#d1d9e0',
+                },
+                '& .MuiInputBase-root:hover fieldset': {
+                  borderColor: colorPalette.primary.darkGreen,
+                },
+                '& .MuiInputBase-root.Mui-focused fieldset': {
+                  borderColor: colorPalette.primary.darkGreen,
+                  borderWidth: '2px',
+                },
+              }}
+              rows={20}
+            />
+          </Box>
+
+          {/* Footer Actions */}
+          <Box
+            sx={{
+              p: 2,
+              borderTop: '1px solid #e1e8ed',
+              display: 'flex',
+              gap: 1,
+              justifyContent: 'flex-end',
+            }}
+          >
+            <Button
+              onClick={() => setJobDescDrawerOpen(false)}
+              sx={{
+                textTransform: 'none',
+                color: '#666',
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                handleTailorResume();
+                setJobDescDrawerOpen(false);
+              }}
+              disabled={tailoring || !jobDescription || !extractedData}
+              sx={{
+                bgcolor: colorPalette.primary.darkGreen,
+                color: '#ffffff',
+                textTransform: 'none',
+                '&:hover': {
+                  bgcolor: '#1a8050',
+                },
+                '&:disabled': {
+                  bgcolor: '#cccccc',
+                  color: '#666666',
+                },
+              }}
+            >
+              {tailoring ? 'Tailoring...' : 'Tailor Resume'}
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
     </Box>
   );
 };

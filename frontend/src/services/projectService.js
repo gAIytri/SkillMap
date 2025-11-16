@@ -46,6 +46,14 @@ const projectService = {
     });
     return response.data;
   },
+
+  // Update section order
+  updateSectionOrder: async (projectId, sectionOrder) => {
+    const response = await api.put(`/api/projects/${projectId}/section-order`, {
+      section_order: sectionOrder,
+    });
+    return response.data;
+  },
 };
 
 export default projectService;

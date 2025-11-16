@@ -20,8 +20,6 @@ google-auth-oauthlib==1.2.0
 
 # Document processing
 python-docx==1.1.0
-PyLaTeX==1.4.2
-pypandoc==1.12
 
 # AI/LLM Integration
 openai==1.109.1
