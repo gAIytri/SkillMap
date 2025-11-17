@@ -136,7 +136,7 @@ def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColo
     return hyperlink
 
 
-def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9):
+def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9, keep_together: bool = True):
     """
     Add a bulleted paragraph with visible bullet points (•)
 
@@ -144,6 +144,7 @@ def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9):
         doc: Document object
         text: Bullet text
         font_size: Font size in points (default 9)
+        keep_together: If True, prevents bullet from splitting across pages (default True)
     """
     # Create paragraph and add bullet character directly
     para = doc.add_paragraph()
@@ -162,6 +163,10 @@ def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9):
     para.paragraph_format.space_after = Pt(0)
     para.paragraph_format.line_spacing = 1.0  # Single line spacing
 
+    # Pagination: Keep bullet paragraph together (don't split mid-bullet)
+    if keep_together:
+        para.paragraph_format.keep_together = True
+
     return para
 
 
@@ -173,17 +178,23 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
     NAME (centered, Title style)
     location | email | phone (centered, 10pt)
     LinkedIn | GitHub | Portfolio (centered, 10pt, blue links)
+
+    Uses 3 paragraphs with EXACTLY spacing for precise control.
     """
-    # Name - manually formatted instead of using 'Title' style
+    # Paragraph 1: Name (18pt, bold)
     name_para = doc.add_paragraph()
     name_run = name_para.add_run(sanitize_text(personal_info.get('name', '')))
     name_run.font.size = Pt(18)
     name_run.font.bold = True
     name_run.font.name = 'Calibri'
     name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    name_para.paragraph_format.space_after = Pt(0)  # NO gap below name
+    # Use EXACTLY spacing for name line
+    name_para.paragraph_format.space_before = Pt(0)
+    name_para.paragraph_format.space_after = Pt(2)  # Minimal gap after name
+    name_para.paragraph_format.line_spacing = Pt(18)  # Exact 18pt for 18pt font
+    name_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
 
-    # Contact line (pipe-separated)
+    # Paragraph 2: Contact info (10pt) - combined with links in single paragraph for tightness
     contact_parts = []
     if personal_info.get('location'):
         contact_parts.append(personal_info['location'])
@@ -192,51 +203,60 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
     if personal_info.get('phone'):
         contact_parts.append(personal_info['phone'])
 
-    if contact_parts:
-        contact_para = doc.add_paragraph()
-        contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        contact_para.paragraph_format.space_before = Pt(0)
-        contact_para.paragraph_format.space_after = Pt(0)
-        contact_run = contact_para.add_run(' | '.join(contact_parts))
-        contact_run.font.size = Pt(10)
-        contact_run.font.name = 'Calibri'
-
-    # Links line (pipe-separated, blue hyperlinks)
-    # Use generic header_links (completely dynamic)
     header_links = personal_info.get('header_links', [])
 
-    if header_links:
-        links_para = doc.add_paragraph()
-        links_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        links_para.paragraph_format.space_before = Pt(0)
-        links_para.paragraph_format.space_after = Pt(0)
+    if contact_parts or header_links:
+        contact_links_para = doc.add_paragraph()
+        contact_links_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Use EXACTLY 11pt spacing for tight 10pt text lines
+        contact_links_para.paragraph_format.space_before = Pt(0)
+        contact_links_para.paragraph_format.space_after = Pt(4)
+        contact_links_para.paragraph_format.line_spacing = Pt(11)  # Tight for 10pt font
+        contact_links_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
 
-        for idx, link in enumerate(header_links):
-            text = link.get('text', '')
-            url = link.get('url', None)
+        # Add contact info
+        if contact_parts:
+            contact_run = contact_links_para.add_run(' | '.join(contact_parts))
+            contact_run.font.size = Pt(10)
+            contact_run.font.name = 'Calibri'
+            # Line break before links
+            if header_links:
+                contact_links_para.add_run('\n')
 
-            if not text:
-                continue
+        # Add links on next line
+        if header_links:
+            for idx, link in enumerate(header_links):
+                text = link.get('text', '')
+                url = link.get('url', None)
 
-            # Add separator if not first link
-            if idx > 0:
-                separator_run = links_para.add_run(' | ')
-                separator_run.font.size = Pt(10)
-                separator_run.font.name = 'Calibri'
+                if not text:
+                    continue
 
-            # Create hyperlink if URL exists, otherwise plain text
-            if url:
-                # Add clickable hyperlink
-                add_hyperlink(links_para, text, url, size=10, color=RGBColor(0, 0, 255))
-            else:
-                # Add plain text (blue color for consistency)
-                link_run = links_para.add_run(text)
-                link_run.font.size = Pt(10)
-                link_run.font.color.rgb = RGBColor(0, 0, 255)
+                # Add separator if not first link
+                if idx > 0:
+                    separator_run = contact_links_para.add_run(' | ')
+                    separator_run.font.size = Pt(10)
+                    separator_run.font.name = 'Calibri'
+
+                # Create hyperlink if URL exists, otherwise plain text
+                if url:
+                    add_hyperlink(contact_links_para, text, url, size=10, color=RGBColor(0, 0, 255))
+                else:
+                    link_run = contact_links_para.add_run(text)
+                    link_run.font.size = Pt(10)
+                    link_run.font.name = 'Calibri'
+                    link_run.font.color.rgb = RGBColor(0, 0, 255)
 
 
-def add_section_header(doc: Document, title: str):
-    """Add section header with underline (e.g., PROFESSIONAL SUMMARY)"""
+def add_section_header(doc: Document, title: str, keep_with_next: bool = False):
+    """
+    Add section header with underline (e.g., PROFESSIONAL SUMMARY)
+
+    Args:
+        doc: Document object
+        title: Section title text
+        keep_with_next: If True, keeps header on same page as next paragraph (for small sections)
+    """
     # Create plain paragraph WITHOUT Heading1 style to avoid built-in spacing
     # All formatting (bold, size, font, underline) is applied manually below
     para = doc.add_paragraph()
@@ -276,13 +296,20 @@ def add_section_header(doc: Document, title: str):
     ind.set(qn('w:right'), '0')
     pPr_ind.append(ind)
 
+    # Pagination control: Keep header with next paragraph if requested
+    if keep_with_next:
+        para.paragraph_format.keep_with_next = True
+
+    return para
+
 
 def add_professional_summary(doc: Document, summary: str):
     """Add professional summary section"""
     if not summary:
         return
 
-    add_section_header(doc, 'PROFESSIONAL SUMMARY')
+    # Keep header with content (entire section should stay together)
+    add_section_header(doc, 'PROFESSIONAL SUMMARY', keep_with_next=True)
 
     summary_para = doc.add_paragraph(sanitize_text(summary))
     summary_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # JUSTIFY aligned (both left and right edges)
@@ -291,6 +318,8 @@ def add_professional_summary(doc: Document, summary: str):
     summary_para.paragraph_format.space_before = Pt(0)  # NO gap after underline
     summary_para.paragraph_format.space_after = Pt(0)
     summary_para.paragraph_format.line_spacing = 1.0  # Single line spacing
+    # Pagination: Keep summary together (don't split across pages)
+    summary_para.paragraph_format.keep_together = True
     if summary_para.runs:
         summary_para.runs[0].font.size = Pt(10)
         summary_para.runs[0].font.name = 'Calibri'
@@ -304,11 +333,14 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
     EDUCATION (Heading 1, underlined)
     Institution, Location (Normal, 10pt, bold)
     Degree – GPA: X.X    Date (Normal, 10pt, italic, right-aligned)
+
+    Pagination: Entire section stays together (education is typically short)
     """
     if not education:
         return
 
-    add_section_header(doc, 'EDUCATION')
+    # Keep header with content (entire section should stay together)
+    add_section_header(doc, 'EDUCATION', keep_with_next=True)
 
     for edu in education:
         # School name and location (bold) with date on same line
@@ -324,6 +356,9 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         school_para.paragraph_format.space_before = Pt(0)
         school_para.paragraph_format.space_after = Pt(0)
         school_para.paragraph_format.line_spacing = 1.0  # Single line spacing
+        # Pagination: Keep school with degree line
+        school_para.paragraph_format.keep_with_next = True
+        school_para.paragraph_format.keep_together = True
 
         # Add school name and location (bold)
         school_run = school_para.add_run(', '.join(school_parts))
@@ -353,6 +388,8 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         degree_para.paragraph_format.space_before = Pt(0)
         degree_para.paragraph_format.space_after = Pt(0)
         degree_para.paragraph_format.line_spacing = 1.0  # Single line spacing
+        # Pagination: Keep degree paragraph together
+        degree_para.paragraph_format.keep_together = True
 
         # Add degree text (italic, no date)
         degree_run = degree_para.add_run(' '.join(degree_parts))
@@ -369,11 +406,15 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
     Company – Title, Location    Start – End (Heading 2, date right-aligned)
     • Bullet 1 (List Paragraph, 9pt)
     • Bullet 2
+
+    Pagination: Each individual job entry stays together (header + bullets),
+    but section can span multiple pages
     """
     if not experience:
         return
 
-    add_section_header(doc, 'EXPERIENCE')
+    # Don't use keep_with_next here - allow section to span pages
+    add_section_header(doc, 'EXPERIENCE', keep_with_next=False)
 
     for idx, exp in enumerate(experience):
         # Job header (Heading 2)
@@ -405,6 +446,9 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
         job_para.paragraph_format.space_after = Pt(0)  # NO gap after job header
         job_para.paragraph_format.line_spacing = 1.0  # Single line spacing
         job_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
+        # Pagination: Keep job header with its bullets (don't split entry)
+        job_para.paragraph_format.keep_with_next = True
+        job_para.paragraph_format.keep_together = True
 
         # Add job header text
         job_text = ', '.join(job_header_parts) if job_header_parts else ''
@@ -441,11 +485,15 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
     Project Name – Technologies    Date (Heading 2)
     • Description bullet 1 (List Paragraph, 9pt)
     • Description bullet 2
+
+    Pagination: Each individual project entry stays together (header + bullets),
+    but section can span multiple pages
     """
     if not projects:
         return
 
-    add_section_header(doc, 'PROJECTS')
+    # Don't use keep_with_next here - allow section to span pages
+    add_section_header(doc, 'PROJECTS', keep_with_next=False)
 
     for idx, project in enumerate(projects):
         # Project header (Heading 2) with date on right
@@ -477,6 +525,9 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
         project_para.paragraph_format.space_after = Pt(0)  # NO gap after project header
         project_para.paragraph_format.line_spacing = 1.0  # Single line spacing
         project_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
+        # Pagination: Keep project header with its bullets (don't split entry)
+        project_para.paragraph_format.keep_with_next = True
+        project_para.paragraph_format.keep_together = True
 
         # Add project name and technologies
         run = project_para.add_run(sanitize_text(project_header))
@@ -547,11 +598,14 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):
     Format:
     TECHNICAL SKILLS (Heading 1, underlined)
     Category: skill1, skill2, skill3 (Normal, 10pt, bold category)
+
+    Pagination: Entire section stays together (skills are typically short)
     """
     if not skills:
         return
 
-    add_section_header(doc, 'TECHNICAL SKILLS')
+    # Keep header with content (entire section should stay together)
+    add_section_header(doc, 'TECHNICAL SKILLS', keep_with_next=True)
 
     for skill_cat in skills:
         category = skill_cat.get('category', '')
@@ -566,6 +620,9 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):
             skill_para.paragraph_format.space_before = Pt(0)
             skill_para.paragraph_format.space_after = Pt(0)
             skill_para.paragraph_format.line_spacing = 1.0  # Single line spacing
+            # Pagination: Keep skill lines together
+            skill_para.paragraph_format.keep_with_next = True
+            skill_para.paragraph_format.keep_together = True
 
             # Category (bold)
             cat_run = skill_para.add_run(f"{category}: ")
@@ -586,14 +643,17 @@ def add_certifications_section(doc: Document, certifications: List[str]):
     CERTIFICATIONS (Heading 1, underlined)
     • Certification 1 (List Paragraph, 9pt)
     • Certification 2
+
+    Pagination: Entire section stays together (certifications are typically short)
     """
     if not certifications:
         return
 
-    add_section_header(doc, 'CERTIFICATIONS')
+    # Keep header with content (entire section should stay together)
+    add_section_header(doc, 'CERTIFICATIONS', keep_with_next=True)
 
     for cert in certifications:
-        add_bullet_paragraph(doc, cert, font_size=9)
+        add_bullet_paragraph(doc, cert, font_size=9, keep_together=True)
 
 
 # ============================================================================
