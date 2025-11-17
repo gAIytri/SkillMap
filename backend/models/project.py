@@ -19,6 +19,12 @@ class Project(Base):
     doc_metadata = Column(JSON, nullable=True)  # Metadata
     original_filename = Column(String(255), nullable=False)  # Filename
 
+    # Cover letter and email fields
+    cover_letter_text = Column(Text, nullable=True)  # Generated cover letter
+    email_body_text = Column(Text, nullable=True)  # Generated recruiter email
+    cover_letter_generated_at = Column(DateTime(timezone=True), nullable=True)  # When cover letter was generated
+    email_generated_at = Column(DateTime(timezone=True), nullable=True)  # When email was generated
+
     # History tracking for resume tailoring
     tailoring_history = Column(JSON, nullable=True)  # Array of previous versions with timestamps
 

@@ -1,17 +1,90 @@
 import api from './api';
 
 const resumeService = {
-  // Upload and convert DOCX to LaTeX
-  uploadResume: async (file) => {
+  // Upload and extract resume with streaming progress updates
+  // Supports DOCX, PDF, and image files
+  uploadResume: async (file, onMessage) => {
+    const token = localStorage.getItem('access_token');
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+    console.log('Uploading resume:', { filename: file.name, hasToken: !!token });
+
+    if (!token) {
+      throw new Error('No authentication token found. Please login again.');
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await api.post('/api/resumes/upload', formData, {
+    const response = await fetch(`${baseURL}/api/resumes/upload`, {
+      method: 'POST',
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`,
       },
+      body: formData,
     });
-    return response.data;
+
+    console.log('Response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('access_token');
+        throw new Error('Session expired. Please login again.');
+      }
+
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to upload resume (${response.status})`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalResult = null;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              // Call onMessage callback for each update
+              if (onMessage) {
+                onMessage(data);
+              }
+
+              // Store final result
+              if (data.type === 'final') {
+                finalResult = data;
+              }
+
+              // Handle errors
+              if (data.type === 'error') {
+                throw new Error(data.message || 'Upload failed');
+              }
+            } catch (e) {
+              if (e.message.includes('Upload failed')) {
+                throw e;
+              }
+              console.error('Failed to parse SSE message:', e);
+            }
+          }
+        }
+      }
+
+      return finalResult;
+    } catch (error) {
+      console.error('Streaming upload error:', error);
+      throw error;
+    }
   },
 
   // Save as base resume

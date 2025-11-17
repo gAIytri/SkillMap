@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   Container,
   Box,
@@ -11,9 +12,9 @@ import {
   Link,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 import { colorPalette } from '../styles/theme';
-import GoogleIcon from '@mui/icons-material/Google';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -22,7 +23,7 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -47,9 +48,28 @@ const Login = () => {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Google OAuth implementation
-    alert('Google OAuth setup required. See SETUP.md for instructions.');
+  const handleGoogleLogin = async (credentialResponse) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Use googleLogin from AuthContext - it handles everything!
+      await googleLogin(credentialResponse.credential);
+
+      toast.success('Successfully logged in with Google!');
+      navigate('/dashboard');
+    } catch (err) {
+      console.error('Google login error:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to login with Google. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    toast.error('Google login was cancelled or failed.');
   };
 
   return (
@@ -142,24 +162,17 @@ const Login = () => {
 
           <Divider sx={{ my: 2 }}>OR</Divider>
 
-          <Button
-            fullWidth
-            variant="outlined"
-            size="large"
-            startIcon={<GoogleIcon />}
-            onClick={handleGoogleLogin}
-            sx={{
-              py: 1.5,
-              borderColor: colorPalette.primary.darkGreen,
-              color: colorPalette.primary.darkGreen,
-              '&:hover': {
-                borderColor: colorPalette.primary.darkGreen,
-                bgcolor: colorPalette.secondary.lightGreen,
-              },
-            }}
-          >
-            Continue with Google
-          </Button>
+          <Box display="flex" justifyContent="center" width="100%">
+            <GoogleLogin
+              onSuccess={handleGoogleLogin}
+              onError={handleGoogleError}
+              useOneTap
+              theme="outline"
+              size="large"
+              text="continue_with"
+              width="100%"
+            />
+          </Box>
 
           <Box textAlign="center" mt={3}>
             <Typography variant="body2" color="text.secondary">

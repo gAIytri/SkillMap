@@ -20,6 +20,8 @@ from services.agent_tools import (
     validate_intent,
     summarize_job_description,
     tailor_resume_content,
+    generate_cover_letter,
+    generate_recruiter_email,
     set_runtime_context
 )
 
@@ -116,7 +118,9 @@ class ResumeTailoringAgent:
         self.tools = [
             validate_intent,
             summarize_job_description,
-            tailor_resume_content
+            tailor_resume_content,
+            generate_cover_letter,
+            generate_recruiter_email
         ]
 
         # System prompt for the agent
@@ -345,6 +349,77 @@ You have access to the user's resume JSON and job description through the runtim
                 await asyncio.sleep(0)  # Force flush
                 return
 
+            # Step 4: Generate cover letter
+            yield {
+                "type": "status",
+                "message": "Generating professional cover letter...",
+                "step": "cover_letter"
+            }
+            await asyncio.sleep(0)  # Force flush
+
+            # Convert tailored JSON to string for the tool
+            tailored_json_str = json.dumps(tailor_result.get("tailored_json", {}))
+
+            # Pass job summary (already computed) instead of re-processing full JD
+            cover_letter_result = generate_cover_letter.invoke({
+                "resume_json": tailored_json_str,
+                "job_summary": summary_result,  # Reuse existing summary for efficiency
+                "job_description": job_description
+            })
+
+            # Track tokens from generate_cover_letter
+            if "token_usage" in cover_letter_result:
+                usage = cover_letter_result["token_usage"]
+                self.prompt_tokens_used += usage.get("prompt_tokens", 0)
+                self.completion_tokens_used += usage.get("completion_tokens", 0)
+                self.total_tokens_used += usage.get("total_tokens", 0)
+                logger.info(f"Cumulative tokens after generate_cover_letter: {self.total_tokens_used}")
+
+            yield {
+                "type": "tool_result",
+                "tool": "generate_cover_letter",
+                "message": cover_letter_result.get("message", ""),
+                "data": {
+                    "company_name": cover_letter_result.get("company_name", ""),
+                    "success": cover_letter_result.get("success", False)
+                }
+            }
+            await asyncio.sleep(0)  # Force flush
+
+            # Step 5: Generate recruiter email
+            yield {
+                "type": "status",
+                "message": "Generating recruiter email...",
+                "step": "email"
+            }
+            await asyncio.sleep(0)  # Force flush
+
+            # Pass job summary (already computed) instead of re-processing full JD
+            email_result = generate_recruiter_email.invoke({
+                "resume_json": tailored_json_str,
+                "job_summary": summary_result,  # Reuse existing summary for efficiency
+                "job_description": job_description
+            })
+
+            # Track tokens from generate_recruiter_email
+            if "token_usage" in email_result:
+                usage = email_result["token_usage"]
+                self.prompt_tokens_used += usage.get("prompt_tokens", 0)
+                self.completion_tokens_used += usage.get("completion_tokens", 0)
+                self.total_tokens_used += usage.get("total_tokens", 0)
+                logger.info(f"Cumulative tokens after generate_recruiter_email: {self.total_tokens_used}")
+
+            yield {
+                "type": "tool_result",
+                "tool": "generate_recruiter_email",
+                "message": email_result.get("message", ""),
+                "data": {
+                    "subject": email_result.get("subject", ""),
+                    "success": email_result.get("success", False)
+                }
+            }
+            await asyncio.sleep(0)  # Force flush
+
             # Final result with token usage
             logger.info(
                 f"Resume tailoring completed - Total tokens used: {self.total_tokens_used} "
@@ -354,9 +429,14 @@ You have access to the user's resume JSON and job description through the runtim
             yield {
                 "type": "final",
                 "success": True,
-                "message": "Resume tailored successfully!",
+                "message": "Resume tailored successfully! Cover letter and email generated.",
                 "tailored_json": tailor_result.get("tailored_json", {}),
                 "changes_made": tailor_result.get("changes_made", []),
+                "cover_letter": cover_letter_result.get("cover_letter", ""),
+                "cover_letter_success": cover_letter_result.get("success", False),
+                "email_subject": email_result.get("subject", ""),
+                "email_body": email_result.get("body", ""),
+                "email_success": email_result.get("success", False),
                 "token_usage": {
                     "prompt_tokens": self.prompt_tokens_used,
                     "completion_tokens": self.completion_tokens_used,

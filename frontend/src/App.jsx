@@ -3,6 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box } from '@mui/material';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { Toaster } from 'react-hot-toast';
 
 // Theme and Context
 import theme from './styles/theme';
@@ -29,6 +30,45 @@ function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <GlobalStyles />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#fff',
+              color: '#333',
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#4caf50',
+                secondary: '#fff',
+              },
+              style: {
+                border: '1px solid #4caf50',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#f44336',
+                secondary: '#fff',
+              },
+              style: {
+                border: '1px solid #f44336',
+              },
+            },
+            loading: {
+              iconTheme: {
+                primary: '#2196f3',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
         <Router>
           <AuthProvider>
             <Box

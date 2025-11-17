@@ -8,9 +8,14 @@ import {
   Alert,
   CircularProgress,
   LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { colorPalette } from '../styles/theme';
 import resumeService from '../services/resumeService';
 
@@ -18,7 +23,26 @@ const UploadResume = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [statusMessages, setStatusMessages] = useState([]);
   const navigate = useNavigate();
+
+  // Supported file formats
+  const SUPPORTED_FORMATS = {
+    docx: ['.docx', '.doc'],
+    pdf: ['.pdf'],
+    image: ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'],
+  };
+
+  const getAllowedExtensions = () => {
+    return Object.values(SUPPORTED_FORMATS).flat().join(', ');
+  };
+
+  const isFileSupported = (filename) => {
+    const lowerName = filename.toLowerCase();
+    return Object.values(SUPPORTED_FORMATS)
+      .flat()
+      .some(ext => lowerName.endsWith(ext));
+  };
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -26,8 +50,8 @@ const UploadResume = () => {
     if (!file) return;
 
     // Validate file type
-    if (!file.name.endsWith('.docx')) {
-      setError('Please upload a .docx file only');
+    if (!isFileSupported(file.name)) {
+      setError(`Unsupported file format. Please upload one of: ${getAllowedExtensions()}`);
       return;
     }
 
@@ -46,38 +70,46 @@ const UploadResume = () => {
 
     setUploading(true);
     setError('');
+    setStatusMessages([]);
 
     try {
-      // Upload and convert DOCX to LaTeX
-      const convertedData = await resumeService.uploadResume(selectedFile);
+      // Upload with streaming progress updates
+      const result = await resumeService.uploadResume(
+        selectedFile,
+        (message) => {
+          // Handle status updates
+          if (message.type === 'status') {
+            setStatusMessages(prev => [...prev, message.message]);
+          } else if (message.type === 'error') {
+            throw new Error(message.message);
+          }
+        }
+      );
 
-      // Save as base resume
-      await resumeService.saveBaseResume({
-        latex_content: convertedData.latex_content,
-        doc_metadata: convertedData.metadata,
-        original_filename: selectedFile.name,
-      });
-
-      // Navigate directly to dashboard
-      navigate('/dashboard');
+      if (result && result.success) {
+        // Navigate to dashboard on success
+        navigate('/dashboard');
+      } else {
+        throw new Error('Upload completed but no data received');
+      }
     } catch (err) {
-      // Handle error properly - could be string or object
+      console.error('Upload error:', err);
+
+      // Handle error properly
       let errorMessage = 'Failed to upload resume. Please try again.';
 
-      if (err.response?.data?.detail) {
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.response?.data?.detail) {
         const detail = err.response.data.detail;
         if (typeof detail === 'string') {
           errorMessage = detail;
         } else if (Array.isArray(detail)) {
-          // Pydantic validation errors
           errorMessage = detail.map(e => e.msg).join(', ');
-        } else if (typeof detail === 'object') {
-          errorMessage = JSON.stringify(detail);
         }
       }
 
       setError(errorMessage);
-    } finally {
       setUploading(false);
     }
   };
@@ -122,13 +154,19 @@ const UploadResume = () => {
           <Typography
             variant="body1"
             color="text.secondary"
-            mb={4}
-            maxWidth="600px"
+            mb={1}
+            maxWidth="700px"
             mx="auto"
           >
-            Upload your resume in DOCX format. We'll extract the content and styling,
-            convert it to LaTeX, and you'll be able to tailor it for different job applications.
+            Upload your resume in DOCX, PDF, or image format. Our AI will extract the content
+            and structure it for tailoring to different job applications.
           </Typography>
+
+          <Box mb={4}>
+            <Typography variant="caption" color="text.secondary">
+              <strong>Supported formats:</strong> {getAllowedExtensions()}
+            </Typography>
+          </Box>
 
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
@@ -138,7 +176,7 @@ const UploadResume = () => {
 
           <Box mb={4}>
             <input
-              accept=".docx"
+              accept={getAllowedExtensions()}
               style={{ display: 'none' }}
               id="resume-file-input"
               type="file"
@@ -164,12 +202,12 @@ const UploadResume = () => {
                   },
                 }}
               >
-                Select .DOCX File
+                Select Resume File
               </Button>
             </label>
           </Box>
 
-          {selectedFile && (
+          {selectedFile && !uploading && (
             <Box mb={3}>
               <Typography variant="body2" color="text.secondary" mb={1}>
                 Selected file:
@@ -191,35 +229,93 @@ const UploadResume = () => {
                   '& .MuiLinearProgress-bar': {
                     bgcolor: colorPalette.primary.brightGreen,
                   },
+                  mb: 2,
                 }}
               />
-              <Typography variant="body2" color="text.secondary" mt={1}>
-                Uplaoding your resume...
+
+              {/* Status messages */}
+              {statusMessages.length > 0 && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    maxHeight: 200,
+                    overflow: 'auto',
+                    bgcolor: '#f5f5f5',
+                    textAlign: 'left',
+                  }}
+                >
+                  <List dense>
+                    {statusMessages.map((msg, idx) => (
+                      <ListItem key={idx} disablePadding sx={{ py: 0.5 }}>
+                        <CheckCircleIcon
+                          sx={{
+                            fontSize: 16,
+                            color: colorPalette.primary.brightGreen,
+                            mr: 1,
+                          }}
+                        />
+                        <ListItemText
+                          primary={msg}
+                          primaryTypographyProps={{
+                            variant: 'body2',
+                            color: 'text.secondary',
+                          }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              )}
+
+              {/* Show specific message for OCR */}
+              {statusMessages.some(msg => msg.includes('OCR')) && (
+                <Box mt={2}>
+                  <Chip
+                    label="Using OCR - This may take 5-10 seconds"
+                    size="small"
+                    sx={{
+                      bgcolor: colorPalette.secondary.lightGreen,
+                      color: colorPalette.primary.darkGreen,
+                      fontWeight: 600,
+                    }}
+                  />
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {!uploading && (
+            <Button
+              variant="contained"
+              size="large"
+              onClick={handleUpload}
+              disabled={!selectedFile || uploading}
+              sx={{
+                py: 1.5,
+                px: 4,
+                bgcolor: colorPalette.primary.brightGreen,
+                '&:hover': {
+                  bgcolor: colorPalette.secondary.mediumGreen,
+                },
+              }}
+            >
+              Upload & Extract
+            </Button>
+          )}
+
+          {uploading && (
+            <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Processing...
               </Typography>
             </Box>
           )}
 
-          <Button
-            variant="contained"
-            size="large"
-            onClick={handleUpload}
-            disabled={!selectedFile || uploading}
-            startIcon={uploading && <CircularProgress size={20} />}
-            sx={{
-              py: 1.5,
-              px: 4,
-              bgcolor: colorPalette.primary.brightGreen,
-              '&:hover': {
-                bgcolor: colorPalette.secondary.mediumGreen,
-              },
-            }}
-          >
-            {uploading ? 'Uploading...' : 'Upload & Convert'}
-          </Button>
-
           <Box mt={4}>
             <Typography variant="caption" color="text.secondary">
-              Supported format: .docx only • Max file size: 10MB
+              Max file size: 10MB • AI-powered extraction
             </Typography>
           </Box>
         </Paper>

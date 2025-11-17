@@ -6,7 +6,7 @@ No templates, no Jinja2 - just clean, reliable document building
 
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from io import BytesIO
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # Global spacing configuration (in Pt)
-SECTION_SPACING_BEFORE = 6  # Space before each section header
-SECTION_SPACING_AFTER = 3   # Space after each section header (padding below underline)
+SECTION_SPACING_BEFORE = 5  # Space before each section header (reduced for tighter spacing)
+SECTION_SPACING_AFTER = 2   # Space after each section header (NO gap after underline)
 
 STYLES = {
     'contact': {
@@ -138,34 +138,29 @@ def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColo
 
 def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9):
     """
-    Add a bulleted paragraph with proper formatting
+    Add a bulleted paragraph with visible bullet points (•)
 
     Args:
         doc: Document object
         text: Bullet text
         font_size: Font size in points (default 9)
     """
-    para = doc.add_paragraph(sanitize_text(text), style='List Paragraph')
+    # Create paragraph and add bullet character directly
+    para = doc.add_paragraph()
 
-    # Set font size
-    if para.runs:
-        para.runs[0].font.size = Pt(font_size)
+    # Add bullet character (•) followed by text
+    run = para.add_run(f"• {sanitize_text(text)}")
+    run.font.size = Pt(font_size)
+    run.font.name = 'Calibri'
 
-    # Add bullet numbering
-    pPr = para._p.get_or_add_pPr()
-    numPr = OxmlElement('w:numPr')
+    # Set hanging indent for bullet alignment
+    para.paragraph_format.left_indent = Inches(0.12)
+    para.paragraph_format.first_line_indent = Inches(-0.10)
 
-    # Bullet list (ilvl 0 = first level)
-    ilvl = OxmlElement('w:ilvl')
-    ilvl.set(qn('w:val'), '0')
-
-    # Numbering ID (0 = default bullet list)
-    numId = OxmlElement('w:numId')
-    numId.set(qn('w:val'), '1')  # Use numbering definition 1 (bullets)
-
-    numPr.append(ilvl)
-    numPr.append(numId)
-    pPr.append(numPr)
+    # Ensure no extra spacing
+    para.paragraph_format.space_before = Pt(0)
+    para.paragraph_format.space_after = Pt(0)
+    para.paragraph_format.line_spacing = 1.0  # Single line spacing
 
     return para
 
@@ -184,8 +179,9 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
     name_run = name_para.add_run(sanitize_text(personal_info.get('name', '')))
     name_run.font.size = Pt(18)
     name_run.font.bold = True
+    name_run.font.name = 'Calibri'
     name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    name_para.paragraph_format.space_after = Pt(6)
+    name_para.paragraph_format.space_after = Pt(0)  # NO gap below name
 
     # Contact line (pipe-separated)
     contact_parts = []
@@ -197,18 +193,23 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
         contact_parts.append(personal_info['phone'])
 
     if contact_parts:
-        contact_para = doc.add_paragraph(style='Normal')
+        contact_para = doc.add_paragraph()
         contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact_para.paragraph_format.space_before = Pt(0)
+        contact_para.paragraph_format.space_after = Pt(0)
         contact_run = contact_para.add_run(' | '.join(contact_parts))
         contact_run.font.size = Pt(10)
+        contact_run.font.name = 'Calibri'
 
     # Links line (pipe-separated, blue hyperlinks)
     # Use generic header_links (completely dynamic)
     header_links = personal_info.get('header_links', [])
 
     if header_links:
-        links_para = doc.add_paragraph(style='Normal')
+        links_para = doc.add_paragraph()
         links_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        links_para.paragraph_format.space_before = Pt(0)
+        links_para.paragraph_format.space_after = Pt(0)
 
         for idx, link in enumerate(header_links):
             text = link.get('text', '')
@@ -221,6 +222,7 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
             if idx > 0:
                 separator_run = links_para.add_run(' | ')
                 separator_run.font.size = Pt(10)
+                separator_run.font.name = 'Calibri'
 
             # Create hyperlink if URL exists, otherwise plain text
             if url:
@@ -235,27 +237,44 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
 
 def add_section_header(doc: Document, title: str):
     """Add section header with underline (e.g., PROFESSIONAL SUMMARY)"""
-    # Use style ID (Heading1) not display name (Heading 1)
-    para = doc.add_paragraph(title, style='Heading1')
+    # Create plain paragraph WITHOUT Heading1 style to avoid built-in spacing
+    # All formatting (bold, size, font, underline) is applied manually below
+    para = doc.add_paragraph()
+
+    # Add title text as a run
+    run = para.add_run(title)
+    run.font.size = Pt(12)
+    run.font.bold = True
+    run.font.name = 'Calibri'
 
     # Ensure header starts at content area edge (no additional indent)
     para.paragraph_format.left_indent = Inches(0)
     para.paragraph_format.first_line_indent = Inches(0)
 
-    # Add spacing before section
+    # Add spacing before section, NO spacing after
     para.paragraph_format.space_before = Pt(SECTION_SPACING_BEFORE)
-    para.paragraph_format.space_after = Pt(SECTION_SPACING_AFTER)
+    para.paragraph_format.space_after = Pt(SECTION_SPACING_AFTER)  # NO GAP after underline
+    para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
 
     # Add bottom border (underline effect for the entire paragraph)
+    # The border will extend full width of the content area (between margins)
     pPr = para._p.get_or_add_pPr()
     pBdr = OxmlElement('w:pBdr')
     bottom = OxmlElement('w:bottom')
     bottom.set(qn('w:val'), 'single')
     bottom.set(qn('w:sz'), '6')  # Border thickness
-    bottom.set(qn('w:space'), '1')
+    bottom.set(qn('w:space'), '0')  # No spacing - border goes edge to edge
     bottom.set(qn('w:color'), 'auto')
     pBdr.append(bottom)
     pPr.append(pBdr)
+
+    # Force paragraph to span full width by setting indentation explicitly
+    # This ensures the border extends edge-to-edge within margins
+    pPr_ind = para._p.get_or_add_pPr()
+    ind = OxmlElement('w:ind')
+    ind.set(qn('w:left'), '0')
+    ind.set(qn('w:right'), '0')
+    pPr_ind.append(ind)
 
 
 def add_professional_summary(doc: Document, summary: str):
@@ -265,13 +284,16 @@ def add_professional_summary(doc: Document, summary: str):
 
     add_section_header(doc, 'PROFESSIONAL SUMMARY')
 
-    summary_para = doc.add_paragraph(sanitize_text(summary), style='Normal')
-    summary_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    # Explicitly set indents to 0 to start at content area edge
+    summary_para = doc.add_paragraph(sanitize_text(summary))
+    summary_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # JUSTIFY aligned (both left and right edges)
     summary_para.paragraph_format.left_indent = Inches(0)
     summary_para.paragraph_format.first_line_indent = Inches(0)
+    summary_para.paragraph_format.space_before = Pt(0)  # NO gap after underline
+    summary_para.paragraph_format.space_after = Pt(0)
+    summary_para.paragraph_format.line_spacing = 1.0  # Single line spacing
     if summary_para.runs:
         summary_para.runs[0].font.size = Pt(10)
+        summary_para.runs[0].font.name = 'Calibri'
 
 
 def add_education_section(doc: Document, education: List[Dict[str, Any]]):
@@ -297,8 +319,11 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         school_para = doc.add_paragraph(style='Normal')
         school_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
         # Explicitly set indents to 0 to align with section header
-        school_para.paragraph_format.left_indent = Inches(0)
+        school_para.paragraph_format.left_indent = Pt(1)
         school_para.paragraph_format.first_line_indent = Inches(0)
+        school_para.paragraph_format.space_before = Pt(0)
+        school_para.paragraph_format.space_after = Pt(0)
+        school_para.paragraph_format.line_spacing = 1.0  # Single line spacing
 
         # Add school name and location (bold)
         school_run = school_para.add_run(', '.join(school_parts))
@@ -308,7 +333,7 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         # Add date on right side with tab (SAME line as school, at underline end)
         if edu.get('graduation_date'):
             tab_stops = school_para.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(7.2), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+            tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
 
             # Add tab and date (bold to match original resume)
             date_run = school_para.add_run(f"\t{edu['graduation_date']}")
@@ -325,6 +350,9 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         # Explicitly set indents to 0 to align with section header
         degree_para.paragraph_format.left_indent = Inches(0)
         degree_para.paragraph_format.first_line_indent = Inches(0)
+        degree_para.paragraph_format.space_before = Pt(0)
+        degree_para.paragraph_format.space_after = Pt(0)
+        degree_para.paragraph_format.line_spacing = 1.0  # Single line spacing
 
         # Add degree text (italic, no date)
         degree_run = degree_para.add_run(' '.join(degree_parts))
@@ -347,7 +375,7 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
 
     add_section_header(doc, 'EXPERIENCE')
 
-    for exp in experience:
+    for idx, exp in enumerate(experience):
         # Job header (Heading 2)
         company = exp.get('company', '')
         title = exp.get('title', '')
@@ -365,24 +393,38 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
         if location:
             job_header_parts.append(location)
 
-        job_para = doc.add_paragraph(style='Heading2')  # Use style ID
+        # Create plain paragraph WITHOUT Heading2 style to avoid built-in spacing
+        # All formatting (bold, size, font) is applied manually below
+        job_para = doc.add_paragraph()
+
         # Explicitly set indents to 0 to align with section header
-        job_para.paragraph_format.left_indent = Inches(0)
+        job_para.paragraph_format.left_indent = Pt(1)
         job_para.paragraph_format.first_line_indent = Inches(0)
+        # First item: NO gap after section underline. Subsequent items: add minimal spacing
+        job_para.paragraph_format.space_before = Pt(2) if idx == 0 else Pt(6)
+        job_para.paragraph_format.space_after = Pt(0)  # NO gap after job header
+        job_para.paragraph_format.line_spacing = 1.0  # Single line spacing
+        job_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
 
         # Add job header text
         job_text = ', '.join(job_header_parts) if job_header_parts else ''
         if job_text:
-            job_para.add_run(job_text)
+            run = job_para.add_run(job_text)
+            run.font.bold = True
+            run.font.size = Pt(11)
+            run.font.name = 'Calibri'
 
-        # Add dates on right side with tab
+        # Add dates on right side at end of line
         if start_date and end_date:
-            # Add right-aligned tab stop at 7.2 inches (at underline end)
+            # Add right-aligned tab stop at 7.5 inches (page width 8.5 - left 0.5 - right 0.5 = 7.5)
             tab_stops = job_para.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(7.2), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+            tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
 
             # Add tab and dates
-            job_para.add_run(f"\t{start_date} – {end_date}")
+            date_run = job_para.add_run(f"\t{start_date} – {end_date}")
+            date_run.font.bold = True
+            date_run.font.size = Pt(11)
+            date_run.font.name = 'Calibri'
 
         # Bullets (List Paragraph, 9pt)
         bullets = exp.get('bullets', [])
@@ -405,7 +447,7 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
 
     add_section_header(doc, 'PROJECTS')
 
-    for project in projects:
+    for idx, project in enumerate(projects):
         # Project header (Heading 2) with date on right
         name = project.get('name', '')
         technologies = project.get('technologies', [])
@@ -423,21 +465,35 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
                 tech_str = str(technologies)
             project_header += f" ({tech_str})"
 
-        project_para = doc.add_paragraph(style='Heading2')  # Use style ID
+        # Create plain paragraph WITHOUT Heading2 style to avoid built-in spacing
+        # All formatting (bold, size, font) is applied manually below
+        project_para = doc.add_paragraph()
+
         # Explicitly set indents to 0 to align with section header
-        project_para.paragraph_format.left_indent = Inches(0)
+        project_para.paragraph_format.left_indent = Pt(1)
         project_para.paragraph_format.first_line_indent = Inches(0)
+        # First item: NO gap after section underline. Subsequent items: add minimal spacing
+        project_para.paragraph_format.space_before = Pt(0) if idx == 0 else Pt(4)
+        project_para.paragraph_format.space_after = Pt(0)  # NO gap after project header
+        project_para.paragraph_format.line_spacing = 1.0  # Single line spacing
+        project_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
 
         # Add project name and technologies
-        project_para.add_run(sanitize_text(project_header))
+        run = project_para.add_run(sanitize_text(project_header))
+        run.font.bold = True
+        run.font.size = Pt(11)
+        run.font.name = 'Calibri'
 
-        # Add date on right side with tab (at underline end)
+        # Add date on right side at end of line
         if date:
             tab_stops = project_para.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(7.2), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+            tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
 
             # Add tab and date
-            project_para.add_run(f"\t{date}")
+            date_run = project_para.add_run(f"\t{date}")
+            date_run.font.bold = True
+            date_run.font.size = Pt(11)
+            date_run.font.name = 'Calibri'
 
         # Description - split by period into separate bullets
         description = project.get('description', '')
@@ -505,8 +561,11 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):
             skill_para = doc.add_paragraph(style='Normal')
             skill_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
             # Explicitly set indents to 0 to align with section header
-            skill_para.paragraph_format.left_indent = Inches(0)
+            skill_para.paragraph_format.left_indent = Pt(1)
             skill_para.paragraph_format.first_line_indent = Inches(0)
+            skill_para.paragraph_format.space_before = Pt(0)
+            skill_para.paragraph_format.space_after = Pt(0)
+            skill_para.paragraph_format.line_spacing = 1.0  # Single line spacing
 
             # Category (bold)
             cat_run = skill_para.add_run(f"{category}: ")
@@ -581,9 +640,18 @@ def generate_resume_from_json(
             # Reload the cleared document (this preserves styles properly)
             doc = Document(temp_output)
 
-            # Ensure document margins are preserved (they should be from original doc)
-            # Log the margins for debugging
+            # Set ALL margins to 0.5 inch and page size to US Letter
             section = doc.sections[0]
+            section.top_margin = Inches(0.5)
+            section.bottom_margin = Inches(0.5)
+            section.left_margin = Inches(0.5)
+            section.right_margin = Inches(0.5)
+
+            # Set page size to US Letter (8.5" × 11")
+            section.page_width = Inches(8.5)
+            section.page_height = Inches(11)
+
+            # Log the margins for debugging
             logger.info(f"Document margins - Top: {section.top_margin.inches}\", Bottom: {section.bottom_margin.inches}\", Left: {section.left_margin.inches}\", Right: {section.right_margin.inches}\"")
 
             logger.info("Cleared existing content, preserving styles and page setup")

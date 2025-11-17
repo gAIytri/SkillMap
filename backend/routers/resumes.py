@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
+import asyncio
+import json
 
 from config.database import get_db
 from config.settings import settings
@@ -13,7 +15,6 @@ from services.resume_extractor import extract_resume  # LLM extraction
 from services.docx_recreation_service import recreate_docx_from_json  # Legacy - keeping for backup
 from services.docx_generation_service import generate_resume_from_json, get_default_section_order
 from services.resume_tailoring_service import tailor_resume  # Resume tailoring
-from utils.helpers import validate_file_extension, save_upload_file
 import logging
 import tempfile
 import os
@@ -23,84 +24,182 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 
-@router.post("/upload", response_model=ResumeConvertResponse)
+@router.post("/upload")
 async def upload_and_convert_resume(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Upload DOCX and extract resume data
+    Upload resume (DOCX, PDF, or Image) and extract data with streaming status updates
+
+    Supported formats:
+    - DOCX (.docx, .doc)
+    - PDF (.pdf)
+    - Images (.jpg, .jpeg, .png, .bmp, .tiff)
 
     Process:
-    1. Validate file
-    2. Extract structured JSON (LLM)
-    3. Convert to LaTeX (for PDF)
-    4. Return both formats
+    1. Validate file format
+    2. Try fast text extraction
+    3. Fallback to OCR if needed (with status update)
+    4. Parse with AI
+    5. Save to database
+    6. Return structured JSON
+
+    Returns:
+        Server-Sent Events stream with status updates and final result
     """
-    # Validate file extension
-    if not validate_file_extension(file.filename, settings.ALLOWED_EXTENSIONS):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .docx files are allowed"
-        )
 
-    # Read file content
-    content = await file.read()
+    # Read file content BEFORE creating generator (important!)
+    file_content = await file.read()
+    filename = file.filename
 
-    try:
-        # Extract structured JSON using LLM
-        logger.info("Extracting resume with LLM...")
-        resume_json = extract_resume(content)
-        logger.info("Resume extracted successfully")
+    async def event_generator():
+        """Generate Server-Sent Events for status updates"""
+        try:
+            status_messages = []
 
-        # Save original DOCX and JSON to database
-        logger.info("Saving to database...")
-        existing_resume = db.query(BaseResume).filter(
-            BaseResume.user_id == current_user.id
-        ).first()
+            def status_callback(message: str):
+                """Collect status messages"""
+                status_messages.append(message)
 
-        if existing_resume:
-            # Update existing resume
-            existing_resume.original_filename = file.filename
-            existing_resume.original_docx = content
-            existing_resume.resume_json = resume_json
-            existing_resume.doc_metadata = {"original_filename": file.filename}
-            existing_resume.latex_content = None  # No longer using LaTeX
-            db.commit()
-            db.refresh(existing_resume)
-        else:
-            # Create new resume
-            new_resume = BaseResume(
-                user_id=current_user.id,
-                original_filename=file.filename,
-                original_docx=content,
-                resume_json=resume_json,
-                doc_metadata={"original_filename": file.filename},
-                latex_content=None  # No longer using LaTeX
-            )
-            db.add(new_resume)
-            db.commit()
-            db.refresh(new_resume)
+            # Send initial status
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Uploading resume...'})}\n\n"
+            await asyncio.sleep(0)  # Force flush
 
-        logger.info("Saved to database successfully")
+            try:
+                # Extract structured JSON using hybrid approach
+                logger.info(f"Processing file: {filename}")
 
-        # Return response
-        return ResumeConvertResponse(
-            latex_content="",  # Not used anymore
-            metadata={
-                "resume_json": resume_json,
-                "original_filename": file.filename
-            },
-            preview_available=True
-        )
+                # Use the hybrid extractor with status callbacks
+                resume_json = extract_resume(
+                    file_content,
+                    filename=filename,
+                    status_callback=status_callback
+                )
 
-    except Exception as e:
-        logger.error(f"Resume processing failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process resume: {str(e)}"
-        )
+                # Send each status message to frontend
+                for msg in status_messages:
+                    yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
+                    await asyncio.sleep(0)
+
+                logger.info("Resume extracted successfully")
+
+                # Generate DOCX from extracted JSON (regardless of input format)
+                # This ensures we always have a valid DOCX for templating
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Generating DOCX template...'})}\n\n"
+                await asyncio.sleep(0)
+
+                try:
+                    from services.docx_generation_service import generate_resume_from_json
+
+                    # If original file is DOCX, use it as base; otherwise create from scratch
+                    base_docx = file_content if filename.lower().endswith(('.docx', '.doc')) else None
+
+                    generated_docx = generate_resume_from_json(
+                        resume_json=resume_json,
+                        base_resume_docx=base_docx,
+                        section_order=None  # Use default order
+                    )
+                    logger.info("DOCX template generated successfully")
+                except Exception as e:
+                    logger.error(f"Failed to generate DOCX template: {e}")
+                    # Fallback: use original if DOCX, otherwise None
+                    generated_docx = file_content if filename.lower().endswith(('.docx', '.doc')) else None
+
+                # Save original file and JSON to database
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Saving to database...'})}\n\n"
+                await asyncio.sleep(0)
+
+                existing_resume = db.query(BaseResume).filter(
+                    BaseResume.user_id == current_user.id
+                ).first()
+
+                if existing_resume:
+                    # Update existing resume
+                    existing_resume.original_filename = filename
+                    existing_resume.original_docx = generated_docx  # Store generated DOCX
+                    existing_resume.resume_json = resume_json
+                    existing_resume.doc_metadata = {"original_filename": filename}
+                    existing_resume.latex_content = None
+                    db.commit()
+                    db.refresh(existing_resume)
+                else:
+                    # Create new resume
+                    new_resume = BaseResume(
+                        user_id=current_user.id,
+                        original_filename=filename,
+                        original_docx=generated_docx,  # Store generated DOCX
+                        resume_json=resume_json,
+                        doc_metadata={"original_filename": filename},
+                        latex_content=None
+                    )
+                    db.add(new_resume)
+                    db.commit()
+                    db.refresh(new_resume)
+
+                logger.info("Saved to database successfully")
+
+                # Send final success message
+                final_response = {
+                    "type": "final",
+                    "success": True,
+                    "metadata": {
+                        "resume_json": resume_json,
+                        "original_filename": filename
+                    },
+                    "preview_available": True
+                }
+
+                yield f"data: {json.dumps(final_response)}\n\n"
+
+            except ValueError as e:
+                # File format error
+                error_msg = str(e)
+                logger.error(f"File format error: {error_msg}")
+
+                error_response = {
+                    "type": "error",
+                    "message": error_msg,
+                    "details": "Please upload a supported file format: DOCX, PDF, or image (JPG, PNG)"
+                }
+                yield f"data: {json.dumps(error_response)}\n\n"
+
+            except Exception as e:
+                # General extraction error
+                error_msg = str(e)
+                logger.error(f"Resume extraction failed: {error_msg}")
+                import traceback
+                traceback.print_exc()
+
+                error_response = {
+                    "type": "error",
+                    "message": f"Failed to extract resume: {error_msg}",
+                    "details": "Please ensure the file contains readable text and try again."
+                }
+                yield f"data: {json.dumps(error_response)}\n\n"
+
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+            error_response = {
+                "type": "error",
+                "message": f"Upload failed: {str(e)}"
+            }
+            yield f"data: {json.dumps(error_response)}\n\n"
+
+    # Return streaming response
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable buffering for nginx
+        }
+    )
 
 
 @router.post("/base", response_model=ResumeResponse, status_code=status.HTTP_201_CREATED)

@@ -54,6 +54,18 @@ const projectService = {
     });
     return response.data;
   },
+
+  // Get cover letter for project
+  getCoverLetter: async (projectId) => {
+    const response = await api.get(`/api/projects/${projectId}/cover-letter`);
+    return response.data;
+  },
+
+  // Get email for project
+  getEmail: async (projectId) => {
+    const response = await api.get(`/api/projects/${projectId}/email`);
+    return response.data;
+  },
 };
 
 export default projectService;

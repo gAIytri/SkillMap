@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   Container,
   Box,
@@ -11,11 +12,9 @@ import {
   Link,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useGoogleLogin } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 import { colorPalette } from '../styles/theme';
-import GoogleIcon from '@mui/icons-material/Google';
-import authService from '../services/authService';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -26,7 +25,7 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -67,44 +66,28 @@ const Register = () => {
     }
   };
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (codeResponse) => {
-      try {
-        setLoading(true);
-        setError('');
-        // Exchange code for ID token and login
-        const response = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            code: codeResponse.code,
-            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-            redirect_uri: window.location.origin,
-            grant_type: 'authorization_code',
-          }),
-        });
+  const handleGoogleSignup = async (credentialResponse) => {
+    try {
+      setLoading(true);
+      setError('');
 
-        const tokens = await response.json();
+      // Use googleLogin from AuthContext - works for both login and signup!
+      await googleLogin(credentialResponse.credential);
 
-        // Login with ID token
-        await authService.googleLogin(tokens.id_token);
-        navigate('/upload-resume');
-      } catch (err) {
-        setError(err.response?.data?.detail || 'Google authentication failed');
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: () => {
-      setError('Google login failed');
-    },
-    flow: 'auth-code',
-  });
+      toast.success('Successfully signed up with Google!');
+      navigate('/upload-resume');
+    } catch (err) {
+      console.error('Google signup error:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to sign up with Google. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleGoogleSignup = () => {
-    googleLogin();
+  const handleGoogleError = () => {
+    toast.error('Google sign up was cancelled or failed.');
   };
 
   return (
@@ -218,24 +201,17 @@ const Register = () => {
 
           <Divider sx={{ my: 2 }}>OR</Divider>
 
-          <Button
-            fullWidth
-            variant="outlined"
-            size="large"
-            startIcon={<GoogleIcon />}
-            onClick={handleGoogleSignup}
-            sx={{
-              py: 1.5,
-              borderColor: colorPalette.primary.darkGreen,
-              color: colorPalette.primary.darkGreen,
-              '&:hover': {
-                borderColor: colorPalette.primary.darkGreen,
-                bgcolor: colorPalette.secondary.lightGreen,
-              },
-            }}
-          >
-            Sign up with Google
-          </Button>
+          <Box display="flex" justifyContent="center" width="100%">
+            <GoogleLogin
+              onSuccess={handleGoogleSignup}
+              onError={handleGoogleError}
+              useOneTap
+              theme="outline"
+              size="large"
+              text="signup_with"
+              width="100%"
+            />
+          </Box>
 
           <Box textAlign="center" mt={3}>
             <Typography variant="body2" color="text.secondary">

@@ -483,6 +483,18 @@ async def tailor_project_resume_with_agent(
                         # Update with new tailored resume
                         project_to_update.resume_json = final_result["tailored_json"]
 
+                        # Save cover letter if generated
+                        if final_result.get("cover_letter_success"):
+                            project_to_update.cover_letter_text = final_result.get("cover_letter", "")
+                            project_to_update.cover_letter_generated_at = datetime.utcnow()
+                            logger.info(f"✓ Cover letter saved for project {project_id}")
+
+                        # Save email if generated
+                        if final_result.get("email_success"):
+                            project_to_update.email_body_text = final_result.get("email_body", "")
+                            project_to_update.email_generated_at = datetime.utcnow()
+                            logger.info(f"✓ Email saved for project {project_id}")
+
                         # Deduct credits based on actual token usage
                         token_usage = final_result.get("token_usage", {})
                         total_tokens = token_usage.get("total_tokens", 0)
@@ -614,3 +626,86 @@ async def update_section_order(
     logger.info(f"Updated section order for project {project_id}: {order_update.section_order}")
 
     return project
+
+
+@router.get("/{project_id}/cover-letter")
+async def get_cover_letter(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get cover letter text for a project
+
+    Returns the generated cover letter if available, otherwise 404.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.cover_letter_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cover letter not generated yet. Please tailor the resume first."
+        )
+
+    return {
+        "success": True,
+        "cover_letter": project.cover_letter_text,
+        "generated_at": project.cover_letter_generated_at.isoformat() if project.cover_letter_generated_at else None
+    }
+
+
+@router.get("/{project_id}/email")
+async def get_email_body(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get recruiter email for a project
+
+    Returns the generated email subject and body if available, otherwise 404.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.email_body_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email not generated yet. Please tailor the resume first."
+        )
+
+    # Extract subject from email body (first line if it starts with "Subject:")
+    email_body = project.email_body_text
+    subject = "Application for Position"  # Default subject
+    body = email_body
+
+    # Try to extract subject if present
+    if email_body and (email_body.startswith("Subject:") or "Subject:" in email_body[:100]):
+        lines = email_body.split('\n', 1)
+        if len(lines) == 2 and "Subject:" in lines[0]:
+            subject = lines[0].replace("Subject:", "").strip()
+            body = lines[1].strip()
+
+    return {
+        "success": True,
+        "email_subject": subject,
+        "email_body": body,
+        "generated_at": project.email_generated_at.isoformat() if project.email_generated_at else None
+    }

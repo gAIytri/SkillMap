@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -88,8 +89,9 @@ const ResumeViewer = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      toast.success('PDF downloaded successfully!');
     } catch (err) {
-      alert('Failed to download PDF. Please try again.');
+      toast.error('Failed to download PDF. Please try again.');
     } finally {
       setDownloading(false);
     }

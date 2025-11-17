@@ -20,6 +20,11 @@ google-auth-oauthlib==1.2.0
 
 # Document processing
 python-docx==1.1.0
+pymupdf==1.24.0           # Fast PDF text extraction
+pdf2image==1.17.0         # PDF to image conversion for OCR
+pytesseract==0.3.10       # OCR engine wrapper
+Pillow==10.2.0            # Image processing
+docx2txt==0.9             # Alternative DOCX extraction
 
 # AI/LLM Integration
 openai==1.109.1

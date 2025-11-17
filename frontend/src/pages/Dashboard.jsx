@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import {
   Container,
   Box,
@@ -73,7 +74,7 @@ const Dashboard = () => {
 
   const handleCreateProject = async () => {
     if (!newProjectData.project_name.trim()) {
-      alert('Please enter a project name');
+      toast.error('Please enter a project name');
       return;
     }
 
@@ -81,9 +82,10 @@ const Dashboard = () => {
       const newProject = await projectService.createProject(newProjectData);
       setOpenCreateDialog(false);
       setNewProjectData({ project_name: '', job_description: '' });
+      toast.success('Project created successfully!');
       navigate(`/project/${newProject.id}`);
     } catch (err) {
-      alert('Failed to create project. Please try again.');
+      toast.error('Failed to create project. Please try again.');
     }
   };
 
@@ -92,11 +94,13 @@ const Dashboard = () => {
       return;
     }
 
+    const toastId = toast.loading('Deleting project...');
     try {
       await projectService.deleteProject(projectId);
       setProjects(projects.filter((p) => p.id !== projectId));
+      toast.success('Project deleted successfully!', { id: toastId });
     } catch (err) {
-      alert('Failed to delete project. Please try again.');
+      toast.error('Failed to delete project. Please try again.', { id: toastId });
     }
   };
 

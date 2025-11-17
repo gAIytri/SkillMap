@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   Box,
   Button,
@@ -12,23 +13,23 @@ import {
   TextField,
   Tabs,
   Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   LinearProgress,
   Accordion,
   AccordionSummary,
   AccordionDetails,
   Chip,
-  Divider,
   Drawer,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import DownloadIcon from '@mui/icons-material/Download';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryIcon from '@mui/icons-material/History';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import DescriptionIcon from '@mui/icons-material/Description';
+import EmailIcon from '@mui/icons-material/Email';
+import SendIcon from '@mui/icons-material/Send';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DownloadIcon from '@mui/icons-material/Download';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
@@ -70,6 +71,9 @@ const ProjectEditor = () => {
   const [extractedData, setExtractedData] = useState(null); // LLM extracted JSON
   const [downloadingRecreated, setDownloadingRecreated] = useState(false);
   const [activeTab, setActiveTab] = useState(0); // 0 = formatted, 1 = raw JSON
+  const [documentTab, setDocumentTab] = useState(0); // 0 = Resume, 1 = Cover Letter, 2 = Email
+  const [coverLetter, setCoverLetter] = useState(null);
+  const [email, setEmail] = useState(null); // { subject, body }
   const [pdfZoom, setPdfZoom] = useState(100);
   const [tailoring, setTailoring] = useState(false);
   const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
@@ -181,13 +185,21 @@ const ProjectEditor = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file
-    if (!file.name.endsWith('.docx')) {
-      setError('Please upload a .docx file');
+    // Supported file formats (same as UploadResume)
+    const SUPPORTED_FORMATS = ['.docx', '.doc', '.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'];
+
+    // Validate file type
+    const fileName = file.name.toLowerCase();
+    const isSupported = SUPPORTED_FORMATS.some(ext => fileName.endsWith(ext));
+
+    if (!isSupported) {
+      toast.error(`Unsupported file format. Please upload one of: ${SUPPORTED_FORMATS.join(', ')}`);
+      setError(`Unsupported file format. Please upload one of: ${SUPPORTED_FORMATS.join(', ')}`);
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
       setError('File size must be less than 10MB');
       return;
     }
@@ -217,12 +229,12 @@ const ProjectEditor = () => {
       // Step 4: Reload PDF preview with new data
       await loadPdfPreview();
 
-      alert('Resume replaced successfully!');
+      toast.success('Resume replaced successfully!');
     } catch (err) {
       console.error('Resume upload error:', err);
       const errorMsg = err.response?.data?.detail || err.message || 'Failed to upload and replace resume. Please try again.';
       setError(errorMsg);
-      alert(`Error: ${errorMsg}`);
+      toast.error(errorMsg);
     } finally {
       setUploading(false);
       // Reset file input
@@ -246,10 +258,12 @@ const ProjectEditor = () => {
       // Reload PDF
       await loadPdfPreview();
 
-      alert('Project saved successfully!');
+      toast.success('Project saved successfully!');
     } catch (err) {
       console.error('Save error:', err);
-      setError('Failed to save project. Please try again.');
+      const errorMsg = 'Failed to save project. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -269,8 +283,9 @@ const ProjectEditor = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      toast.success('PDF downloaded successfully!');
     } catch (err) {
-      alert('Failed to download PDF. Please try again.');
+      toast.error('Failed to download PDF. Please try again.');
     } finally {
       setDownloading(false);
     }
@@ -290,8 +305,9 @@ const ProjectEditor = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      toast.success('DOCX downloaded successfully!');
     } catch (err) {
-      alert('Failed to download DOCX. Please try again.');
+      toast.error('Failed to download DOCX. Please try again.');
     } finally {
       setDownloading(false);
     }
@@ -312,8 +328,9 @@ const ProjectEditor = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      toast.success('Tailored DOCX downloaded successfully!');
     } catch (err) {
-      alert('Failed to download DOCX. Please try again.');
+      toast.error('Failed to download DOCX. Please try again.');
     } finally {
       setDownloadingRecreated(false);
     }
@@ -321,18 +338,21 @@ const ProjectEditor = () => {
 
   const handleTailorResume = async () => {
     if (!jobDescription || jobDescription.trim().length < 10) {
-      alert('Please paste a job description first (at least 10 characters).');
+      toast.error('Please paste a job description first (at least 10 characters).');
       return;
     }
 
     if (!extractedData) {
-      alert('No resume found for this project. Please upload a resume first.');
+      toast.error('No resume found for this project. Please upload a resume first.');
       return;
     }
 
     // Check if user has sufficient credits
     if (user && user.credits < 5.0) {
-      alert(`Insufficient credits to tailor resume.\n\nYou have ${user.credits.toFixed(1)} credits.\nMinimum 5 credits required to tailor resume.`);
+      toast.error(
+        `Insufficient credits! You have ${user.credits.toFixed(1)} credits. Minimum 5 credits required.`,
+        { duration: 5000 }
+      );
       return;
     }
 
@@ -373,6 +393,30 @@ const ProjectEditor = () => {
         // Reload PDF preview to show tailored version
         await loadPdfPreview();
 
+        // Fetch cover letter and email if generated
+        try {
+          const [coverLetterData, emailData] = await Promise.all([
+            projectService.getCoverLetter(projectId).catch(() => null),
+            projectService.getEmail(projectId).catch(() => null),
+          ]);
+
+          if (coverLetterData && coverLetterData.success) {
+            setCoverLetter(coverLetterData.cover_letter);
+            console.log('✓ Cover letter loaded');
+          }
+
+          if (emailData && emailData.success) {
+            setEmail({
+              subject: emailData.email_subject,
+              body: emailData.email_body,
+            });
+            console.log('✓ Email loaded');
+          }
+        } catch (err) {
+          console.warn('Failed to load cover letter/email:', err);
+          // Don't fail the whole operation if these fail
+        }
+
         // Refresh user data to update credits in navbar
         if (refreshUser) {
           await refreshUser();
@@ -380,16 +424,32 @@ const ProjectEditor = () => {
 
         // Show success message with changes made
         const changes = finalResult.changes_made || [];
-        let successMsg = 'Resume tailored successfully!\n\nChanges Made:\n';
-        changes.forEach((change, idx) => {
-          successMsg += `${idx + 1}. ${change}\n`;
-        });
-        alert(successMsg);
+        if (changes.length > 0) {
+          toast.success(
+            (t) => (
+              <div>
+                <strong>Resume tailored successfully!</strong>
+                <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                  <strong>Changes Made:</strong>
+                  <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                    {changes.slice(0, 3).map((change, idx) => (
+                      <li key={idx}>{change}</li>
+                    ))}
+                    {changes.length > 3 && <li>...and {changes.length - 3} more</li>}
+                  </ul>
+                </div>
+              </div>
+            ),
+            { duration: 6000 }
+          );
+        } else {
+          toast.success('Resume tailored! Cover letter and email generated.');
+        }
       } else {
         const errorMsg = finalResult?.message || 'Failed to tailor resume - no result';
         console.error('Tailoring failed:', finalResult);
         setError(errorMsg);
-        alert(`Error: ${errorMsg}`);
+        toast.error(errorMsg);
       }
     } catch (err) {
       console.error('Tailoring error (full):', err);
@@ -401,12 +461,12 @@ const ProjectEditor = () => {
 
       // If it's an auth error, redirect to login
       if (errorMsg.includes('authentication') || errorMsg.includes('Session expired') || errorMsg.includes('login again')) {
-        alert(`${errorMsg}\n\nRedirecting to login...`);
+        toast.error(`${errorMsg} Redirecting to login...`, { duration: 3000 });
         setTimeout(() => {
           navigate('/login');
         }, 1500);
       } else {
-        alert(`Error: ${errorMsg}\n\nCheck console for details.`);
+        toast.error(errorMsg);
       }
     } finally {
       setTailoring(false);
@@ -454,7 +514,7 @@ const ProjectEditor = () => {
       setReorderingPdf(false);
       // Revert on error
       setSectionOrder(sectionOrder);
-      alert('Failed to update section order. Please try again.');
+      toast.error('Failed to update section order. Please try again.');
     }
   };
 
@@ -881,7 +941,35 @@ const ProjectEditor = () => {
   }
 
   return (
-    <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* Full-Screen Loading Overlay for Resume Upload */}
+      {uploading && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <CircularProgress size={60} sx={{ color: '#4caf50', mb: 3 }} />
+          <Typography variant="h6" sx={{ color: '#fff', fontFamily: 'Poppins, sans-serif', mb: 1 }}>
+            Replacing Resume
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'Poppins, sans-serif' }}>
+            Extracting data and generating preview...
+          </Typography>
+        </Box>
+      )}
+
       {/* Compact Professional Header */}
       <Box
         sx={{
@@ -939,7 +1027,7 @@ const ProjectEditor = () => {
             type="file"
             ref={fileInputRef}
             onChange={handleResumeUpload}
-            accept=".docx"
+            accept=".docx,.doc,.pdf,.jpg,.jpeg,.png,.bmp,.tiff,.tif"
             style={{ display: 'none' }}
           />
 
@@ -948,6 +1036,7 @@ const ProjectEditor = () => {
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
             size="small"
+            startIcon={uploading ? <CircularProgress size={14} sx={{ color: '#111111' }} /> : null}
             sx={{
               color: '#111111',
               textTransform: 'none',
@@ -957,9 +1046,13 @@ const ProjectEditor = () => {
               px: 1,
               py: 0.5,
               '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
+              '&:disabled': {
+                color: '#666',
+                opacity: 0.7,
+              },
             }}
           >
-            Replace
+            {uploading ? 'Replacing...' : 'Replace'}
           </Button>
 
           {/* Download PDF */}
@@ -1073,71 +1166,100 @@ const ProjectEditor = () => {
             bgcolor: '#ffffff',
           }}
         >
+          {/* Document Tabs: Resume | Cover Letter | Email */}
           <Box
             sx={{
-              px: 2,
-        
-              border: '2px solid',
-              borderColor: colorPalette.primary.darkGreen,
-              bgcolor: 'rgba(76, 175, 80, 0.04)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
+              borderBottom: 1,
+              borderColor: 'divider',
+              bgcolor: '#fff',
             }}
           >
-            <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
-              PDF Preview
-            </Typography>
-            <Box display="flex" alignItems="center">
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={handleZoomOut}
-                disabled={pdfZoom <= 60}
-                sx={{
-                  color: '#2c3e50',
-                  borderColor: 'transparent',
+            <Tabs
+              value={documentTab}
+              onChange={(e, newValue) => setDocumentTab(newValue)}
+              sx={{
+                minHeight: '48px',
+                '& .MuiTab-root': {
+                  minHeight: '48px',
                   textTransform: 'none',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  minWidth: '30px',
-                  px: 0,
-                  py: 0,
-                  '&:hover': {
-                    bgcolor: 'rgba(76, 175, 80, 0.1)',
-                    borderColor: colorPalette.primary.darkGreen,
-                  },
-                }}
-              >
-                -
-              </Button>
-              <Typography variant="caption" sx={{ minWidth: '50px', textAlign: 'center', color: '#2c3e50', fontSize: '0.8rem', fontWeight: 600 }}>
-                {pdfZoom}%
-              </Typography>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={handleZoomIn}
-                disabled={pdfZoom >= 200}
-                sx={{
-                  color: '#2c3e50',
-                  borderColor: 'transparent',
-                  textTransform: 'none',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  minWidth: '30px',
-                  px: 0,
-                  py: 0,
-                  '&:hover': {
-                    bgcolor: 'rgba(76, 175, 80, 0.1)',
-                    borderColor: colorPalette.primary.darkGreen,
-                  },
-                }}
-              >
-                +
-              </Button>
-            </Box>
+                  fontWeight: 600,
+                },
+              }}
+            >
+              <Tab icon={<DescriptionIcon />} iconPosition="start" label="Resume" />
+              <Tab icon={<EmailIcon />} iconPosition="start" label="Cover Letter" />
+              <Tab icon={<SendIcon />} iconPosition="start" label="Email" />
+            </Tabs>
           </Box>
+
+          {/* Zoom Controls (only for Resume tab) */}
+          {documentTab === 0 && (
+            <Box
+              sx={{
+                px: 2,
+                py: 1,
+                border: '2px solid',
+                borderColor: colorPalette.primary.darkGreen,
+                bgcolor: 'rgba(76, 175, 80, 0.04)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
+                PDF Preview
+              </Typography>
+              <Box display="flex" alignItems="center">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleZoomOut}
+                  disabled={pdfZoom <= 60}
+                  sx={{
+                    color: '#2c3e50',
+                    borderColor: 'transparent',
+                    textTransform: 'none',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    minWidth: '30px',
+                    px: 0,
+                    py: 0,
+                    '&:hover': {
+                      bgcolor: 'rgba(76, 175, 80, 0.1)',
+                      borderColor: colorPalette.primary.darkGreen,
+                    },
+                  }}
+                >
+                  -
+                </Button>
+                <Typography variant="caption" sx={{ minWidth: '50px', textAlign: 'center', color: '#2c3e50', fontSize: '0.8rem', fontWeight: 600 }}>
+                  {pdfZoom}%
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleZoomIn}
+                  disabled={pdfZoom >= 200}
+                  sx={{
+                    color: '#2c3e50',
+                    borderColor: 'transparent',
+                    textTransform: 'none',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    minWidth: '30px',
+                    px: 0,
+                    py: 0,
+                    '&:hover': {
+                      bgcolor: 'rgba(76, 175, 80, 0.1)',
+                      borderColor: colorPalette.primary.darkGreen,
+                    },
+                  }}
+                >
+                  +
+                </Button>
+              </Box>
+            </Box>
+          )}
           <Box
             sx={{
               flex: 1,
@@ -1149,48 +1271,204 @@ const ProjectEditor = () => {
               p: 0.5,
             }}
           >
-            {pdfLoading || reorderingPdf ? (
-              <Box textAlign="center" sx={{ alignSelf: 'center' }}>
-                <CircularProgress sx={{ color: colorPalette.primary.darkGreen }} />
-                <Typography variant="body2" color="text.secondary" mt={2}>
-                  {reorderingPdf ? 'Reordering sections...' : 'Generating PDF preview...'}
-                </Typography>
+            {/* Resume Tab */}
+            {documentTab === 0 && (
+              <>
+                {pdfLoading || reorderingPdf ? (
+                  <Box textAlign="center" sx={{ alignSelf: 'center' }}>
+                    <CircularProgress sx={{ color: colorPalette.primary.darkGreen }} />
+                    <Typography variant="body2" color="text.secondary" mt={2}>
+                      {reorderingPdf ? 'Reordering sections...' : 'Generating PDF preview...'}
+                    </Typography>
+                  </Box>
+                ) : pdfUrl ? (
+                  <Box
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'flex-start',
+                      overflow: 'auto',
+                      bgcolor: '#e0e0e0',
+                      p: 1,
+                    }}
+                  >
+                    <iframe
+                      ref={iframeRef}
+                      key={`pdf-${pdfZoom}`}
+                      src={`${pdfUrl}#zoom=${pdfZoom}&toolbar=0&navpanes=0`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        backgroundColor: '#FFF',
+                      }}
+                      title="Resume PDF Preview"
+                    />
+                  </Box>
+                ) : (
+                  <Paper elevation={3} sx={{ p: 4, maxWidth: '400px', textAlign: 'center' }}>
+                    <Typography variant="body2" color="error">
+                      Failed to load PDF preview
+                    </Typography>
+                    <Button variant="outlined" onClick={loadPdfPreview} sx={{ mt: 2 }}>
+                      Retry
+                    </Button>
+                  </Paper>
+                )}
+              </>
+            )}
+
+            {/* Cover Letter Tab */}
+            {documentTab === 1 && (
+              <Box sx={{ width: '100%', height: '100%', p: 3, overflow: 'auto' }}>
+                {coverLetter ? (
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6" fontWeight={600} color="#2c3e50">
+                        Cover Letter
+                      </Typography>
+                      <Button
+                        startIcon={<DownloadIcon />}
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          // Download as .txt file
+                          const blob = new Blob([coverLetter], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${project?.project_name || 'cover-letter'}_cover_letter.txt`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success('Cover letter downloaded!');
+                        }}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Download
+                      </Button>
+                    </Box>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        bgcolor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: '"Times New Roman", serif',
+                        fontSize: '14px',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {coverLetter}
+                    </Paper>
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      color: '#666',
+                    }}
+                  >
+                    <EmailIcon sx={{ fontSize: 48, color: '#bbb', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" textAlign="center">
+                      Click "Tailor Resume" to generate cover letter
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" textAlign="center" mt={1}>
+                      A professional cover letter will be created alongside your tailored resume
+                    </Typography>
+                  </Box>
+                )}
               </Box>
-            ) : pdfUrl ? (
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'flex-start',
-                  overflow: 'auto',
-                  bgcolor: '#e0e0e0',
-                  p: 1,
-                }}
-              >
-                <iframe
-                  ref={iframeRef}
-                  key={`pdf-${pdfZoom}`}
-                  src={`${pdfUrl}#zoom=${pdfZoom}&toolbar=0&navpanes=0`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    border: 'none',
-                    backgroundColor: '#FFF',
-                  }}
-                  title="Resume PDF Preview"
-                />
+            )}
+
+            {/* Email Tab */}
+            {documentTab === 2 && (
+              <Box sx={{ width: '100%', height: '100%', p: 3, overflow: 'auto' }}>
+                {email ? (
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6" fontWeight={600} color="#2c3e50">
+                        Recruiter Email
+                      </Typography>
+                      <Button
+                        startIcon={<ContentCopyIcon />}
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          const emailText = `Subject: ${email.subject}\n\n${email.body}`;
+                          navigator.clipboard.writeText(emailText);
+                          toast.success('Email copied to clipboard!');
+                        }}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Copy Email
+                      </Button>
+                    </Box>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        bgcolor: '#fff',
+                        border: '1px solid #e0e0e0',
+                      }}
+                    >
+                      <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                        Subject:
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600} mb={3} sx={{ color: '#2c3e50' }}>
+                        {email.subject}
+                      </Typography>
+                      <Box
+                        sx={{
+                          borderTop: '1px solid #e0e0e0',
+                          pt: 3,
+                        }}
+                      >
+                        <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                          Body:
+                        </Typography>
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            whiteSpace: 'pre-wrap',
+                            fontFamily: '"Arial", sans-serif',
+                            fontSize: '14px',
+                            lineHeight: 1.6,
+                            color: '#333',
+                          }}
+                        >
+                          {email.body}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      color: '#666',
+                    }}
+                  >
+                    <SendIcon sx={{ fontSize: 48, color: '#bbb', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" textAlign="center">
+                      Click "Tailor Resume" to generate email
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" textAlign="center" mt={1}>
+                      A professional recruiter email will be created alongside your tailored resume
+                    </Typography>
+                  </Box>
+                )}
               </Box>
-            ) : (
-              <Paper elevation={3} sx={{ p: 4, maxWidth: '400px', textAlign: 'center' }}>
-                <Typography variant="body2" color="error">
-                  Failed to load PDF preview
-                </Typography>
-                <Button variant="outlined" onClick={loadPdfPreview} sx={{ mt: 2 }}>
-                  Retry
-                </Button>
-              </Paper>
             )}
           </Box>
         </Box>
@@ -1308,43 +1586,68 @@ const ProjectEditor = () => {
         </Box>
       </Box>
 
-      {/* Agent Tailoring Modal */}
-      <Dialog
-        open={tailoring}
-        maxWidth="sm"
-        fullWidth
-        disableEscapeKeyDown
-        sx={{
-          '& .MuiDialog-paper': {
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-          },
-        }}
-      >
-        <DialogTitle
+      {/* Agent Tailoring Full-Screen Overlay */}
+      {tailoring && (
+        <Box
           sx={{
-            bgcolor: colorPalette.primary.darkGreen,
-            color: 'white',
-            pb: 2,
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            bgcolor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            backdropFilter: 'blur(4px)',
           }}
         >
-          <Box display="flex" alignItems="center" gap={1.5}>
-            <CircularProgress size={24} sx={{ color: 'white' }} />
-            <Typography variant="h6" fontWeight={600}>
-              Tailoring Resume
-            </Typography>
-          </Box>
-          <LinearProgress
+          {/* Main Content Card */}
+          <Box
             sx={{
-              mt: 2,
-              bgcolor: 'rgba(255, 255, 255, 0.2)',
-              '& .MuiLinearProgress-bar': {
-                bgcolor: '#ffffff',
-              },
+              bgcolor: 'white',
+              borderRadius: '16px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              width: '90%',
+              maxWidth: '600px',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
             }}
-          />
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, minHeight: '250px', maxHeight: '500px', overflow: 'auto' }}>
+          >
+            {/* Header */}
+            <Box
+              sx={{
+                bgcolor: colorPalette.primary.darkGreen,
+                color: 'white',
+                p: 3,
+                borderTopLeftRadius: '16px',
+                borderTopRightRadius: '16px',
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1.5} mb={2}>
+                <CircularProgress size={28} sx={{ color: 'white' }} />
+                <Typography variant="h5" fontWeight={700} fontFamily="Poppins, sans-serif">
+                  Tailoring Resume
+                </Typography>
+              </Box>
+              <LinearProgress
+                sx={{
+                  bgcolor: 'rgba(255, 255, 255, 0.2)',
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: '#ffffff',
+                  },
+                  borderRadius: '4px',
+                  height: '6px',
+                }}
+              />
+            </Box>
+
+            {/* Messages Container */}
+            <Box sx={{ p: 3, flex: 1, overflow: 'auto', minHeight: '250px', maxHeight: '500px' }}>
           {agentMessages.length === 0 && (
             <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4}>
               <CircularProgress size={40} sx={{ color: colorPalette.primary.darkGreen }} />
@@ -1443,10 +1746,12 @@ const ProjectEditor = () => {
             </Box>
           )}
 
-          {/* Auto-scroll anchor */}
-          <div ref={messagesEndRef} />
-        </DialogContent>
-      </Dialog>
+              {/* Auto-scroll anchor */}
+              <div ref={messagesEndRef} />
+            </Box>
+          </Box>
+        </Box>
+      )}
 
       {/* Job Description Drawer - Slides from Left */}
       <Drawer

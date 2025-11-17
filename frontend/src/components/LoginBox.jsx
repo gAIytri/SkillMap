@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import { Box, TextField, Button, Typography, Divider } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import { useNavigate } from 'react-router-dom';
@@ -85,7 +86,7 @@ export default function LoginBox() {
     if (email && password) {
       navigate('/dashboard');
     } else {
-      alert('Please enter both email and password.');
+      toast.error('Please enter both email and password.');
     }
   };
 
