@@ -8,7 +8,6 @@ import {
   Typography,
   Paper,
   CircularProgress,
-  Alert,
   IconButton,
   TextField,
   Tabs,
@@ -34,6 +33,7 @@ import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
 import { useAuth } from '../context/AuthContext';
+import RechargeDialog from '../components/credits/RechargeDialog';
 import {
   DndContext,
   closestCenter,
@@ -77,6 +77,8 @@ const ProjectEditor = () => {
   const [pdfZoom, setPdfZoom] = useState(100);
   const [tailoring, setTailoring] = useState(false);
   const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
+  const [showRechargeDialog, setShowRechargeDialog] = useState(false);
+  const [rechargeDialogBlocking, setRechargeDialogBlocking] = useState(false);
   const [sectionOrder, setSectionOrder] = useState([
     'personal_info',
     'professional_summary',
@@ -97,6 +99,7 @@ const ProjectEditor = () => {
   }); // Track which sections are expanded (all collapsed by default)
   const iframeRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const abortControllerRef = useRef(null); // For cancelling requests
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -108,6 +111,14 @@ const ProjectEditor = () => {
 
   useEffect(() => {
     loadProject();
+
+    // Cleanup function to abort pending requests on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        console.log('Aborting pending requests on unmount');
+        abortControllerRef.current.abort();
+      }
+    };
   }, [projectId]);
 
   // Auto-scroll to bottom when new messages arrive
@@ -122,7 +133,10 @@ const ProjectEditor = () => {
       const projectData = await projectService.getProject(projectId);
       setProject(projectData);
       setLatexContent(projectData.tailored_latex_content);
-      setJobDescription(projectData.job_description || '');
+
+      // Load JD: prefer last_tailoring_jd, fallback to job_description
+      const jdToLoad = projectData.last_tailoring_jd || projectData.job_description || '';
+      setJobDescription(jdToLoad);
 
       // Load project's resume JSON (not base_resume)
       if (projectData.resume_json) {
@@ -139,7 +153,9 @@ const ProjectEditor = () => {
       // Load PDF preview
       await loadPdfPreview();
     } catch (err) {
-      setError('Failed to load project. Please try again.');
+      const errorMsg = 'Failed to load project. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
     }
   };
@@ -207,9 +223,17 @@ const ProjectEditor = () => {
     setUploading(true);
     setError('');
 
+    // Create new AbortController for this upload
+    const uploadAbortController = new AbortController();
+    abortControllerRef.current = uploadAbortController;
+
     try {
-      // Step 1: Upload and convert the new resume
-      const convertedData = await resumeService.uploadResume(file);
+      // Step 1: Upload and convert the new resume with abort support
+      const convertedData = await resumeService.uploadResume(
+        file,
+        null, // No progress callback needed here
+        uploadAbortController.signal
+      );
 
       // Step 2: Extract JSON data from metadata (LLM extraction)
       const resumeJson = convertedData.metadata?.resume_json;
@@ -231,12 +255,19 @@ const ProjectEditor = () => {
 
       toast.success('Resume replaced successfully!');
     } catch (err) {
+      // Gracefully handle aborted uploads
+      if (err.name === 'AbortError') {
+        console.log('Resume upload was cancelled');
+        return;
+      }
+
       console.error('Resume upload error:', err);
       const errorMsg = err.response?.data?.detail || err.message || 'Failed to upload and replace resume. Please try again.';
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
       setUploading(false);
+      abortControllerRef.current = null; // Clean up controller
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -278,7 +309,7 @@ const ProjectEditor = () => {
       const url = window.URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${project.project_name.replace(/\s+/g, '_')}.pdf`;
+      link.download = `${(project?.project_name || 'resume').replace(/\s+/g, '_')}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -300,7 +331,7 @@ const ProjectEditor = () => {
       const url = window.URL.createObjectURL(docxBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${project.project_name.replace(/\s+/g, '_')}.docx`;
+      link.download = `${(project?.project_name || 'resume').replace(/\s+/g, '_')}.docx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -349,16 +380,18 @@ const ProjectEditor = () => {
 
     // Check if user has sufficient credits
     if (user && user.credits < 5.0) {
-      toast.error(
-        `Insufficient credits! You have ${user.credits.toFixed(1)} credits. Minimum 5 credits required.`,
-        { duration: 5000 }
-      );
+      // Show blocking recharge dialog
+      setRechargeDialogBlocking(true);
+      setShowRechargeDialog(true);
       return;
     }
 
     setTailoring(true);
     setError('');
     setAgentMessages([]); // Clear previous messages
+
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController();
 
     try {
       // Call agent-based tailoring with streaming updates
@@ -380,7 +413,8 @@ const ProjectEditor = () => {
           } else if (message.type === 'tool_result') {
             console.log(`[Tool: ${message.tool}] ${message.message}`);
           }
-        }
+        },
+        abortControllerRef.current.signal // Pass abort signal
       );
 
       console.log('Final result:', finalResult);
@@ -418,8 +452,18 @@ const ProjectEditor = () => {
         }
 
         // Refresh user data to update credits in navbar
+        let updatedUser = user;
         if (refreshUser) {
-          await refreshUser();
+          const freshUser = await refreshUser();
+          if (freshUser) {
+            updatedUser = freshUser;
+          }
+        }
+
+        // Check if low credits warning should be shown (non-blocking)
+        if (updatedUser && updatedUser.credits < 10.0) {
+          setRechargeDialogBlocking(false);
+          setShowRechargeDialog(true);
         }
 
         // Show success message with changes made
@@ -446,18 +490,45 @@ const ProjectEditor = () => {
           toast.success('Resume tailored! Cover letter and email generated.');
         }
       } else {
+        // Check if it's an invalid intent error
         const errorMsg = finalResult?.message || 'Failed to tailor resume - no result';
         console.error('Tailoring failed:', finalResult);
-        setError(errorMsg);
-        toast.error(errorMsg);
+
+        if (errorMsg.toLowerCase().includes('invalid') || errorMsg.toLowerCase().includes('not related') || errorMsg.toLowerCase().includes('unrelated')) {
+          // Invalid intent detected - revert to last tailoring JD if available
+          const lastJD = project?.last_tailoring_jd || '';
+          if (lastJD) {
+            toast.error(
+              `${errorMsg}. Reverted to previous job description.`,
+              { duration: 5000 }
+            );
+            setJobDescription(lastJD);
+          } else {
+            toast.error(
+              `${errorMsg}. Please provide a valid job description.`,
+              { duration: 5000 }
+            );
+            setJobDescription(''); // Clear invalid JD
+          }
+        } else {
+          setError(errorMsg);
+          toast.error(errorMsg);
+        }
       }
     } catch (err) {
+      // Gracefully handle aborted requests (user navigated away)
+      if (err.name === 'AbortError') {
+        console.log('Tailoring request was cancelled');
+        return; // Don't show error message for intentional cancellation
+      }
+
       console.error('Tailoring error (full):', err);
       console.error('Error message:', err.message);
       console.error('Error stack:', err.stack);
 
       const errorMsg = err.message || 'Failed to tailor resume. Please try again.';
       setError(errorMsg);
+      toast.error(errorMsg);
 
       // If it's an auth error, redirect to login
       if (errorMsg.includes('authentication') || errorMsg.includes('Session expired') || errorMsg.includes('login again')) {
@@ -470,6 +541,7 @@ const ProjectEditor = () => {
       }
     } finally {
       setTailoring(false);
+      abortControllerRef.current = null; // Clean up controller
     }
   };
 
@@ -920,6 +992,7 @@ const ProjectEditor = () => {
     );
   }
 
+  // If error and no project, show error page without Alert
   if (error && !project) {
     return (
       <Box
@@ -930,9 +1003,9 @@ const ProjectEditor = () => {
         minHeight="calc(100vh - 64px)"
         p={4}
       >
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Typography variant="h6" color="error" sx={{ mb: 3 }}>
           {error}
-        </Alert>
+        </Typography>
         <Button variant="contained" onClick={() => navigate('/dashboard')}>
           Back to Dashboard
         </Button>
@@ -1146,12 +1219,6 @@ const ProjectEditor = () => {
           </Button>
         </Box>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ borderRadius: 0 }}>
-          {error}
-        </Alert>
-      )}
 
       {/* 2-Column Layout: PDF Preview (flex) + Extracted Data (fixed) */}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', bgcolor: '#f5f7fa' }}>
@@ -1865,6 +1932,14 @@ const ProjectEditor = () => {
           </Box>
         </Box>
       </Drawer>
+
+      {/* Recharge Credits Dialog */}
+      <RechargeDialog
+        open={showRechargeDialog}
+        onClose={() => setShowRechargeDialog(false)}
+        currentCredits={user?.credits || 0}
+        blocking={rechargeDialogBlocking}
+      />
     </Box>
   );
 };

@@ -33,6 +33,7 @@ class HeaderLink(BaseModel):
 class PersonalInfo(BaseModel):
     """Personal information"""
     name: str
+    current_role: Optional[str] = None  # Job title/role if mentioned in header
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
@@ -292,6 +293,56 @@ class ResumeExtractor:
             logger.error(f"OCR extraction failed: {e}")
             raise Exception(f"OCR extraction failed: {str(e)}")
 
+    def _clean_extracted_data(self, data: dict) -> dict:
+        """
+        Post-process extracted data to remove duplicates and clean up
+
+        Args:
+            data: Raw extracted resume data
+
+        Returns:
+            Cleaned resume data
+        """
+        # Clean header_links: remove email/phone duplicates
+        if 'personal_info' in data and 'header_links' in data['personal_info']:
+            email = data['personal_info'].get('email', '') or ''
+            phone = data['personal_info'].get('phone', '') or ''
+
+            # Ensure email and phone are strings
+            email = str(email).lower() if email else ''
+            phone = str(phone) if phone else ''
+
+            cleaned_links = []
+            for link in data['personal_info']['header_links']:
+                link_text = str(link.get('text', '') or '').lower()
+                link_url = str(link.get('url', '') or '').lower()
+
+                # Skip if it's email or phone
+                if email and (email in link_text or email in link_url):
+                    continue
+                if phone and (phone in link_text or phone in link_url):
+                    continue
+
+                cleaned_links.append(link)
+
+            data['personal_info']['header_links'] = cleaned_links
+
+        # Deduplicate skills within each category
+        if 'skills' in data:
+            for skill_category in data['skills']:
+                if 'skills' in skill_category and isinstance(skill_category['skills'], list):
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    unique_skills = []
+                    for skill in skill_category['skills']:
+                        skill_lower = skill.lower().strip()
+                        if skill_lower not in seen:
+                            seen.add(skill_lower)
+                            unique_skills.append(skill.strip())
+                    skill_category['skills'] = unique_skills
+
+        return data
+
     def _parse_with_llm(self, text: str) -> dict:
         """Parse extracted text with OpenAI LLM"""
         logger.info("Sending to OpenAI for structured parsing...")
@@ -303,11 +354,14 @@ INSTRUCTIONS:
 - Identify sections by context (not just keywords)
 - Extract ALL content exactly as written
 - Maintain chronological order (newest first)
-- For skills, group by logical categories
+- For skills, group by logical categories (remove duplicates within each category)
 - Preserve dates exactly (e.g., "Sept 2025", "Present")
-- For header_links: Extract any links/text in the header (LinkedIn, GitHub, Portfolio, etc.)
-  * Extract the display text (e.g., "LinkedIn", "GitHub", "Medium")
-  * Extract URLs if available
+- For personal_info:
+  * Extract current_role/job title if mentioned in the header (e.g., "Software Engineer", "Data Analyst")
+  * DO NOT include email/phone in header_links (they have dedicated fields)
+  * For header_links: Only extract social/professional links (LinkedIn, GitHub, Portfolio, etc.)
+  * Keep link text clean and simple (e.g., "LinkedIn" not "LinkedinLinkedinLinkedin")
+  * Avoid repeating text multiple times in link names
 
 RESUME:
 {text}
@@ -331,6 +385,9 @@ RESUME:
 
         resume_data = completion.choices[0].message.parsed
         result = resume_data.model_dump()
+
+        # Clean up the data
+        result = self._clean_extracted_data(result)
 
         logger.info("Resume parsed successfully by LLM")
         return result

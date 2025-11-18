@@ -3,7 +3,7 @@ import api from './api';
 const resumeService = {
   // Upload and extract resume with streaming progress updates
   // Supports DOCX, PDF, and image files
-  uploadResume: async (file, onMessage) => {
+  uploadResume: async (file, onMessage, abortSignal = null) => {
     const token = localStorage.getItem('access_token');
     const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -22,6 +22,7 @@ const resumeService = {
         'Authorization': `Bearer ${token}`,
       },
       body: formData,
+      signal: abortSignal, // Add abort signal support
     });
 
     console.log('Response status:', response.status, response.statusText);
@@ -148,7 +149,7 @@ const resumeService = {
   },
 
   // Tailor project resume with Agent (Streaming with progress updates)
-  tailorProjectResumeWithAgent: async (projectId, jobDescription, onMessage) => {
+  tailorProjectResumeWithAgent: async (projectId, jobDescription, onMessage, abortSignal = null) => {
     const token = localStorage.getItem('access_token');
     const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -165,6 +166,7 @@ const resumeService = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ job_description: jobDescription }),
+      signal: abortSignal, // Add abort signal support
     });
 
     console.log('Response status:', response.status, response.statusText);

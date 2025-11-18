@@ -37,10 +37,25 @@ const authService = {
     localStorage.removeItem('user');
   },
 
-  // Get current user
+  // Get current user (with error handling for corrupted localStorage)
   getCurrentUser: () => {
-    const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    try {
+      const userStr = localStorage.getItem('user');
+      if (!userStr) return null;
+
+      // Parse JSON safely
+      return JSON.parse(userStr);
+    } catch (error) {
+      console.error('Failed to parse user from localStorage:', error);
+      // Clear corrupted data
+      try {
+        localStorage.removeItem('user');
+        localStorage.removeItem('access_token');
+      } catch (clearError) {
+        console.error('Failed to clear localStorage:', clearError);
+      }
+      return null;
+    }
   },
 
   // Check if user is authenticated

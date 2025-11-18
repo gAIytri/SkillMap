@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Box,
@@ -25,6 +25,17 @@ const UploadResume = () => {
   const [error, setError] = useState('');
   const [statusMessages, setStatusMessages] = useState([]);
   const navigate = useNavigate();
+  const abortControllerRef = useRef(null); // For cancelling requests
+
+  // Cleanup pending requests on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        console.log('Aborting pending upload on unmount');
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Supported file formats
   const SUPPORTED_FORMATS = {
@@ -72,8 +83,12 @@ const UploadResume = () => {
     setError('');
     setStatusMessages([]);
 
+    // Create new AbortController for this upload
+    const uploadAbortController = new AbortController();
+    abortControllerRef.current = uploadAbortController;
+
     try {
-      // Upload with streaming progress updates
+      // Upload with streaming progress updates and abort support
       const result = await resumeService.uploadResume(
         selectedFile,
         (message) => {
@@ -83,7 +98,8 @@ const UploadResume = () => {
           } else if (message.type === 'error') {
             throw new Error(message.message);
           }
-        }
+        },
+        uploadAbortController.signal // Pass abort signal
       );
 
       if (result && result.success) {
@@ -93,6 +109,12 @@ const UploadResume = () => {
         throw new Error('Upload completed but no data received');
       }
     } catch (err) {
+      // Gracefully handle aborted uploads
+      if (err.name === 'AbortError') {
+        console.log('Upload was cancelled');
+        return;
+      }
+
       console.error('Upload error:', err);
 
       // Handle error properly
@@ -111,6 +133,8 @@ const UploadResume = () => {
 
       setError(errorMessage);
       setUploading(false);
+    } finally {
+      abortControllerRef.current = null; // Clean up controller
     }
   };
 

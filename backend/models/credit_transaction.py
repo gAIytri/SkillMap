@@ -33,6 +33,7 @@ class CreditTransaction(Base):
 
     # Metadata
     description = Column(String(500), nullable=True)  # Optional description
+    stripe_session_id = Column(String(255), nullable=True, unique=True, index=True)  # Stripe checkout session ID for idempotency
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

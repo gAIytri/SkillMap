@@ -172,14 +172,14 @@ def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9, keep_toge
 
 def add_header_section(doc: Document, personal_info: Dict[str, Any]):
     """
-    Add header section with name and contact info
+    Add header section with name, role, and contact info
 
     Format:
-    NAME (centered, Title style)
-    location | email | phone (centered, 10pt)
+    NAME (centered, 18pt, bold)
+    Current Role | location | email | phone (centered, 10pt)
     LinkedIn | GitHub | Portfolio (centered, 10pt, blue links)
 
-    Uses 3 paragraphs with EXACTLY spacing for precise control.
+    Uses paragraphs with EXACTLY spacing for precise control.
     """
     # Paragraph 1: Name (18pt, bold)
     name_para = doc.add_paragraph()
@@ -196,6 +196,11 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
 
     # Paragraph 2: Contact info (10pt) - combined with links in single paragraph for tightness
     contact_parts = []
+
+    # Add current_role FIRST if present
+    if personal_info.get('current_role'):
+        contact_parts.append(personal_info['current_role'])
+
     if personal_info.get('location'):
         contact_parts.append(personal_info['location'])
     if personal_info.get('email'):
@@ -424,16 +429,6 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
         start_date = exp.get('start_date', '')
         end_date = exp.get('end_date', '')
 
-        # Format: "Company – Title, Location"
-        job_header_parts = []
-        if company and title:
-            job_header_parts.append(f"{company} – {title}")
-        elif company:
-            job_header_parts.append(company)
-
-        if location:
-            job_header_parts.append(location)
-
         # Create plain paragraph WITHOUT Heading2 style to avoid built-in spacing
         # All formatting (bold, size, font) is applied manually below
         job_para = doc.add_paragraph()
@@ -450,30 +445,68 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
         job_para.paragraph_format.keep_with_next = True
         job_para.paragraph_format.keep_together = True
 
-        # Add job header text
-        job_text = ', '.join(job_header_parts) if job_header_parts else ''
-        if job_text:
-            run = job_para.add_run(job_text)
-            run.font.bold = True
-            run.font.size = Pt(11)
-            run.font.name = 'Calibri'
+        # Dynamic layout: Keep subtext on line 1 if short, wrap to line 2 if long
+        if company:
+            # Build subtext
+            job_subtext_parts = []
+            if title:
+                job_subtext_parts.append(title)
+            if location:
+                job_subtext_parts.append(location)
 
-        # Add dates on right side at end of line
-        if start_date and end_date:
-            # Add right-aligned tab stop at 7.5 inches (page width 8.5 - left 0.5 - right 0.5 = 7.5)
-            tab_stops = job_para.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+            subtext = ', '.join(job_subtext_parts) if job_subtext_parts else ''
 
-            # Add tab and dates
-            date_run = job_para.add_run(f"\t{start_date} – {end_date}")
-            date_run.font.bold = True
-            date_run.font.size = Pt(11)
-            date_run.font.name = 'Calibri'
+            # Estimate text width to decide layout
+            # Rough estimation: 11pt bold ~0.09 in/char, 10pt normal ~0.07 in/char
+            # Tab stop at 7.5", need ~1" for date, so max ~6.5" for text
+            company_width = len(company) * 0.09
+            subtext_width = len(subtext) * 0.07 if subtext else 0
+            separator_width = 0.2  # " – " separator
+            total_width = company_width + separator_width + subtext_width
+
+            # If text would exceed 5.5 inches, wrap subtext to line 2
+            wrap_subtext = (total_width > 5.5) and subtext
+
+            # Add company name (always on line 1)
+            company_run = job_para.add_run(company)
+            company_run.font.bold = True
+            company_run.font.size = Pt(11)
+            company_run.font.name = 'Calibri'
+
+            # If subtext is short, add it on line 1
+            if subtext and not wrap_subtext:
+                subtext_run = job_para.add_run(f" – {subtext}")
+                subtext_run.font.bold = False
+                subtext_run.font.size = Pt(10)  # One size smaller
+                subtext_run.font.name = 'Calibri'
+
+            # Add dates on right side (ALWAYS on line 1)
+            if start_date and end_date:
+                tab_stops = job_para.paragraph_format.tab_stops
+                tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+
+                date_run = job_para.add_run(f"\t{start_date} – {end_date}")
+                date_run.font.bold = True
+                date_run.font.size = Pt(11)
+                date_run.font.name = 'Calibri'
+
+            # If subtext is long, add it on line 2
+            if subtext and wrap_subtext:
+                job_para.add_run('\n')
+                subtext_run = job_para.add_run(subtext)
+                subtext_run.font.bold = False
+                subtext_run.font.size = Pt(10)
+                subtext_run.font.name = 'Calibri'
 
         # Bullets (List Paragraph, 9pt)
         bullets = exp.get('bullets', [])
-        for bullet in bullets:
-            add_bullet_paragraph(doc, bullet, font_size=9)
+        for i, bullet in enumerate(bullets):
+            # Keep all bullets together with the job header
+            # Set keep_with_next=True on all bullets except the last one
+            is_last_bullet = (i == len(bullets) - 1)
+            bullet_para = add_bullet_paragraph(doc, bullet, font_size=9, keep_together=True)
+            if not is_last_bullet:
+                bullet_para.paragraph_format.keep_with_next = True
 
 
 def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
@@ -502,17 +535,6 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
         link = project.get('link', '')
         date = project.get('date', '')
 
-        # Format: "Project Name – Technologies (parenthetical)"
-        project_header = name
-
-        # Add technologies if available (in parentheses for consistency with original)
-        if technologies:
-            if isinstance(technologies, list):
-                tech_str = ', '.join(technologies)
-            else:
-                tech_str = str(technologies)
-            project_header += f" ({tech_str})"
-
         # Create plain paragraph WITHOUT Heading2 style to avoid built-in spacing
         # All formatting (bold, size, font) is applied manually below
         project_para = doc.add_paragraph()
@@ -529,22 +551,57 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
         project_para.paragraph_format.keep_with_next = True
         project_para.paragraph_format.keep_together = True
 
-        # Add project name and technologies
-        run = project_para.add_run(sanitize_text(project_header))
-        run.font.bold = True
-        run.font.size = Pt(11)
-        run.font.name = 'Calibri'
+        # Dynamic layout: Keep technologies on line 1 if short, wrap to line 2 if long
+        if name:
+            # Build tech string
+            tech_str = ''
+            if technologies:
+                if isinstance(technologies, list):
+                    tech_str = ', '.join(technologies)
+                else:
+                    tech_str = str(technologies)
 
-        # Add date on right side at end of line
-        if date:
-            tab_stops = project_para.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+            # Estimate text width to decide layout
+            # Rough estimation: 11pt bold ~0.09 in/char, 10pt normal ~0.07 in/char
+            # Tab stop at 7.5", need ~1" for date, so max ~6.5" for text
+            name_width = len(name) * 0.09
+            tech_width = len(tech_str) * 0.07 if tech_str else 0
+            separator_width = 0.2  # " – " separator
+            total_width = name_width + separator_width + tech_width
 
-            # Add tab and date
-            date_run = project_para.add_run(f"\t{date}")
-            date_run.font.bold = True
-            date_run.font.size = Pt(11)
-            date_run.font.name = 'Calibri'
+            # If text would exceed 5.5 inches, wrap tech to line 2
+            wrap_tech = (total_width > 5.5) and tech_str
+
+            # Add project name (always on line 1)
+            project_run = project_para.add_run(sanitize_text(name))
+            project_run.font.bold = True
+            project_run.font.size = Pt(11)
+            project_run.font.name = 'Calibri'
+
+            # If tech is short, add it on line 1
+            if tech_str and not wrap_tech:
+                tech_run = project_para.add_run(f" – {sanitize_text(tech_str)}")
+                tech_run.font.bold = False
+                tech_run.font.size = Pt(10)
+                tech_run.font.name = 'Calibri'
+
+            # Add date on right side (ALWAYS on line 1)
+            if date:
+                tab_stops = project_para.paragraph_format.tab_stops
+                tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
+
+                date_run = project_para.add_run(f"\t{date}")
+                date_run.font.bold = True
+                date_run.font.size = Pt(11)
+                date_run.font.name = 'Calibri'
+
+            # If tech is long, add it on line 2
+            if tech_str and wrap_tech:
+                project_para.add_run('\n')
+                tech_run = project_para.add_run(sanitize_text(tech_str))
+                tech_run.font.bold = False
+                tech_run.font.size = Pt(10)
+                tech_run.font.name = 'Calibri'
 
         # Description - split by period into separate bullets
         description = project.get('description', '')
@@ -578,17 +635,23 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
 
             return result
 
+        # Collect all bullet sentences first
+        all_sentences = []
         if isinstance(description, str):
             # Split by sentence and create separate bullets
-            sentences = split_into_sentences(description)
-            for sentence in sentences:
-                add_bullet_paragraph(doc, sentence, font_size=9)
+            all_sentences = split_into_sentences(description)
         elif isinstance(description, list):
             # Already a list of bullets
             for desc in description:
                 sentences = split_into_sentences(desc)
-                for sentence in sentences:
-                    add_bullet_paragraph(doc, sentence, font_size=9)
+                all_sentences.extend(sentences)
+
+        # Add bullets with keep_with_next to keep project entry together
+        for i, sentence in enumerate(all_sentences):
+            is_last_bullet = (i == len(all_sentences) - 1)
+            bullet_para = add_bullet_paragraph(doc, sentence, font_size=9, keep_together=True)
+            if not is_last_bullet:
+                bullet_para.paragraph_format.keep_with_next = True
 
 
 def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):

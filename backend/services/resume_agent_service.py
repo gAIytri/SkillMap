@@ -107,9 +107,7 @@ class ResumeTailoringAgent:
             api_key=settings.OPENAI_API_KEY,
             temperature=0.3,
             streaming=True,
-            model_kwargs={
-                "seed": 42  # For consistency
-            },
+            seed=42,  # For consistency (explicit parameter to avoid warning)
             callbacks=[self.token_callback],  # Add token tracking callback
             verbose=True  # Enable verbose logging for LangSmith
         )

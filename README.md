@@ -21,6 +21,8 @@ Upload your resume once, and SkillMap will:
 - 📡 **Live Streaming**: Watch agent progress in real-time during tailoring
 - 📊 **Agent Monitoring**: LangSmith integration for debugging and tracing
 - 📥 **Multiple Exports**: Download as DOCX or PDF
+- 💳 **Credit System**: Stripe-powered payment system with transaction history
+- 💰 **Usage Tracking**: Token-based credit consumption (2000 tokens = 1 credit)
 
 ## Tech Stack
 
@@ -33,6 +35,7 @@ Upload your resume once, and SkillMap will:
 - **Streaming**: Server-Sent Events (SSE)
 - **Document Processing**: python-docx
 - **PDF Conversion**: LibreOffice
+- **Payments**: Stripe (checkout + webhooks)
 
 ### Frontend
 - **Framework**: React + Vite
@@ -47,6 +50,8 @@ Upload your resume once, and SkillMap will:
 - Python 3.10+
 - Node.js 18+
 - OpenAI API Key
+- Stripe Account (for payments)
+- Stripe CLI (for local webhook testing)
 - LibreOffice (for PDF conversion)
 
 ### Backend Setup
@@ -58,10 +63,25 @@ pip install -r requirements.txt
 
 # Create .env file
 cp .env.example .env
-# Add your OPENAI_API_KEY to .env
+# Add your OPENAI_API_KEY and Stripe keys to .env
 
 # Start server
 uvicorn main:app --reload --port 8000
+```
+
+### Stripe Setup (Required for Credits System)
+```bash
+# Install Stripe CLI
+# macOS: brew install stripe/stripe-cli/stripe
+# Windows/Linux: https://stripe.com/docs/stripe-cli
+
+# Login to your Stripe account
+stripe login
+
+# In a separate terminal, forward webhooks to local backend
+stripe listen --forward-to http://localhost:8000/api/credits/webhook
+
+# Copy the webhook signing secret (whsec_...) to .env as STRIPE_WEBHOOK_SECRET
 ```
 
 ### Frontend Setup
@@ -154,6 +174,11 @@ CORS_ORIGINS=http://localhost:5173
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=lsv2_pt_your-key
 LANGCHAIN_PROJECT=SkillMap
+
+# Stripe Payment (REQUIRED for credits system)
+STRIPE_SECRET_KEY=sk_test_your-key
+STRIPE_PUBLISHABLE_KEY=pk_test_your-key
+STRIPE_WEBHOOK_SECRET=whsec_your-key  # Get from 'stripe listen'
 ```
 
 ### Frontend (.env)
@@ -190,10 +215,21 @@ VITE_GOOGLE_CLIENT_ID=your-google-client-id  # Optional
 - Inline preview in browser
 - Download as PDF or DOCX
 
+### Credits System
+- **Token-Based Pricing**: 2000 tokens = 1 credit (rounded to nearest 0.5)
+- **Credit Packages**: 50, 100, 250, 500 credits available
+- **Stripe Integration**: Secure payment processing with Stripe Checkout
+- **Webhook Processing**: Real-time credit addition after successful payment
+- **Transaction History**: Complete audit trail of all credit purchases and usage
+- **Low Balance Warning**: Alerts when credits fall below threshold
+- **Profile Page**: View current balance and transaction history
+- **Navbar Display**: Always-visible credit balance
+
 ## Database Schema
 
 ### Users
 - Authentication and profile data
+- Credit balance (float, default 100.0)
 
 ### Base Resumes
 - Original uploaded resume
@@ -204,6 +240,14 @@ VITE_GOOGLE_CLIENT_ID=your-google-client-id  # Optional
 - Tailored resume versions
 - Job descriptions
 - Independent JSON data per project
+
+### Credit Transactions
+- Transaction type (PURCHASE, TAILOR, GRANT, REFUND, BONUS)
+- Amount (positive for add, negative for deduct)
+- Balance after transaction
+- Token usage tracking (prompt + completion tokens)
+- Stripe session ID (for idempotency)
+- Timestamps
 
 See [BACKEND.md](./BACKEND.md) for complete schema details.
 
@@ -226,6 +270,13 @@ See [BACKEND.md](./BACKEND.md) for complete schema details.
 - `GET /api/projects/{id}/pdf`
 - `GET /api/projects/{id}/docx`
 
+### Credits
+- `GET /api/credits/balance`
+- `GET /api/credits/transactions`
+- `GET /api/credits/packages`
+- `POST /api/credits/create-checkout-session`
+- `POST /api/credits/webhook` (Stripe webhook)
+
 See [BACKEND.md](./BACKEND.md) for complete API documentation.
 
 ## Common Issues
@@ -241,6 +292,27 @@ See [BACKEND.md](./BACKEND.md) for complete API documentation.
 ### CORS Errors
 **Problem**: Frontend can't reach backend
 **Solution**: Add frontend URL to `CORS_ORIGINS` in backend `.env`
+
+### Credits Not Adding After Payment
+**Problem**: Payment successful but credits don't update
+**Solution**:
+1. Ensure `stripe listen` is running in a separate terminal
+2. Verify webhook secret in `.env` matches output from `stripe listen`
+3. Ensure Stripe CLI is logged into the same account as your API keys
+4. Check backend terminal for webhook errors
+5. Restart backend after updating webhook secret
+
+### Stripe Webhook 500 Error
+**Problem**: `stripe listen` shows `[500]` for webhook events
+**Solution**:
+1. Check that webhook secret in `.env` is correct
+2. Ensure backend is running on port 8000
+3. Verify Stripe CLI is logged into correct account: `stripe config --list`
+4. Re-login if needed: `stripe login`
+
+### Credits Not Showing in Navbar
+**Problem**: Credits updated in database but not in UI
+**Solution**: This was fixed by updating `refreshUser()` in AuthContext to sync localStorage
 
 ## Deployment
 
@@ -299,7 +371,17 @@ cp .env.example .env
 
 ### Latest Features (Current Version)
 
-**LangChain Agent System** (NEW):
+**Credit System with Stripe Integration** (NEW):
+- Token-based pricing: 2000 tokens = 1 credit
+- Stripe Checkout for secure payments
+- Real-time webhook processing with idempotency
+- Transaction history with detailed usage tracking
+- Low balance warnings
+- Profile page with credit balance and transactions
+- Navbar credit display with real-time updates
+- localStorage sync for persistent state
+
+**LangChain Agent System**:
 - ReAct agent architecture with 3 tools: validate, summarize, tailor
 - Real-time streaming via Server-Sent Events (SSE)
 - Guardrail checkpoint validates user input intent

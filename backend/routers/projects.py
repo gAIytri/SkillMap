@@ -6,6 +6,7 @@ import asyncio
 import json
 
 from config.database import get_db
+from config.settings import settings
 from schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectList, SectionOrderUpdate
 from middleware.auth_middleware import get_current_user
 from models.user import User
@@ -400,11 +401,11 @@ async def tailor_project_resume_with_agent(
         StreamingResponse with Server-Sent Events (SSE) format
         Each event contains JSON with status updates
     """
-    # Check user has sufficient credits (minimum 5 credits)
-    if current_user.credits < 5.0:
+    # Check user has sufficient credits
+    if current_user.credits < settings.MINIMUM_CREDITS_FOR_TAILOR:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Insufficient credits. You have {current_user.credits} credits. Minimum 5 credits required to tailor resume."
+            detail=f"Insufficient credits. You have {current_user.credits} credits. Minimum {settings.MINIMUM_CREDITS_FOR_TAILOR} credits required to tailor resume."
         )
 
     # Validate project exists
@@ -483,6 +484,10 @@ async def tailor_project_resume_with_agent(
                         # Update with new tailored resume
                         project_to_update.resume_json = final_result["tailored_json"]
 
+                        # Save the job description that was used for this tailoring
+                        project_to_update.last_tailoring_jd = request.job_description
+                        logger.info(f"✓ Saved last tailoring JD for project {project_id}")
+
                         # Save cover letter if generated
                         if final_result.get("cover_letter_success"):
                             project_to_update.cover_letter_text = final_result.get("cover_letter", "")
@@ -501,20 +506,22 @@ async def tailor_project_resume_with_agent(
                         prompt_tokens = token_usage.get("prompt_tokens", 0)
                         completion_tokens = token_usage.get("completion_tokens", 0)
 
-                        # Calculate credits: 2000 tokens = 1 credit, round to nearest 0.5
-                        raw_credits = total_tokens / 2000.0
-                        credits_to_deduct = round(raw_credits * 2) / 2  # Round to nearest 0.5
+                        # Calculate credits based on token usage
+                        raw_credits = total_tokens / settings.TOKENS_PER_CREDIT
+                        credits_to_deduct = round(raw_credits / settings.CREDIT_ROUNDING) * settings.CREDIT_ROUNDING  # Round to nearest 0.5
 
                         logger.info(f"Tokens used: {total_tokens}, Credits to deduct: {credits_to_deduct}")
 
-                        # Fetch user fresh from the database
-                        user_to_update = db_new.query(User).filter(User.id == current_user.id).first()
+                        # Fetch user with row-level lock to prevent race conditions
+                        # .with_for_update() ensures no other transaction can modify this row
+                        # until we commit (prevents double-spending if two tailorings happen simultaneously)
+                        user_to_update = db_new.query(User).filter(User.id == current_user.id).with_for_update().first()
                         balance_after = 0.0  # Default value
 
                         if not user_to_update:
                             logger.error(f"User {current_user.id} not found for credit deduction!")
                         else:
-                            # Deduct credits
+                            # Deduct credits (row is locked, safe from concurrent modifications)
                             user_to_update.credits -= credits_to_deduct
                             balance_after = user_to_update.credits
 

@@ -19,6 +19,9 @@ class Project(Base):
     doc_metadata = Column(JSON, nullable=True)  # Metadata
     original_filename = Column(String(255), nullable=False)  # Filename
 
+    # Job description tracking
+    last_tailoring_jd = Column(Text, nullable=True)  # Last successful JD used for tailoring
+
     # Cover letter and email fields
     cover_letter_text = Column(Text, nullable=True)  # Generated cover letter
     email_body_text = Column(Text, nullable=True)  # Generated recruiter email

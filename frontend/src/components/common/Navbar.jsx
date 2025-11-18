@@ -115,6 +115,14 @@ const Navbar = () => {
               <MenuItem disabled>
                 <Typography variant="body2">{user?.email}</Typography>
               </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  navigate('/profile');
+                  handleClose();
+                }}
+              >
+                Profile
+              </MenuItem>
               <MenuItem onClick={handleLogout}>Logout</MenuItem>
             </Menu>
           </Box>

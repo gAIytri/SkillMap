@@ -13,6 +13,7 @@ import { AuthProvider } from './context/AuthContext';
 // Components
 import Navbar from './components/common/Navbar';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
 import Landing from './pages/Landing';
@@ -21,6 +22,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import UploadResume from './pages/UploadResume';
 import ProjectEditor from './pages/ProjectEditor';
+import Profile from './pages/Profile';
 
 function App() {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -69,53 +71,63 @@ function App() {
             },
           }}
         />
-        <Router>
-          <AuthProvider>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '100vh',
-              }}
-            >
-              <Navbar />
-              <Box component="main" sx={{ flexGrow: 1 }}>
-                <Routes>
-                  {/* Public Routes */}
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
+        <ErrorBoundary>
+          <Router>
+            <AuthProvider>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: '100vh',
+                }}
+              >
+                <Navbar />
+                <Box component="main" sx={{ flexGrow: 1 }}>
+                  <Routes>
+                    {/* Public Routes */}
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
 
-                  {/* Protected Routes */}
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/upload-resume"
-                    element={
-                      <ProtectedRoute>
-                        <UploadResume />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/project/:projectId"
-                    element={
-                      <ProtectedRoute>
-                        <ProjectEditor />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Routes>
+                    {/* Protected Routes */}
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/upload-resume"
+                      element={
+                        <ProtectedRoute>
+                          <UploadResume />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/project/:projectId"
+                      element={
+                        <ProtectedRoute>
+                          <ProjectEditor />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <Profile />
+                        </ProtectedRoute>
+                      }
+                    />
+                  </Routes>
+                </Box>
               </Box>
-            </Box>
-          </AuthProvider>
-        </Router>
+            </AuthProvider>
+          </Router>
+        </ErrorBoundary>
       </ThemeProvider>
     </GoogleOAuthProvider>
   );
