@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import authService from '../services/authService';
 import userService from '../services/userService';
 
@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const profile = await userService.getCurrentProfile();
       setUser(profile);
@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Failed to refresh user:', error);
       return null;
     }
-  };
+  }, []); // No dependencies - userService is stable
 
   const value = {
     user,

@@ -10,6 +10,8 @@ import {
   Alert,
   Divider,
   Link,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
@@ -27,6 +29,8 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const handleChange = (e) => {
     setFormData({
@@ -98,18 +102,19 @@ const Register = () => {
         justifyContent="center"
         alignItems="center"
         minHeight="calc(100vh - 64px)"
-        py={4}
+        py={isMobile ? 2 : 4}
+        px={isMobile ? 2 : 0}
       >
         <Paper
           elevation={3}
           sx={{
-            p: 4,
+            p: isMobile ? 2 : 4,
             width: '100%',
             borderRadius: 3,
           }}
         >
           <Typography
-            variant="h4"
+            variant={isMobile ? 'h5' : 'h4'}
             component="h1"
             gutterBottom
             textAlign="center"

@@ -18,6 +18,9 @@ import {
   AccordionDetails,
   Chip,
   Drawer,
+  Fab,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -29,6 +32,8 @@ import EmailIcon from '@mui/icons-material/Email';
 import SendIcon from '@mui/icons-material/Send';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
+import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
@@ -100,6 +105,12 @@ const ProjectEditor = () => {
   const iframeRef = useRef(null);
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null); // For cancelling requests
+
+  // Responsive design
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md')); // mobile < 900px
+  const isTablet = useMediaQuery(theme.breakpoints.between('md', 'lg')); // 900px - 1200px
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -1046,56 +1057,63 @@ const ProjectEditor = () => {
       {/* Compact Professional Header */}
       <Box
         sx={{
-          height: '40px',
+          height: isMobile ? '48px' : '40px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          px: 2,
+          px: isMobile ? 1 : 2,
           backgroundColor:'#98C7AC',
           backdropFilter: 'blur(8px)',
           borderBottom: '1px solid rgba(244,244,244,0.1)',
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          opacity:0.5
+          opacity:0.8,
+          overflow: 'hidden',
         }}
       >
         {/* Left: Back button and Project Info (One Line) */}
-        <Box display="flex" alignItems="center" gap={1.5}>
+        <Box display="flex" alignItems="center" gap={isMobile ? 0.5 : 1.5} overflow="hidden" flex={1} mr={1}>
           <IconButton
             onClick={() => navigate('/dashboard')}
             size="small"
             sx={{
               color: '#111111',
+              p: isMobile ? 0.5 : 1,
               '&:hover': { bgcolor: 'rgba(244,244,244,0.1)' },
             }}
           >
-            <ArrowBackIcon fontSize="small" />
+            <ArrowBackIcon fontSize={isMobile ? 'small' : 'medium'} />
           </IconButton>
           <Typography
-            variant="subtitle1"
+            variant={isMobile ? 'body2' : 'subtitle1'}
             fontWeight={600}
             sx={{
               color: '#111111',
               fontFamily: 'Poppins, sans-serif',
-              mr: 2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              mr: isMobile ? 0 : 2,
             }}
           >
             {project?.project_name}
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: '0.75rem',
-              color: '#111111',
-            }}
-          >
-            Updated: {project && new Date(project.updated_at).toLocaleString()}
-          </Typography>
+          {!isMobile && (
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                fontSize: '0.75rem',
+                color: '#111111',
+              }}
+            >
+              Updated: {project && new Date(project.updated_at).toLocaleString()}
+            </Typography>
+          )}
         </Box>
 
         {/* Right: Action Buttons */}
-        <Box display="flex" alignItems="center" gap={0.5}>
+        <Box display="flex" alignItems="center" gap={isMobile ? 0.25 : 0.5} flexShrink={0}>
           <input
             type="file"
             ref={fileInputRef}
@@ -1105,28 +1123,30 @@ const ProjectEditor = () => {
           />
 
           {/* Replace Resume */}
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            size="small"
-            startIcon={uploading ? <CircularProgress size={14} sx={{ color: '#111111' }} /> : null}
-            sx={{
-              color: '#111111',
-              textTransform: 'none',
-              fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.75rem',
-              minWidth: 'auto',
-              px: 1,
-              py: 0.5,
-              '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
-              '&:disabled': {
-                color: '#666',
-                opacity: 0.7,
-              },
-            }}
-          >
-            {uploading ? 'Replacing...' : 'Replace'}
-          </Button>
+          {!isMobile && (
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              size="small"
+              startIcon={uploading ? <CircularProgress size={14} sx={{ color: '#111111' }} /> : null}
+              sx={{
+                color: '#111111',
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.75rem',
+                minWidth: 'auto',
+                px: 1,
+                py: 0.5,
+                '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
+                '&:disabled': {
+                  color: '#666',
+                  opacity: 0.7,
+                },
+              }}
+            >
+              {uploading ? 'Replacing...' : 'Replace'}
+            </Button>
+          )}
 
           {/* Download PDF */}
           <Button
@@ -1137,10 +1157,10 @@ const ProjectEditor = () => {
               color: '#111111',
               textTransform: 'none',
               fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.75rem',
+              fontSize: isMobile ? '0.65rem' : '0.75rem',
               minWidth: 'auto',
-              px: 1,
-              py: 0.5,
+              px: isMobile ? 0.5 : 1,
+              py: isMobile ? 0.3 : 0.5,
               '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
             }}
           >
@@ -1156,10 +1176,10 @@ const ProjectEditor = () => {
               color: '#111111',
               textTransform: 'none',
               fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.75rem',
+              fontSize: isMobile ? '0.65rem' : '0.75rem',
               minWidth: 'auto',
-              px: 1,
-              py: 0.5,
+              px: isMobile ? 0.5 : 1,
+              py: isMobile ? 0.3 : 0.5,
               '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
             }}
           >
@@ -1177,10 +1197,10 @@ const ProjectEditor = () => {
               color: '#ffffff',
               textTransform: 'none',
               fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.75rem',
+              fontSize: isMobile ? '0.65rem' : '0.75rem',
               minWidth: 'auto',
-              px: 1.5,
-              py: 0.5,
+              px: isMobile ? 0.75 : 1.5,
+              py: isMobile ? 0.3 : 0.5,
               '&:hover': {
                 bgcolor: '#1a8050',
               },
@@ -1190,7 +1210,7 @@ const ProjectEditor = () => {
               },
             }}
           >
-            Tailor Resume
+            {isMobile ? 'Tailor' : 'Tailor Resume'}
           </Button>
 
           {/* Save Button */}
@@ -1204,10 +1224,10 @@ const ProjectEditor = () => {
               color: '#111111',
               textTransform: 'none',
               fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.75rem',
-              ml: 0.5,
-              px: 1.5,
-              py: 0.5,
+              fontSize: isMobile ? '0.65rem' : '0.75rem',
+              ml: isMobile ? 0.25 : 0.5,
+              px: isMobile ? 0.75 : 1.5,
+              py: isMobile ? 0.3 : 0.5,
               boxShadow: 'none',
               '&:hover': {
                 bgcolor: '#1a8050',
@@ -1221,12 +1241,12 @@ const ProjectEditor = () => {
       </Box>
 
       {/* 2-Column Layout: PDF Preview (flex) + Extracted Data (fixed) */}
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', bgcolor: '#f5f7fa' }}>
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', bgcolor: '#f5f7fa', position: 'relative' }}>
         {/* Left: PDF Viewer - Takes remaining space */}
         <Box
           sx={{
             flex: 1,
-            borderRight: '2px solid #e1e8ed',
+            borderRight: isMobile ? 'none' : '2px solid #e1e8ed',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -1540,20 +1560,165 @@ const ProjectEditor = () => {
           </Box>
         </Box>
 
-        {/* Right: Extracted Data with Tabs - 40% Width */}
+        {/* Right: Extracted Data with Tabs - Drawer on Mobile, Fixed Sidebar on Desktop/Tablet */}
+        {isMobile ? (
+          /* Mobile: Floating Action Button to open drawer */
+          <Fab
+            color="primary"
+            onClick={() => setMobileDrawerOpen(true)}
+            sx={{
+              position: 'fixed',
+              bottom: 16,
+              right: 16,
+              zIndex: 1000,
+              bgcolor: colorPalette.primary.darkGreen,
+              '&:hover': {
+                bgcolor: '#1a8050',
+              },
+            }}
+          >
+            <MenuIcon />
+          </Fab>
+        ) : (
+          /* Desktop/Tablet: Fixed Sidebar */
+          <Box
+            sx={{
+              width: isTablet ? '45%' : '40%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              bgcolor: '#ffffff',
+            }}
+          >
+            <Box
+              sx={{
+                px: 2,
+                py: 0.4,
+                border: '2px solid',
+                borderColor: colorPalette.primary.darkGreen,
+                bgcolor: 'rgba(76, 175, 80, 0.04)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
+                Extracted Data (LLM)
+              </Typography>
+            </Box>
+
+            {/* Tabs for Formatted / Raw JSON */}
+            <Tabs
+              value={activeTab}
+              onChange={(_, newValue) => setActiveTab(newValue)}
+              sx={{
+                borderBottom: '1px solid #e0e0e0',
+                minHeight: '40px',
+                '& .MuiTab-root': {
+                  minHeight: '40px',
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                },
+              }}
+            >
+              <Tab label="Formatted View" />
+              <Tab label="Raw JSON" />
+            </Tabs>
+
+            {/* Tab Content */}
+            <Box
+              sx={{
+                flex: 1,
+                overflow: 'auto',
+                bgcolor: '#fafbfc',
+                p: 2,
+              }}
+            >
+              {!extractedData ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    color: '#666',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" textAlign="center">
+                    No data extracted yet
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" textAlign="center" mt={1}>
+                    Upload a resume to see extracted JSON data
+                  </Typography>
+                </Box>
+              ) : activeTab === 0 ? (
+                /* Formatted View with Drag-and-Drop Reordering */
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={sectionOrder}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <Box sx={{ pl: 1 }}>
+                      {sectionOrder.map((sectionKey) => renderSection(sectionKey))}
+                    </Box>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                /* Raw JSON View */
+                <Box
+                  sx={{
+                    height: '100%',
+                    bgcolor: '#1e1e1e',
+                    color: '#d4d4d4',
+                    p: 2,
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflow: 'auto',
+                  }}
+                >
+                  {JSON.stringify(extractedData, null, 2)}
+                </Box>
+              )}
+            </Box>
+          </Box>
+        )}
+      </Box>
+
+      {/* Mobile Drawer for Extracted Data */}
+      <Drawer
+        anchor="right"
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: '85%',
+            maxWidth: '400px',
+            boxSizing: 'border-box',
+          },
+        }}
+      >
         <Box
           sx={{
-            width: '40%',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden',
+            height: '100%',
             bgcolor: '#ffffff',
           }}
         >
+          {/* Drawer Header */}
           <Box
             sx={{
               px: 2,
-              py:0.4,
+              py: 1,
               border: '2px solid',
               borderColor: colorPalette.primary.darkGreen,
               bgcolor: 'rgba(76, 175, 80, 0.04)',
@@ -1565,7 +1730,13 @@ const ProjectEditor = () => {
             <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
               Extracted Data (LLM)
             </Typography>
-
+            <IconButton
+              size="small"
+              onClick={() => setMobileDrawerOpen(false)}
+              sx={{ color: '#2c3e50' }}
+            >
+              <CloseIcon />
+            </IconButton>
           </Box>
 
           {/* Tabs for Formatted / Raw JSON */}
@@ -1583,8 +1754,8 @@ const ProjectEditor = () => {
               },
             }}
           >
-            <Tab label="Formatted View" />
-            <Tab label="Raw JSON" />
+            <Tab label="Formatted" />
+            <Tab label="JSON" />
           </Tabs>
 
           {/* Tab Content */}
@@ -1651,7 +1822,7 @@ const ProjectEditor = () => {
             )}
           </Box>
         </Box>
-      </Box>
+      </Drawer>
 
       {/* Agent Tailoring Full-Screen Overlay */}
       {tailoring && (
@@ -1697,7 +1868,7 @@ const ProjectEditor = () => {
             >
               <Box display="flex" alignItems="center" gap={1.5} mb={2}>
                 <CircularProgress size={28} sx={{ color: 'white' }} />
-                <Typography variant="h5" fontWeight={700} fontFamily="Poppins, sans-serif">
+                <Typography variant="h5" fontWeight={700} color='white' fontFamily="Poppins, sans-serif">
                   Tailoring Resume
                 </Typography>
               </Box>

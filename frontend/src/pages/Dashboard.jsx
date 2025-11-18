@@ -19,6 +19,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
@@ -42,6 +44,8 @@ const Dashboard = () => {
     job_description: '',
   });
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     loadDashboard();
@@ -122,11 +126,18 @@ const Dashboard = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: isMobile ? 2 : 4, px: isMobile ? 2 : 3 }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        display="flex"
+        flexDirection={isMobile ? 'column' : 'row'}
+        justifyContent="space-between"
+        alignItems={isMobile ? 'stretch' : 'center'}
+        mb={isMobile ? 2 : 3}
+        gap={isMobile ? 2 : 0}
+      >
         <Box>
-          <Typography variant="h4" fontWeight={700} color={colorPalette.primary.darkGreen}>
+          <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight={700} color={colorPalette.primary.darkGreen}>
             Your Projects
           </Typography>
           <Typography variant="body2" color="text.secondary" mt={1}>
@@ -137,8 +148,10 @@ const Dashboard = () => {
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setOpenCreateDialog(true)}
+          size={isMobile ? 'medium' : 'large'}
           sx={{
             bgcolor: colorPalette.primary.brightGreen,
+            whiteSpace: 'nowrap',
             '&:hover': {
               bgcolor: colorPalette.secondary.mediumGreen,
             },
@@ -192,14 +205,32 @@ const Dashboard = () => {
               : 'Try a different search term'}
           </Typography>
           {projects.length === 0 && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setOpenCreateDialog(true)}
-              sx={{ bgcolor: colorPalette.primary.brightGreen }}
-            >
-              Create Project
-            </Button>
+            <>
+              <Alert
+                severity="success"
+                sx={{
+                  mb: 3,
+                  maxWidth: isMobile ? '100%' : '500px',
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                  border: '1px solid rgba(76, 175, 80, 0.3)',
+                }}
+              >
+                <Typography variant="body2" fontWeight={600} gutterBottom>
+                  Welcome! You've received 100 free credits to get started!
+                </Typography>
+                <Typography variant="caption">
+                  Each resume tailoring costs 5 credits. That's 20 tailored resumes to help you land your dream job!
+                </Typography>
+              </Alert>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenCreateDialog(true)}
+                sx={{ bgcolor: colorPalette.primary.brightGreen }}
+              >
+                Create Project
+              </Button>
+            </>
           )}
         </Box>
       ) : (

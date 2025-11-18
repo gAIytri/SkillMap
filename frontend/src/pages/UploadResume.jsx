@@ -12,6 +12,8 @@ import {
   ListItem,
   ListItemText,
   Chip,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -26,6 +28,8 @@ const UploadResume = () => {
   const [statusMessages, setStatusMessages] = useState([]);
   const navigate = useNavigate();
   const abortControllerRef = useRef(null); // For cancelling requests
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Cleanup pending requests on unmount
   useEffect(() => {
@@ -146,12 +150,13 @@ const UploadResume = () => {
         justifyContent="center"
         alignItems="center"
         minHeight="calc(100vh - 64px)"
-        py={4}
+        py={isMobile ? 2 : 4}
+        px={isMobile ? 2 : 0}
       >
         <Paper
           elevation={3}
           sx={{
-            p: 6,
+            p: isMobile ? 3 : 6,
             width: '100%',
             borderRadius: 3,
             textAlign: 'center',
@@ -159,14 +164,14 @@ const UploadResume = () => {
         >
           <CloudUploadIcon
             sx={{
-              fontSize: 80,
+              fontSize: isMobile ? 60 : 80,
               color: colorPalette.primary.brightGreen,
               mb: 2,
             }}
           />
 
           <Typography
-            variant="h4"
+            variant={isMobile ? 'h5' : 'h4'}
             component="h1"
             gutterBottom
             fontWeight={700}
@@ -176,7 +181,7 @@ const UploadResume = () => {
           </Typography>
 
           <Typography
-            variant="body1"
+            variant={isMobile ? 'body2' : 'body1'}
             color="text.secondary"
             mb={1}
             maxWidth="700px"
@@ -211,11 +216,12 @@ const UploadResume = () => {
               <Button
                 variant="outlined"
                 component="span"
-                size="large"
+                size={isMobile ? 'medium' : 'large'}
                 disabled={uploading}
+                fullWidth={isMobile}
                 sx={{
-                  py: 2,
-                  px: 4,
+                  py: isMobile ? 1.5 : 2,
+                  px: isMobile ? 3 : 4,
                   borderColor: colorPalette.primary.darkGreen,
                   color: colorPalette.primary.darkGreen,
                   borderWidth: 2,
@@ -312,12 +318,13 @@ const UploadResume = () => {
           {!uploading && (
             <Button
               variant="contained"
-              size="large"
+              size={isMobile ? 'medium' : 'large'}
               onClick={handleUpload}
               disabled={!selectedFile || uploading}
+              fullWidth={isMobile}
               sx={{
-                py: 1.5,
-                px: 4,
+                py: isMobile ? 1.5 : 1.5,
+                px: isMobile ? 3 : 4,
                 bgcolor: colorPalette.primary.brightGreen,
                 '&:hover': {
                   bgcolor: colorPalette.secondary.mediumGreen,

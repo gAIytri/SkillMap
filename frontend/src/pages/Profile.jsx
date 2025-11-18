@@ -17,6 +17,8 @@ import {
   TableRow,
   CircularProgress,
   Alert,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -39,6 +41,8 @@ const Profile = () => {
   const [rechargeDialogOpen, setRechargeDialogOpen] = useState(false);
   const hasShownToast = useRef(false); // Prevent duplicate toasts in StrictMode
   const isMounted = useRef(true); // Track if component is mounted
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Stable callback for loading transactions
   const loadTransactions = useCallback(async () => {
@@ -62,11 +66,10 @@ const Profile = () => {
     }
   }, []); // No dependencies - creditsService is stable
 
+  // Load initial data on mount only
   useEffect(() => {
-    // Set mounted flag
     isMounted.current = true;
 
-    // Load data sequentially to avoid race conditions
     const loadData = async () => {
       // First refresh user to get latest credits
       if (refreshUser) {
@@ -81,7 +84,15 @@ const Profile = () => {
 
     loadData();
 
-    // Check for payment status from Stripe redirect
+    // Cleanup function
+    return () => {
+      isMounted.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
+
+  // Handle payment redirect from Stripe (separate effect)
+  useEffect(() => {
     const payment = searchParams.get('payment');
 
     // Only show toast once (prevent duplicates in React StrictMode)
@@ -90,6 +101,11 @@ const Profile = () => {
 
       if (payment === 'success') {
         toast.success('Payment successful! Your credits have been added.', { duration: 5000 });
+        // Reload user and transactions after successful payment
+        if (refreshUser) {
+          refreshUser();
+        }
+        loadTransactions();
       } else if (payment === 'cancelled') {
         toast.error('Payment was cancelled.', { duration: 4000 });
       }
@@ -101,12 +117,7 @@ const Profile = () => {
         }
       }, 100);
     }
-
-    // Cleanup function
-    return () => {
-      isMounted.current = false;
-    };
-  }, [searchParams, loadTransactions, refreshUser]); // All dependencies included
+  }, [searchParams, refreshUser, loadTransactions]); // Re-run when payment param changes
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -151,12 +162,13 @@ const Profile = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: isMobile ? 2 : 4, mb: isMobile ? 2 : 4, px: isMobile ? 2 : 3 }}>
       {/* Header */}
-      <Box display="flex" alignItems="center" gap={2} mb={3}>
+      <Box display="flex" alignItems="center" gap={2} mb={isMobile ? 2 : 3}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/dashboard')}
+          size={isMobile ? 'small' : 'medium'}
           sx={{ color: colorPalette.primary }}
         >
           Back to Dashboard
@@ -164,17 +176,24 @@ const Profile = () => {
       </Box>
 
       {/* User Profile Card */}
-      <Paper sx={{ p: 4, mb: 3, borderRadius: 2 }}>
-        <Box display="flex" alignItems="center" gap={3} mb={3}>
+      <Paper sx={{ p: isMobile ? 2 : 4, mb: 3, borderRadius: 2 }}>
+        <Box
+          display="flex"
+          flexDirection={isMobile ? 'column' : 'row'}
+          alignItems={isMobile ? 'center' : 'center'}
+          gap={isMobile ? 2 : 3}
+          mb={3}
+          textAlign={isMobile ? 'center' : 'left'}
+        >
           <Avatar
             src={user.profile_picture_url}
             alt={user.full_name}
-            sx={{ width: 80, height: 80 }}
+            sx={{ width: isMobile ? 64 : 80, height: isMobile ? 64 : 80 }}
           >
             {user.full_name?.[0]?.toUpperCase() || 'U'}
           </Avatar>
           <Box flex={1}>
-            <Typography variant="h4" fontWeight={700} gutterBottom>
+            <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight={700} gutterBottom>
               {user.full_name}
             </Typography>
             <Box display="flex" alignItems="center" gap={1} mb={0.5}>
@@ -195,11 +214,17 @@ const Profile = () => {
         <Divider sx={{ my: 3 }} />
 
         {/* Credits Section */}
-        <Box display="flex" alignItems="center" justifyContent="space-between">
+        <Box
+          display="flex"
+          flexDirection={isMobile ? 'column' : 'row'}
+          alignItems="center"
+          justifyContent="space-between"
+          gap={isMobile ? 2 : 0}
+        >
           <Box display="flex" alignItems="center" gap={2}>
-            <AccountBalanceWalletIcon sx={{ fontSize: 40, color: colorPalette.primary }} />
+            <AccountBalanceWalletIcon sx={{ fontSize: isMobile ? 32 : 40, color: colorPalette.primary }} />
             <Box>
-              <Typography variant="h3" fontWeight={700} color={colorPalette.primary}>
+              <Typography variant={isMobile ? 'h4' : 'h3'} fontWeight={700} color={colorPalette.primary}>
                 {user.credits?.toFixed(1) || '0.0'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -210,6 +235,8 @@ const Profile = () => {
           <Button
             variant="contained"
             onClick={() => setRechargeDialogOpen(true)}
+            fullWidth={isMobile}
+            size={isMobile ? 'medium' : 'large'}
             sx={{
               bgcolor: colorPalette.primary,
               '&:hover': {
@@ -223,8 +250,8 @@ const Profile = () => {
       </Paper>
 
       {/* Transaction History */}
-      <Paper sx={{ p: 3, borderRadius: 2 }}>
-        <Typography variant="h5" fontWeight={700} mb={3}>
+      <Paper sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
+        <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={700} mb={isMobile ? 2 : 3}>
           Transaction History
         </Typography>
 
@@ -235,7 +262,7 @@ const Profile = () => {
         ) : transactions.length === 0 ? (
           <Alert severity="info">No transactions yet. Start tailoring resumes!</Alert>
         ) : (
-          <TableContainer>
+          <TableContainer sx={{ overflowX: 'auto' }}>
             <Table>
               <TableHead>
                 <TableRow>
