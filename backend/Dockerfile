@@ -1,11 +1,13 @@
 FROM python:3.11-slim
 
-# Install system dependencies including LaTeX
+# Install system dependencies including LaTeX and LibreOffice
 RUN apt-get update && apt-get install -y \
     texlive-latex-base \
     texlive-latex-extra \
     texlive-fonts-recommended \
     texlive-fonts-extra \
+    libreoffice \
+    libreoffice-writer \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
