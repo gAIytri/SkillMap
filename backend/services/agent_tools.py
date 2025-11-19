@@ -299,26 +299,38 @@ CURRENT RESUME (JSON):
 
 TAILORING INSTRUCTIONS:
 
+CRITICAL BALANCE PRINCIPLE:
+- Base ALL changes strictly on the job description provided
+- Make MEANINGFUL improvements that align with JD requirements
+- Do NOT be excessive - avoid over-engineering or adding unnecessary complexity
+- Do NOT reduce content too much - maintain substance and impact
+- Every modification must be JUSTIFIED by something in the job description
+- Stay authentic to the candidate's actual experience while optimizing presentation
+
 1. PROFESSIONAL SUMMARY (paragraph format):
    - Rewrite to directly address the role focus and required skills from job summary
    - Highlight most relevant skills and experience from the resume
    - Use strong, confident language
    - Keep as a single paragraph (3-4 sentences)
    - Incorporate ATS keywords naturally
+   - Balance: Impactful but not exaggerated
 
 2. WORK EXPERIENCE BULLET POINTS (CRITICAL - MAJOR CHANGES):
    - Transform EVERY bullet point to be more technical and impactful
    - Prioritize bullets that align with required_skills and key_responsibilities
-   - Use strong action verbs (Architected, Engineered, Optimized, Implemented, Led, Designed,etc- not limited to this) 
+   - Choose the most appropriate action verbs based on the actual work done and JD requirements
+   - Let the job description guide your verb selection - use technical verbs that match the role
    - Add technical depth: mention frameworks, tools from required_skills
    - Quantify impact: performance improvements, user numbers, efficiency gains
    - Format: [Action Verb] + [What] + [How/Technology] + [Impact/Result]
+   - Balance: Make substantial improvements but stay grounded in what's in the JD
 
 3. PROJECTS (REORGANIZE + ENHANCE):
    - REORDER projects: Most relevant to required_skills and role_focus should come FIRST
    - Enhance descriptions with technologies from required_skills and preferred_skills
    - Highlight aspects that match key_responsibilities
    - Add ATS keywords naturally in project descriptions
+   - Balance: Emphasize JD-relevant aspects without over-embellishing
 
 4. SKILLS (REORGANIZE BY RELEVANCE):
    - REORDER each skill category to put required_skills FIRST

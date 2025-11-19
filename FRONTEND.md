@@ -1,7 +1,37 @@
 # SkillMap Frontend Documentation
 
+## Recent Changes (2025-01-19)
+
+### Upload Experience Improvements
+1. **Template Preview During Upload** (`pages/UploadResume.jsx`)
+   - Added side-by-side layout showing template preview + status messages
+   - Template preview shows what the generated resume will look like
+   - Displays actual resume template image from `/src/assets/resume-template-preview.png`
+   - Responsive layout: stacks vertically on mobile, side-by-side on desktop
+   - Template preview: 320px fixed width with green border
+   - Status messages: flexible width with scrollable area
+
+2. **Layout Details**
+   - **Desktop**: Template on left (320px), status messages on right (flex)
+   - **Mobile**: Status messages first, then template preview below
+   - **Template section**: Bordered paper with "Your resume will look like this" heading
+   - **Status section**: Scrollable list with checkmark icons (max height 400px desktop, 180px mobile)
+
+### Dashboard Protection
+1. **Base Resume Requirement** (`pages/Dashboard.jsx`)
+   - Automatically redirects to `/upload-resume` if user has no base resume
+   - Prevents accessing dashboard/projects without uploading resume first
+   - Ensures every user has their own base resume before creating projects
+
+### Asset Requirements
+1. **Template Preview Image**
+   - Location: `/src/assets/resume-template-preview.png` (or `.jpg`)
+   - Shows clean, professional, ATS-friendly resume format
+   - Full-page screenshot of generated John Doe template
+   - Used during upload to set user expectations
+
 ## Overview
-React-based frontend for AI-powered resume tailoring with Stripe credit system and real-time agent streaming.
+React-based frontend for AI-powered resume tailoring with Stripe credit system and real-time agent streaming. **Fully responsive** design optimized for mobile, tablet, and desktop devices.
 
 ## Tech Stack
 - **Framework**: React 18
@@ -14,6 +44,7 @@ React-based frontend for AI-powered resume tailoring with Stripe credit system a
 - **OAuth**: @react-oauth/google
 - **Drag & Drop**: @dnd-kit/core, @dnd-kit/sortable
 - **Icons**: Material Icons
+- **Responsive Design**: MUI breakpoints (useMediaQuery, useTheme)
 
 ## Project Structure
 ```
@@ -47,6 +78,22 @@ frontend/src/
 ├── App.jsx              # Root component with routing
 └── main.jsx             # Entry point
 ```
+
+## Responsive Design
+
+**Fully responsive** across all devices with dedicated mobile, tablet, and desktop layouts.
+
+### Breakpoints
+- **Mobile**: < 600px (sm)
+- **Tablet**: 600px - 1200px (md-lg)
+- **Desktop**: > 1200px
+
+### Responsive Features
+- **Navbar**: Conditional layout, smaller buttons on mobile, credits only shown when logged in
+- **Landing Page**: Auth-based CTAs, signup incentive badges for non-logged-in users
+- **ProjectEditor**: Slide-in drawer for extracted data on mobile, FAB toggle button
+- **All Pages**: Optimized padding, typography, and layouts for smaller screens
+- **Dashboard**: Welcome message for new users showing "100 free credits"
 
 ## Core Features
 
@@ -118,7 +165,9 @@ Success → Navigate to Dashboard
 
 ### 3. Project Editor
 
-**Layout**: 2-column (PDF 60%, Extracted Data 40%) + Job Description Drawer
+**Layout**:
+- **Desktop/Tablet**: 2-column (PDF 60%, Extracted Data 40%) + Job Description Drawer
+- **Mobile**: Full-width PDF with slide-in drawer for extracted data
 
 **Main Features**:
 - Load project data on mount
@@ -128,6 +177,18 @@ Success → Navigate to Dashboard
 - Download buttons (PDF, DOCX)
 - Replace resume functionality
 - Section drag-and-drop reordering
+- **Responsive header** with mobile optimizations
+
+**Mobile Optimizations**:
+- Header height: 48px (vs 40px on desktop)
+- "Replace" button hidden on mobile
+- "Updated" timestamp hidden on mobile
+- Smaller button sizes (font: 0.65rem, reduced padding)
+- "Tailor Resume" → "Tailor" on mobile
+- Extracted data panel becomes slide-in drawer
+- FAB (Floating Action Button) to toggle drawer
+- Drawer width: 85% with max 400px
+- Project name truncates with ellipsis if too long
 
 **Agent Streaming Modal**:
 ```javascript
@@ -228,22 +289,41 @@ toast.success((t) => (
 - Gradient background (#072D1F → #29B770)
 - Height: 48px (compact)
 - Favicon logo before "SkillMap" text (28px × 28px)
-- Dashboard link
-- Credit balance chip (always visible)
+- Dashboard link (hidden on mobile, moved to menu dropdown)
+- Credit balance chip (**only shown when user is logged in**)
 - User menu with profile dropdown
 - White text/buttons for dark background
+- **Fully responsive** with mobile optimizations
 
-**Credit Chip**:
+**Responsive Behavior**:
+- **Desktop**: Full layout with all buttons and credits visible
+- **Tablet**: Same as desktop
+- **Mobile (<600px)**:
+  - Smaller buttons (reduced padding and font size)
+  - Dashboard button hidden (accessible via menu)
+  - Credits chip smaller (just number, no "Credits" text)
+  - Avatar reduced to 32px
+  - Reduced spacing between elements
+- **Very Small Mobile (<400px)**:
+  - Credits chip completely hidden
+  - Maximum space efficiency
+
+**Credit Chip** (conditional display):
 ```javascript
-<Chip
-  icon={<AccountBalanceWalletIcon />}
-  label={`${user?.credits?.toFixed(1) || '0.0'} Credits`}
-  sx={{
-    bgcolor: 'rgba(255, 255, 255, 0.15)',
-    color: '#ffffff',
-    fontWeight: 600
-  }}
-/>
+{isAuthenticated && user ? (
+  <Chip
+    icon={<AccountBalanceWalletIcon />}
+    label={`${user.credits?.toFixed(1) || '0.0'} ${isMobile ? '' : 'Credits'}`}
+    onClick={() => navigate('/profile')}
+    size={isMobile ? 'small' : 'medium'}
+    sx={{
+      bgcolor: 'rgba(255, 255, 255, 0.15)',
+      color: '#ffffff',
+      fontWeight: 600,
+      cursor: 'pointer'
+    }}
+  />
+) : null}
 ```
 
 ### 7. Dashboard
@@ -254,8 +334,32 @@ toast.success((t) => (
 - Edit/delete actions with confirmations
 - Create new project button
 - Empty state for new users
+- **Welcome message** for new users: "100 free credits to get started"
 - Toast notifications for actions
 - Loading states during operations
+- **Fully responsive** grid layout
+
+**Welcome Message** (for new users with no projects):
+```javascript
+<Alert severity="success">
+  <Typography variant="body2" fontWeight={600}>
+    Welcome! You've received 100 free credits to get started!
+  </Typography>
+  <Typography variant="caption">
+    Each resume tailoring costs 5 credits. That's 20 tailored resumes!
+  </Typography>
+</Alert>
+```
+
+**Responsive Behavior**:
+- **Desktop**: Full layout with all elements
+- **Tablet**: Header stacks vertically, projects in 2 columns
+- **Mobile**:
+  - Reduced padding (py: 2 vs 4)
+  - Header stacks vertically
+  - "New Project" button full width
+  - Projects grid: 1 column (xs=12)
+  - Typography sizes reduced
 
 ### 8. Authentication
 
@@ -363,18 +467,20 @@ const result = await resumeService.uploadResume(
 - `register(data)` - Register new user
 - `googleLogin(idToken)` - Google OAuth login
 - `logout()` - Clear user state
-- `refreshUser()` - Fetch fresh user data from API
+- `refreshUser()` - Fetch fresh user data from API (memoized)
 - `isAuthenticated` - Boolean auth status
 
-**Critical Feature**: `refreshUser()` syncs both React state AND localStorage:
+**Critical Feature**: `refreshUser()` is **memoized with useCallback** to prevent infinite re-renders:
 ```javascript
-const refreshUser = async () => {
+const refreshUser = useCallback(async () => {
   const profile = await userService.getCurrentProfile();
   setUser(profile);  // Update React state
   localStorage.setItem('user', JSON.stringify(profile));  // Sync localStorage
   return profile;
-};
+}, []); // Stable reference - no dependencies
 ```
+
+**Bug Fix**: Previously caused infinite refresh loop on Profile page. Now properly memoized.
 
 ## Routing
 
@@ -481,6 +587,25 @@ background: 'linear-gradient(135deg, #072D1F 0%, #29B770 100%)'
 **Problem**: Credits added to database but navbar shows old value
 **Solution**: Fixed by updating `refreshUser()` to sync localStorage
 
+### Navbar Shows Credits Before User Logs In
+**Problem**: Navbar displays "0.0 Credits" before authentication
+**Solution**: Fixed by changing condition from `isAuthenticated` to `isAuthenticated && user`
+
+### Profile Page Infinite Refresh Loop
+**Problem**: Non-stop fetches and re-renders on Profile page
+**Solution**:
+1. Memoized `refreshUser()` with `useCallback` in AuthContext
+2. Split useEffect into two separate effects (initial load + payment redirect)
+3. Initial load runs only once on mount with empty dependencies
+
+### Navbar Overflow on Mobile
+**Problem**: Navbar elements overflow and cause horizontal scroll
+**Solution**:
+1. Reduced button sizes and padding on mobile
+2. Hidden Dashboard button on mobile (moved to menu)
+3. Shortened credit chip text on mobile
+4. Added overflow: hidden to container
+
 ### CORS Errors
 **Problem**: API requests blocked
 **Solution**: Ensure backend `CORS_ORIGINS` includes `http://localhost:5173`
@@ -523,6 +648,44 @@ Use Stripe test cards:
 - Decline: `4000 0000 0000 0002`
 - Any future expiry, any CVC, any ZIP
 
+## Landing Page Features
+
+### Auth-Based CTAs
+
+**For Non-Logged-In Users**:
+- Hero section shows "Get Started Free" + "Login" buttons
+- Prominent "100 FREE credits" incentive badge with gold star icon
+- Bottom CTA section visible with signup button
+- Second "100 FREE credits" badge in bottom CTA
+
+**For Logged-In Users**:
+- Hero section shows single "Go to Dashboard" button
+- No signup incentive badges (not needed)
+- Bottom CTA section **completely hidden**
+- Clean, streamlined experience
+
+**Signup Incentive Design**:
+```javascript
+{!isAuthenticated && (
+  <Chip
+    icon={<StarIcon sx={{ color: '#FFD700' }} />}
+    label="Sign up and get 100 FREE credits to start!"
+    sx={{
+      bgcolor: colorPalette.primary.darkGreen,
+      color: '#FFFFFF',
+      fontWeight: 700,
+      boxShadow: '0 4px 12px rgba(7, 45, 31, 0.3)'
+    }}
+  />
+)}
+```
+
+### Updated Feature Cards
+1. **Upload Any Resume Format**: DOCX, PDF, or Images (JPG, PNG) - AI extraction
+2. **AI-Powered Tailoring**: Paste job description, get resume + cover letter + email
+3. **Manage Projects**: Organized with version history
+4. **Download PDF or DOCX**: Your choice, instantly generated
+
 ## Deployment
 
 ### Production Build
@@ -532,16 +695,28 @@ npm run build
 ```
 
 ### Hosting Options
-- Vercel
+- **Vercel** (recommended for React apps)
 - Netlify
 - AWS S3 + CloudFront
 - GitHub Pages
 
-### Environment Variables (Production)
+### Environment Variables
+
+**Local Development** (`.env`):
 ```bash
-VITE_API_URL=https://api.yourdomain.com
-VITE_GOOGLE_CLIENT_ID=your-production-client-id
+VITE_API_URL=http://localhost:8000
+VITE_GOOGLE_CLIENT_ID=your-google-client-id
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
+
+**Production** (`.env.production`):
+```bash
+VITE_API_URL=https://skillmap-production.up.railway.app
+VITE_GOOGLE_CLIENT_ID=your-production-client-id
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...  # or pk_live_... for real payments
+```
+
+**Note**: Vite automatically uses `.env.production` when building for production (`npm run build`).
 
 ### SPA Routing Configuration
 

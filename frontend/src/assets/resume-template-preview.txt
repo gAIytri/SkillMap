@@ -1,0 +1,3 @@
+# Template preview image should be placed here
+# User will provide the actual image file
+# Filename: resume-template-preview.png or resume-template-preview.jpg

@@ -1,5 +1,35 @@
 # SkillMap Backend Documentation
 
+## Recent Changes (2025-01-19)
+
+### AI Tailoring Improvements
+1. **Dynamic Action Verb Selection** (`services/agent_tools.py`)
+   - Removed fixed list of action verbs (Architected, Engineered, etc.)
+   - LLM now intelligently selects verbs based on job description and actual work
+   - Added "Critical Balance Principle" to prevent over-engineering or excessive changes
+
+2. **Balance Guidelines Added**
+   - Every change must be justified by job description
+   - Avoid over-engineering or reducing content too much
+   - Stay authentic to candidate's experience while optimizing
+
+### DOCX Generation Updates
+1. **Consistent Font Sizing** (`services/docx_generation_service.py`)
+   - Changed bullet points from 9pt to 10pt to match professional summary
+   - All body text now consistent at 10pt
+
+### Template Preview Generation
+1. **John Doe Template Generator** (`generate_template_preview.py`)
+   - Created script to generate sample resume for UI preview
+   - Uses programmatic template (no base resume dependency)
+   - Generates clean, one-page resume with all sections populated
+
+### Code Cleanup
+1. **Removed Hardcoded Personal Data**
+   - Cleaned up test files that referenced developer's personal resume
+   - All test data now uses generic "John Doe" samples
+   - No fallback to developer's resume for any users
+
 ## Overview
 SkillMap backend is a FastAPI application that handles resume processing, AI-powered tailoring, project management, and credit-based payment system.
 
@@ -416,26 +446,210 @@ stripe listen --forward-to http://localhost:8000/api/credits/webhook
 
 ## Deployment
 
-### Production Checklist
-- [ ] Set strong `SECRET_KEY` (32+ random characters)
-- [ ] Use PostgreSQL instead of SQLite
-- [ ] Set production Stripe keys (not test keys)
-- [ ] Configure production webhook endpoint in Stripe Dashboard
-- [ ] Disable debug mode
-- [ ] Set up HTTPS/SSL
-- [ ] Configure CORS for production domain
-- [ ] Set up database backups
-- [ ] Configure logging
-- [ ] Set up monitoring (Sentry, etc.)
+### 🚀 Production Status
 
-### Production Server
+**Database**: ✅ Neon PostgreSQL (deployed)
+- Region: `us-east-1` (AWS)
+- Connection: `ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech`
+- Tables: `users`, `projects`, `base_resumes`, `credit_transactions`
+
+**Backend**: ✅ Railway (deployed)
+- Production URL: https://skillmap-production.up.railway.app
+- Auto-deploys from GitHub main branch
+- Procfile: `web: uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+**Frontend**: ✅ Vercel (deployed)
+- Production URL: https://skill-map-six.vercel.app
+- Auto-deploys from GitHub main branch
+
+### Neon PostgreSQL Configuration
+
+**Features**:
+- **Connection Pooling**: Built-in pooler for efficient connections
+- **Auto-scaling**: Automatically scales compute based on load
+- **Auto-suspend**: Suspends after inactivity to save costs
+- **Point-in-time Recovery**: Automatic backups with restore capability
+- **Branch Support**: Create database branches for testing
+
+**Local Development**:
 ```bash
-gunicorn main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000 \
-  --timeout 120
+# Local .env uses the same Neon database as production
+DATABASE_URL=postgresql://neondb_owner:npg_GoAXaFcxLQ61@ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
 ```
+
+**Why Neon?**
+- Serverless PostgreSQL with instant branching
+- No cold starts (unlike traditional serverless DBs)
+- Generous free tier for development
+- Seamless scaling from dev to production
+
+### Railway Deployment Configuration
+
+**Environment Variables (Production)**:
+```bash
+# Database
+DATABASE_URL=postgresql://neondb_owner:npg_GoAXaFcxLQ61@ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
+
+# Security
+SECRET_KEY=sjnkx_hgEFwxCZMmno5kLHob52rmYjfTybqSCbjFDA4xEmzekxx6D66zHweASMeS
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_MINUTES=1440
+
+# OpenAI
+OPENAI_API_KEY=sk-proj-your-key
+OPENAI_MODEL=gpt-4o-2024-08-06
+
+# LangSmith (Agent Monitoring)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+LANGCHAIN_API_KEY=lsv2_pt_your-key
+LANGCHAIN_PROJECT=SkillMap
+
+# Stripe (Production - use live keys)
+STRIPE_SECRET_KEY=sk_live_your-key
+STRIPE_PUBLISHABLE_KEY=pk_live_your-key
+STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
+STRIPE_SUCCESS_URL=https://skill-map-six.vercel.app/profile?payment=success
+STRIPE_CANCEL_URL=https://skill-map-six.vercel.app/profile?payment=cancelled
+
+# Google OAuth
+GOOGLE_CLIENT_ID=xxxxxx
+GOOGLE_CLIENT_SECRET=xxxxxxx
+
+# CORS
+FRONTEND_URL=https://skill-map-six.vercel.app
+
+# Credits
+LOW_CREDIT_THRESHOLD=10.0
+MINIMUM_CREDITS_FOR_TAILOR=5.0
+```
+
+**Deployment Files**:
+- `Procfile`: Uvicorn command for Railway
+- `requirements.txt`: Python dependencies
+- `runtime.txt`: Python version (optional)
+
+### Production Deployment Workflow
+
+```bash
+# 1. Test locally with Neon database
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload
+
+# 2. Commit changes
+git add .
+git commit -m "Your changes"
+git push origin main
+
+# 3. Auto-deploy
+# Railway automatically deploys backend (2-5 min)
+# Vercel automatically deploys frontend (1-2 min)
+```
+
+### Database Migration to Neon
+
+Already completed! Tables created:
+```sql
+-- Users table
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR UNIQUE NOT NULL,
+    password_hash VARCHAR,
+    full_name VARCHAR,
+    google_id VARCHAR,
+    credits FLOAT DEFAULT 100.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Base Resumes table
+CREATE TABLE base_resumes (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    original_filename VARCHAR,
+    original_docx BYTEA,
+    resume_json JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Projects table
+CREATE TABLE projects (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    project_name VARCHAR NOT NULL,
+    job_description TEXT,
+    base_resume_id INTEGER REFERENCES base_resumes(id),
+    original_docx BYTEA,
+    resume_json JSONB,
+    tailoring_history JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Credit Transactions table
+CREATE TABLE credit_transactions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    amount FLOAT NOT NULL,
+    balance_after FLOAT NOT NULL,
+    transaction_type VARCHAR NOT NULL,
+    tokens_used INTEGER,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    description VARCHAR,
+    stripe_session_id VARCHAR UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for performance
+CREATE INDEX idx_projects_user_id ON projects(user_id);
+CREATE INDEX idx_credit_transactions_user_id ON credit_transactions(user_id);
+CREATE INDEX idx_credit_transactions_created_at ON credit_transactions(created_at DESC);
+CREATE INDEX idx_credit_transactions_stripe_session_id ON credit_transactions(stripe_session_id);
+```
+
+### Production Checklist
+
+- [x] Set strong `SECRET_KEY` (32+ random characters)
+- [x] Use PostgreSQL (Neon) instead of SQLite
+- [x] Database tables created and indexed
+- [x] Backend deployed to Railway
+- [x] Frontend deployed to Vercel
+- [x] CORS configured for production domain
+- [x] Environment variables configured
+- [ ] Set production Stripe keys (currently using test keys)
+- [ ] Configure production webhook endpoint in Stripe Dashboard
+- [ ] Enable Neon automatic backups
+- [ ] Set up monitoring (Sentry, LangSmith)
+- [ ] Configure custom domain (optional)
+
+### Monitoring & Maintenance
+
+**Railway Monitoring**:
+- View logs: Railway Dashboard → Deployments → View Logs
+- Monitor metrics: CPU, memory, response time
+- Set up alerts for high error rates
+
+**Neon Monitoring**:
+- View connection stats in Neon dashboard
+- Monitor query performance
+- Enable automatic backups (7-30 day retention)
+
+**LangSmith Monitoring**:
+- Track agent execution traces
+- Monitor token usage and costs
+- Debug agent reasoning steps
+- View: https://smith.langchain.com/
+
+### Deployment Guides
+
+For detailed deployment instructions, see:
+- **[DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md)** - Complete step-by-step guide
+- **[DEPLOYMENT_QUICK_START.md](../DEPLOYMENT_QUICK_START.md)** - Quick 45-min deployment
+- **[QUICK_START.md](../QUICK_START.md)** - Local development + production URLs
 
 ## License
 Proprietary - All rights reserved

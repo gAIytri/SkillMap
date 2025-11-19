@@ -38,7 +38,7 @@ STYLES = {
     },
     'bullet': {
         'style': 'List Paragraph',
-        'font_size': 9,
+        'font_size': 10,
     },
     'normal': {
         'style': 'Normal',
@@ -136,14 +136,14 @@ def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColo
     return hyperlink
 
 
-def add_bullet_paragraph(doc: Document, text: str, font_size: int = 9, keep_together: bool = True):
+def add_bullet_paragraph(doc: Document, text: str, font_size: int = 10, keep_together: bool = True):
     """
     Add a bulleted paragraph with visible bullet points (•)
 
     Args:
         doc: Document object
         text: Bullet text
-        font_size: Font size in points (default 9)
+        font_size: Font size in points (default 10)
         keep_together: If True, prevents bullet from splitting across pages (default True)
     """
     # Create paragraph and add bullet character directly
@@ -409,7 +409,7 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
     Format:
     EXPERIENCE (Heading 1, underlined)
     Company – Title, Location    Start – End (Heading 2, date right-aligned)
-    • Bullet 1 (List Paragraph, 9pt)
+    • Bullet 1 (List Paragraph, 10pt)
     • Bullet 2
 
     Pagination: Each individual job entry stays together (header + bullets),
@@ -498,13 +498,13 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
                 subtext_run.font.size = Pt(10)
                 subtext_run.font.name = 'Calibri'
 
-        # Bullets (List Paragraph, 9pt)
+        # Bullets (List Paragraph, 10pt)
         bullets = exp.get('bullets', [])
         for i, bullet in enumerate(bullets):
             # Keep all bullets together with the job header
             # Set keep_with_next=True on all bullets except the last one
             is_last_bullet = (i == len(bullets) - 1)
-            bullet_para = add_bullet_paragraph(doc, bullet, font_size=9, keep_together=True)
+            bullet_para = add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
             if not is_last_bullet:
                 bullet_para.paragraph_format.keep_with_next = True
 
@@ -516,7 +516,7 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
     Format:
     PROJECTS (Heading 1, underlined)
     Project Name – Technologies    Date (Heading 2)
-    • Description bullet 1 (List Paragraph, 9pt)
+    • Description bullet 1 (List Paragraph, 10pt)
     • Description bullet 2
 
     Pagination: Each individual project entry stays together (header + bullets),
@@ -649,7 +649,7 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
         # Add bullets with keep_with_next to keep project entry together
         for i, sentence in enumerate(all_sentences):
             is_last_bullet = (i == len(all_sentences) - 1)
-            bullet_para = add_bullet_paragraph(doc, sentence, font_size=9, keep_together=True)
+            bullet_para = add_bullet_paragraph(doc, sentence, font_size=10, keep_together=True)
             if not is_last_bullet:
                 bullet_para.paragraph_format.keep_with_next = True
 
@@ -704,7 +704,7 @@ def add_certifications_section(doc: Document, certifications: List[str]):
 
     Format:
     CERTIFICATIONS (Heading 1, underlined)
-    • Certification 1 (List Paragraph, 9pt)
+    • Certification 1 (List Paragraph, 10pt)
     • Certification 2
 
     Pagination: Entire section stays together (certifications are typically short)
@@ -716,7 +716,7 @@ def add_certifications_section(doc: Document, certifications: List[str]):
     add_section_header(doc, 'CERTIFICATIONS', keep_with_next=True)
 
     for cert in certifications:
-        add_bullet_paragraph(doc, cert, font_size=9, keep_together=True)
+        add_bullet_paragraph(doc, cert, font_size=10, keep_together=True)
 
 
 # ============================================================================
@@ -874,37 +874,37 @@ def get_default_section_order() -> List[str]:
 if __name__ == '__main__':
     """Test resume generation"""
 
-    # Sample data
+    # Sample test data
     test_data = {
         "personal_info": {
-            "name": "SIDHARTH RAJ KHANDELWAL",
-            "email": "sid_rk@outlook.com",
-            "phone": "(480) 241-8791",
-            "location": "Jersey City, NJ",
+            "name": "JOHN DOE",
+            "email": "john.doe@email.com",
+            "phone": "(555) 123-4567",
+            "location": "San Francisco, CA",
             "linkedin": "LinkedIn",
             "github": "GitHub",
             "portfolio": "Portfolio"
         },
-        "professional_summary": "AI driven Full Stack Developer with 4+ years of experience specializing in React, TypeScript, .NET, Python.",
+        "professional_summary": "Experienced Software Engineer with 5+ years of experience in full-stack development.",
         "education": [
             {
-                "institution": "Pace University",
-                "location": "New York, NY",
-                "degree": "M.S. in Computer Science (Full Stack Development)",
-                "gpa": "3.9",
-                "graduation_date": "May 2025"
+                "institution": "University of Technology",
+                "location": "San Francisco, CA",
+                "degree": "B.S. in Computer Science",
+                "gpa": "3.8",
+                "graduation_date": "May 2020"
             }
         ],
         "experience": [
             {
-                "company": "We Rebel LLC",
-                "title": "Full-Stack Developer",
-                "location": "New York, NY",
-                "start_date": "Sept 2025",
+                "company": "Tech Company Inc.",
+                "title": "Software Engineer",
+                "location": "San Francisco, CA",
+                "start_date": "Jan 2020",
                 "end_date": "Present",
                 "bullets": [
-                    "Led end-to-end development of Common Works Registration pipeline.",
-                    "Integrated Persona identity verification for artist onboarding."
+                    "Developed and maintained web applications using React and Node.js",
+                    "Collaborated with cross-functional teams to deliver features"
                 ]
             }
         ],
@@ -912,15 +912,14 @@ if __name__ == '__main__':
         "skills": [
             {
                 "category": "Languages",
-                "skills": ["TypeScript", "JavaScript", "Python", "C#", "SQL"]
+                "skills": ["JavaScript", "Python", "TypeScript", "SQL"]
             }
         ],
         "certifications": []
     }
 
-    # Generate resume
-    base_path = '/Users/sidharthraj/Gaiytri projects/SkillMap/SidharthRaj_Khandelwal-2.docx'
-    output_bytes = generate_resume_from_json(test_data, base_path)
+    # Generate resume with programmatic template
+    output_bytes = generate_resume_from_json(test_data)
 
     print(f"✅ Test successful! Generated {len(output_bytes)} bytes")
-    print(f"   Using base resume: {base_path}")
+    print(f"   Using programmatic template (no base resume needed)")

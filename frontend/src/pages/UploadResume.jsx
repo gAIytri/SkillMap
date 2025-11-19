@@ -259,59 +259,143 @@ const UploadResume = () => {
                   '& .MuiLinearProgress-bar': {
                     bgcolor: colorPalette.primary.brightGreen,
                   },
-                  mb: 2,
+                  mb: 3,
                 }}
               />
 
-              {/* Status messages */}
-              {statusMessages.length > 0 && (
-                <Paper
-                  variant="outlined"
+              {/* Two-column layout: Template Preview + Status Messages */}
+              <Box
+                display="flex"
+                flexDirection={isMobile ? 'column' : 'row'}
+                gap={3}
+                alignItems="flex-start"
+              >
+                {/* Left: Template Preview */}
+                <Box
+                  flex="0 0 auto"
+                  width={isMobile ? '100%' : '320px'}
+                  sx={{ order: isMobile ? 2 : 1 }}
+                >
+                  <Typography
+                    variant="body2"
+                    fontWeight={600}
+                    color={colorPalette.primary.darkGreen}
+                    mb={1.5}
+                    textAlign="center"
+                  >
+                    Your resume will look like this:
+                  </Typography>
+                  <Paper
+                    elevation={3}
+                    sx={{
+                      overflow: 'hidden',
+                      border: '2px solid',
+                      borderColor: colorPalette.primary.brightGreen,
+                      borderRadius: 2,
+                    }}
+                  >
+                    <img
+                      src="/src/assets/resume-template-preview.png"
+                      alt="Resume Template Preview"
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        display: 'block',
+                      }}
+                      onError={(e) => {
+                        // Fallback if image not found
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    {/* Fallback placeholder */}
+                    <Box
+                      sx={{
+                        display: 'none',
+                        width: '100%',
+                        aspectRatio: '8.5 / 11',
+                        bgcolor: '#f5f5f5',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        p: 3,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" textAlign="center">
+                        Clean, ATS-friendly format
+                      </Typography>
+                    </Box>
+                  </Paper>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    mt={1}
+                    textAlign="center"
+                    fontStyle="italic"
+                  >
+                    Clean, professional, ATS-friendly format
+                  </Typography>
+                </Box>
+
+                {/* Right: Status Messages */}
+                <Box
+                  flex="1"
                   sx={{
-                    p: 2,
-                    maxHeight: 200,
-                    overflow: 'auto',
-                    bgcolor: '#f5f5f5',
-                    textAlign: 'left',
+                    order: isMobile ? 1 : 2,
+                    minWidth: 0,
                   }}
                 >
-                  <List dense>
-                    {statusMessages.map((msg, idx) => (
-                      <ListItem key={idx} disablePadding sx={{ py: 0.5 }}>
-                        <CheckCircleIcon
-                          sx={{
-                            fontSize: 16,
-                            color: colorPalette.primary.brightGreen,
-                            mr: 1,
-                          }}
-                        />
-                        <ListItemText
-                          primary={msg}
-                          primaryTypographyProps={{
-                            variant: 'body2',
-                            color: 'text.secondary',
-                          }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Paper>
-              )}
+                  {statusMessages.length > 0 && (
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        maxHeight: isMobile ? 180 : 400,
+                        overflow: 'auto',
+                        bgcolor: '#f5f5f5',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <List dense>
+                        {statusMessages.map((msg, idx) => (
+                          <ListItem key={idx} disablePadding sx={{ py: 0.5 }}>
+                            <CheckCircleIcon
+                              sx={{
+                                fontSize: 16,
+                                color: colorPalette.primary.brightGreen,
+                                mr: 1,
+                                flexShrink: 0,
+                              }}
+                            />
+                            <ListItemText
+                              primary={msg}
+                              primaryTypographyProps={{
+                                variant: 'body2',
+                                color: 'text.secondary',
+                              }}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  )}
 
-              {/* Show specific message for OCR */}
-              {statusMessages.some(msg => msg.includes('OCR')) && (
-                <Box mt={2}>
-                  <Chip
-                    label="Using OCR - This may take 5-10 seconds"
-                    size="small"
-                    sx={{
-                      bgcolor: colorPalette.secondary.lightGreen,
-                      color: colorPalette.primary.darkGreen,
-                      fontWeight: 600,
-                    }}
-                  />
+                  {/* Show specific message for OCR */}
+                  {statusMessages.some(msg => msg.includes('OCR')) && (
+                    <Box mt={2}>
+                      <Chip
+                        label="Using OCR - This may take 5-10 seconds"
+                        size="small"
+                        sx={{
+                          bgcolor: colorPalette.secondary.lightGreen,
+                          color: colorPalette.primary.darkGreen,
+                          fontWeight: 600,
+                        }}
+                      />
+                    </Box>
+                  )}
                 </Box>
-              )}
+              </Box>
             </Box>
           )}
 
