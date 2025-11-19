@@ -31,6 +31,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 
 const Dashboard = () => {
   const [projects, setProjects] = useState([]);
@@ -43,6 +44,8 @@ const Dashboard = () => {
     project_name: '',
     job_description: '',
   });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -93,19 +96,24 @@ const Dashboard = () => {
     }
   };
 
-  const handleDeleteProject = async (projectId) => {
-    if (!window.confirm('Are you sure you want to delete this project?')) {
-      return;
-    }
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
 
     const toastId = toast.loading('Deleting project...');
     try {
-      await projectService.deleteProject(projectId);
-      setProjects(projects.filter((p) => p.id !== projectId));
+      await projectService.deleteProject(projectToDelete);
+      setProjects(projects.filter((p) => p.id !== projectToDelete));
       toast.success('Project deleted successfully!', { id: toastId });
     } catch (err) {
       toast.error('Failed to delete project. Please try again.', { id: toastId });
+    } finally {
+      setProjectToDelete(null);
     }
+  };
+
+  const openDeleteConfirm = (projectId) => {
+    setProjectToDelete(projectId);
+    setDeleteConfirmOpen(true);
   };
 
   const filteredProjects = projects.filter((project) =>
@@ -205,32 +213,22 @@ const Dashboard = () => {
               : 'Try a different search term'}
           </Typography>
           {projects.length === 0 && (
-            <>
-              <Alert
-                severity="success"
-                sx={{
-                  mb: 3,
-                  maxWidth: isMobile ? '100%' : '500px',
-                  bgcolor: 'rgba(76, 175, 80, 0.1)',
-                  border: '1px solid rgba(76, 175, 80, 0.3)',
-                }}
-              >
-                <Typography variant="body2" fontWeight={600} gutterBottom>
-                  Welcome! You've received 100 free credits to get started!
-                </Typography>
-                <Typography variant="caption">
-                  Each resume tailoring costs 5 credits. That's 20 tailored resumes to help you land your dream job!
-                </Typography>
-              </Alert>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenCreateDialog(true)}
-                sx={{ bgcolor: colorPalette.primary.brightGreen }}
-              >
-                Create Project
-              </Button>
-            </>
+            <Alert
+              severity="success"
+              sx={{
+                mb: 3,
+                maxWidth: isMobile ? '100%' : '500px',
+                bgcolor: 'rgba(76, 175, 80, 0.1)',
+                border: '1px solid rgba(76, 175, 80, 0.3)',
+              }}
+            >
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                Welcome! You've received 100 free credits to get started!
+              </Typography>
+              <Typography variant="caption">
+                Each resume tailoring costs 5 credits. That's 20 tailored resumes to help you land your dream job!
+              </Typography>
+            </Alert>
           )}
         </Box>
       ) : (
@@ -296,7 +294,7 @@ const Dashboard = () => {
                   </Button>
                   <IconButton
                     size="small"
-                    onClick={() => handleDeleteProject(project.id)}
+                    onClick={() => openDeleteConfirm(project.id)}
                     sx={{ color: 'error.main' }}
                   >
                     <DeleteIcon />
@@ -357,6 +355,21 @@ const Dashboard = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setProjectToDelete(null);
+        }}
+        onConfirm={handleDeleteProject}
+        title="Delete Project"
+        message="Are you sure you want to delete this project? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmColor="error"
+      />
     </Container>
   );
 };

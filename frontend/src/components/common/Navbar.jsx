@@ -46,7 +46,7 @@ const Navbar = () => {
             flexGrow: 1,
             cursor: 'pointer',
           }}
-          onClick={() => navigate(isAuthenticated ? '/dashboard' : '/')}
+          onClick={() => navigate('/')}
         >
           <img
             src={faviconSvg}
@@ -79,7 +79,7 @@ const Navbar = () => {
                   },
                 }}
               >
-                Dashboard
+                Projects
               </Button>
             )}
             {!isSmallMobile && (
@@ -139,7 +139,7 @@ const Navbar = () => {
                     handleClose();
                   }}
                 >
-                  Dashboard
+                  Projects
                 </MenuItem>
               )}
               <MenuItem

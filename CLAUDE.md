@@ -1,0 +1,1 @@
+- alwys enter venv environment before doing any migration changes or runnning or anything in backend

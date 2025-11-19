@@ -22,9 +22,26 @@ const creditsService = {
   },
 
   // Create Stripe checkout session
-  createCheckoutSession: async (credits) => {
+  createCheckoutSession: async (credits, enableAutoRecharge = false) => {
     const response = await api.post('/api/credits/create-checkout-session', {
       credits,
+      enable_auto_recharge: enableAutoRecharge,
+    });
+    return response.data;
+  },
+
+  // Get auto-recharge settings
+  getAutoRechargeSettings: async () => {
+    const response = await api.get('/api/credits/auto-recharge');
+    return response.data;
+  },
+
+  // Update auto-recharge settings
+  updateAutoRechargeSettings: async (enabled, credits = null, threshold = 10.0) => {
+    const response = await api.post('/api/credits/auto-recharge', {
+      enabled,
+      credits,
+      threshold,
     });
     return response.data;
   },

@@ -6,18 +6,12 @@ import {
   Button,
   Paper,
   Alert,
-  CircularProgress,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
-  Chip,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { colorPalette } from '../styles/theme';
 import resumeService from '../services/resumeService';
 
@@ -162,277 +156,224 @@ const UploadResume = () => {
             textAlign: 'center',
           }}
         >
-          <CloudUploadIcon
-            sx={{
-              fontSize: isMobile ? 60 : 80,
-              color: colorPalette.primary.brightGreen,
-              mb: 2,
-            }}
-          />
+          {/* Initial State - Before Upload */}
+          {!uploading && (
+            <>
+              <CloudUploadIcon
+                sx={{
+                  fontSize: isMobile ? 60 : 80,
+                  color: colorPalette.primary.brightGreen,
+                  mb: 2,
+                }}
+              />
 
-          <Typography
-            variant={isMobile ? 'h5' : 'h4'}
-            component="h1"
-            gutterBottom
-            fontWeight={700}
-            color={colorPalette.primary.darkGreen}
-          >
-            Upload Your Base Resume
-          </Typography>
+              <Typography
+                variant={isMobile ? 'h5' : 'h4'}
+                component="h1"
+                gutterBottom
+                fontWeight={700}
+                color={colorPalette.primary.darkGreen}
+              >
+                Upload Your Base Resume
+              </Typography>
 
-          <Typography
-            variant={isMobile ? 'body2' : 'body1'}
-            color="text.secondary"
-            mb={1}
-            maxWidth="700px"
-            mx="auto"
-          >
-            Upload your resume in DOCX, PDF, or image format. Our AI will extract the content
-            and structure it for tailoring to different job applications.
-          </Typography>
+              <Typography
+                variant={isMobile ? 'body2' : 'body1'}
+                color="text.secondary"
+                mb={1}
+                maxWidth="700px"
+                mx="auto"
+              >
+                Upload your resume in DOCX, PDF, or image format. Our AI will extract the content
+                and structure it for tailoring to different job applications.
+              </Typography>
 
-          <Box mb={4}>
-            <Typography variant="caption" color="text.secondary">
-              <strong>Supported formats:</strong> {getAllowedExtensions()}
-            </Typography>
-          </Box>
+              <Box mb={4}>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>Supported formats:</strong> {getAllowedExtensions()}
+                </Typography>
+              </Box>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              {error}
-            </Alert>
-          )}
+              {error && (
+                <Alert severity="error" sx={{ mb: 3 }}>
+                  {error}
+                </Alert>
+              )}
 
-          <Box mb={4}>
-            <input
-              accept={getAllowedExtensions()}
-              style={{ display: 'none' }}
-              id="resume-file-input"
-              type="file"
-              onChange={handleFileSelect}
-              disabled={uploading}
-            />
-            <label htmlFor="resume-file-input">
+              <Box mb={4}>
+                <input
+                  accept={getAllowedExtensions()}
+                  style={{ display: 'none' }}
+                  id="resume-file-input"
+                  type="file"
+                  onChange={handleFileSelect}
+                  disabled={uploading}
+                />
+                <label htmlFor="resume-file-input">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    size={isMobile ? 'medium' : 'large'}
+                    disabled={uploading}
+                    fullWidth={isMobile}
+                    sx={{
+                      py: isMobile ? 1.5 : 2,
+                      px: isMobile ? 3 : 4,
+                      borderColor: colorPalette.primary.darkGreen,
+                      color: colorPalette.primary.darkGreen,
+                      borderWidth: 2,
+                      '&:hover': {
+                        borderWidth: 2,
+                        borderColor: colorPalette.primary.brightGreen,
+                        bgcolor: colorPalette.secondary.lightGreen,
+                      },
+                    }}
+                  >
+                    {selectedFile ? 'Replace Resume' : 'Select Resume File'}
+                  </Button>
+                </label>
+              </Box>
+
+              {selectedFile && (
+                <Box mb={3}>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    Selected file:
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedFile.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {(selectedFile.size / 1024).toFixed(2)} KB
+                  </Typography>
+                </Box>
+              )}
+
               <Button
-                variant="outlined"
-                component="span"
+                variant="contained"
                 size={isMobile ? 'medium' : 'large'}
-                disabled={uploading}
+                onClick={handleUpload}
+                disabled={!selectedFile}
                 fullWidth={isMobile}
                 sx={{
-                  py: isMobile ? 1.5 : 2,
+                  py: isMobile ? 1.5 : 1.5,
                   px: isMobile ? 3 : 4,
-                  borderColor: colorPalette.primary.darkGreen,
-                  color: colorPalette.primary.darkGreen,
-                  borderWidth: 2,
+                  bgcolor: colorPalette.primary.brightGreen,
                   '&:hover': {
-                    borderWidth: 2,
-                    borderColor: colorPalette.primary.brightGreen,
-                    bgcolor: colorPalette.secondary.lightGreen,
+                    bgcolor: colorPalette.secondary.mediumGreen,
                   },
                 }}
               >
-                Select Resume File
+                Upload & Extract
               </Button>
-            </label>
-          </Box>
 
-          {selectedFile && !uploading && (
-            <Box mb={3}>
-              <Typography variant="body2" color="text.secondary" mb={1}>
-                Selected file:
-              </Typography>
-              <Typography variant="body1" fontWeight={600}>
-                {selectedFile.name}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {(selectedFile.size / 1024).toFixed(2)} KB
-              </Typography>
-            </Box>
+              <Box mt={4}>
+                <Typography variant="caption" color="text.secondary">
+                  Max file size: 10MB • AI-powered extraction
+                </Typography>
+              </Box>
+            </>
           )}
 
+          {/* During Upload State - Show Progress, Status, and Template */}
           {uploading && (
-            <Box mb={3}>
+            <Box>
+              {/* Uploading text and progress bar at top */}
+              <Typography
+                variant={isMobile ? 'body2' : 'body1'}
+                fontWeight={600}
+                color={colorPalette.primary.darkGreen}
+                mb={isMobile ? 1.5 : 2}
+              >
+                Uploading...
+              </Typography>
+
               <LinearProgress
                 sx={{
                   bgcolor: colorPalette.secondary.lightGreen,
                   '& .MuiLinearProgress-bar': {
                     bgcolor: colorPalette.primary.brightGreen,
                   },
-                  mb: 3,
+                  mb: isMobile ? 3 : 4,
+                  height: isMobile ? 4 : 6,
                 }}
               />
 
-              {/* Two-column layout: Template Preview + Status Messages */}
+              {/* Template Preview - Centered, full width */}
               <Box
                 display="flex"
-                flexDirection={isMobile ? 'column' : 'row'}
-                gap={3}
-                alignItems="flex-start"
+                flexDirection="column"
+                alignItems="center"
+                justifyContent="center"
+                maxWidth={isMobile ? '100%' : '600px'}
+                mx="auto"
+                px={isMobile ? 0 : 2}
               >
-                {/* Left: Template Preview */}
-                <Box
-                  flex="0 0 auto"
-                  width={isMobile ? '100%' : '320px'}
-                  sx={{ order: isMobile ? 2 : 1 }}
+                <Typography
+                  variant={isMobile ? 'caption' : 'body2'}
+                  fontWeight={600}
+                  color={colorPalette.primary.darkGreen}
+                  mb={isMobile ? 1.5 : 2}
+                  textAlign="center"
                 >
-                  <Typography
-                    variant="body2"
-                    fontWeight={600}
-                    color={colorPalette.primary.darkGreen}
-                    mb={1.5}
-                    textAlign="center"
-                  >
-                    Your resume will look like this:
-                  </Typography>
-                  <Paper
-                    elevation={3}
-                    sx={{
-                      overflow: 'hidden',
-                      border: '2px solid',
-                      borderColor: colorPalette.primary.brightGreen,
-                      borderRadius: 2,
-                    }}
-                  >
-                    <img
-                      src="/src/assets/resume-template-preview.png"
-                      alt="Resume Template Preview"
-                      style={{
-                        width: '100%',
-                        height: 'auto',
-                        display: 'block',
-                      }}
-                      onError={(e) => {
-                        // Fallback if image not found
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                    {/* Fallback placeholder */}
-                    <Box
-                      sx={{
-                        display: 'none',
-                        width: '100%',
-                        aspectRatio: '8.5 / 11',
-                        bgcolor: '#f5f5f5',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        p: 3,
-                      }}
-                    >
-                      <Typography variant="caption" color="text.secondary" textAlign="center">
-                        Clean, ATS-friendly format
-                      </Typography>
-                    </Box>
-                  </Paper>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    display="block"
-                    mt={1}
-                    textAlign="center"
-                    fontStyle="italic"
-                  >
-                    Clean, professional, ATS-friendly format
-                  </Typography>
-                </Box>
+                  Your resume will look like this:
+                </Typography>
 
-                {/* Right: Status Messages */}
-                <Box
-                  flex="1"
+                <Paper
+                  elevation={3}
                   sx={{
-                    order: isMobile ? 1 : 2,
-                    minWidth: 0,
+                    width: '100%',
+                    overflow: 'hidden',
+                    border: isMobile ? '1.5px solid' : '2px solid',
+                    borderColor: colorPalette.primary.brightGreen,
+                    borderRadius: isMobile ? 1.5 : 2,
                   }}
                 >
-                  {statusMessages.length > 0 && (
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 2,
-                        maxHeight: isMobile ? 180 : 400,
-                        overflow: 'auto',
-                        bgcolor: '#f5f5f5',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <List dense>
-                        {statusMessages.map((msg, idx) => (
-                          <ListItem key={idx} disablePadding sx={{ py: 0.5 }}>
-                            <CheckCircleIcon
-                              sx={{
-                                fontSize: 16,
-                                color: colorPalette.primary.brightGreen,
-                                mr: 1,
-                                flexShrink: 0,
-                              }}
-                            />
-                            <ListItemText
-                              primary={msg}
-                              primaryTypographyProps={{
-                                variant: 'body2',
-                                color: 'text.secondary',
-                              }}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Paper>
-                  )}
+                  <img
+                    src="/src/assets/resume-template-preview.png"
+                    alt="Resume Template Preview"
+                    style={{
+                      width: '100%',
+                      height: 'auto',
+                      display: 'block',
+                    }}
+                    onError={(e) => {
+                      // Fallback if image not found
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  {/* Fallback placeholder */}
+                  <Box
+                    sx={{
+                      display: 'none',
+                      width: '100%',
+                      aspectRatio: '8.5 / 11',
+                      bgcolor: '#f5f5f5',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      p: isMobile ? 2 : 3,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" textAlign="center">
+                      Clean, ATS-friendly format
+                    </Typography>
+                  </Box>
+                </Paper>
 
-                  {/* Show specific message for OCR */}
-                  {statusMessages.some(msg => msg.includes('OCR')) && (
-                    <Box mt={2}>
-                      <Chip
-                        label="Using OCR - This may take 5-10 seconds"
-                        size="small"
-                        sx={{
-                          bgcolor: colorPalette.secondary.lightGreen,
-                          color: colorPalette.primary.darkGreen,
-                          fontWeight: 600,
-                        }}
-                      />
-                    </Box>
-                  )}
-                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  mt={isMobile ? 1 : 2}
+                  textAlign="center"
+                  fontStyle="italic"
+                  sx={{ fontSize: isMobile ? '0.7rem' : '0.75rem' }}
+                >
+                  Clean, professional, ATS-friendly format
+                </Typography>
               </Box>
             </Box>
           )}
-
-          {!uploading && (
-            <Button
-              variant="contained"
-              size={isMobile ? 'medium' : 'large'}
-              onClick={handleUpload}
-              disabled={!selectedFile || uploading}
-              fullWidth={isMobile}
-              sx={{
-                py: isMobile ? 1.5 : 1.5,
-                px: isMobile ? 3 : 4,
-                bgcolor: colorPalette.primary.brightGreen,
-                '&:hover': {
-                  bgcolor: colorPalette.secondary.mediumGreen,
-                },
-              }}
-            >
-              Upload & Extract
-            </Button>
-          )}
-
-          {uploading && (
-            <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-              <CircularProgress size={20} />
-              <Typography variant="body2" color="text.secondary">
-                Processing...
-              </Typography>
-            </Box>
-          )}
-
-          <Box mt={4}>
-            <Typography variant="caption" color="text.secondary">
-              Max file size: 10MB • AI-powered extraction
-            </Typography>
-          </Box>
         </Paper>
       </Box>
     </Container>

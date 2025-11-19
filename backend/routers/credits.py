@@ -63,11 +63,27 @@ class CreditPackage(BaseModel):
 
 class CheckoutSessionRequest(BaseModel):
     credits: int  # Number of credits to purchase
+    enable_auto_recharge: bool = False  # Whether to save payment method for auto-recharge
 
 
 class CheckoutSessionResponse(BaseModel):
     session_id: str
     url: str
+
+
+class AutoRechargeSettings(BaseModel):
+    enabled: bool
+    credits: Optional[int]
+    threshold: float
+
+    class Config:
+        from_attributes = True
+
+
+class UpdateAutoRechargeRequest(BaseModel):
+    enabled: bool
+    credits: Optional[int]  # Required if enabled=True
+    threshold: Optional[float] = 10.0
 
 
 # ============================================================================
@@ -210,12 +226,37 @@ async def create_checkout_session(
         logger.info(
             f"Creating Stripe checkout session for user {current_user.id}: "
             f"{request.credits} credits = ${price_usd}"
+            f"{' (with auto-recharge)' if request.enable_auto_recharge else ''}"
         )
 
-        # Create Stripe Checkout Session
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
+        # Get or create Stripe customer if auto-recharge is enabled
+        customer_id = None
+        if request.enable_auto_recharge:
+            if current_user.stripe_customer_id:
+                # Use existing customer
+                customer_id = current_user.stripe_customer_id
+                logger.info(f"Using existing Stripe customer: {customer_id}")
+            else:
+                # Create new Stripe customer
+                customer = stripe.Customer.create(
+                    email=current_user.email,
+                    name=current_user.full_name,
+                    metadata={
+                        'user_id': str(current_user.id),
+                        'email': current_user.email,
+                    }
+                )
+                customer_id = customer.id
+
+                # Save customer ID to database
+                current_user.stripe_customer_id = customer_id
+                db.commit()
+                logger.info(f"Created new Stripe customer: {customer_id}")
+
+        # Build checkout session parameters
+        checkout_params = {
+            'payment_method_types': ['card'],
+            'line_items': [{
                 'price_data': {
                     'currency': 'usd',
                     'unit_amount': price_cents,
@@ -227,17 +268,29 @@ async def create_checkout_session(
                 },
                 'quantity': 1,
             }],
-            mode='payment',
-            success_url=settings.STRIPE_SUCCESS_URL,
-            cancel_url=settings.STRIPE_CANCEL_URL,
-            customer_email=current_user.email,
-            client_reference_id=str(current_user.id),
-            metadata={
+            'mode': 'payment',
+            'success_url': settings.STRIPE_SUCCESS_URL,
+            'cancel_url': settings.STRIPE_CANCEL_URL,
+            'client_reference_id': str(current_user.id),
+            'metadata': {
                 'user_id': str(current_user.id),
                 'credits': str(request.credits),
                 'email': current_user.email,
+                'enable_auto_recharge': str(request.enable_auto_recharge),
             },
-        )
+        }
+
+        # Add customer and setup future usage if auto-recharge is enabled
+        if request.enable_auto_recharge and customer_id:
+            checkout_params['customer'] = customer_id
+            checkout_params['payment_intent_data'] = {
+                'setup_future_usage': 'off_session'  # Save payment method for future charges
+            }
+        else:
+            checkout_params['customer_email'] = current_user.email
+
+        # Create Stripe Checkout Session
+        checkout_session = stripe.checkout.Session.create(**checkout_params)
 
         logger.info(f"✓ Stripe checkout session created: {checkout_session.id}")
 
@@ -259,6 +312,99 @@ async def create_checkout_session(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create checkout session"
+        )
+
+
+@router.get("/auto-recharge", response_model=AutoRechargeSettings)
+async def get_auto_recharge_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user's auto-recharge settings
+
+    Returns:
+        AutoRechargeSettings with enabled status, credit package, and threshold
+    """
+    try:
+        # Refresh user from database
+        db.refresh(current_user)
+
+        return AutoRechargeSettings(
+            enabled=current_user.auto_recharge_enabled or False,
+            credits=current_user.auto_recharge_credits,
+            threshold=current_user.auto_recharge_threshold or 10.0
+        )
+    except Exception as e:
+        logger.error(f"Failed to get auto-recharge settings: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve auto-recharge settings"
+        )
+
+
+@router.post("/auto-recharge", response_model=AutoRechargeSettings)
+async def update_auto_recharge_settings(
+    request: UpdateAutoRechargeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update user's auto-recharge settings
+
+    This endpoint configures auto-recharge. When enabling, the user must:
+    1. Have a saved payment method (set via Stripe checkout with setup mode)
+    2. Specify which credit package to auto-purchase
+    3. Optionally set a threshold (default: 10 credits)
+
+    Args:
+        request: UpdateAutoRechargeRequest with settings
+
+    Returns:
+        Updated AutoRechargeSettings
+    """
+    try:
+        # Validation: If enabling, credits must be specified and valid
+        if request.enabled:
+            if not request.credits:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Credit package must be specified when enabling auto-recharge"
+                )
+
+            if request.credits not in settings.CREDIT_PACKAGES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid credit package. Choose from: {list(settings.CREDIT_PACKAGES.keys())}"
+                )
+
+        # Update user settings
+        current_user.auto_recharge_enabled = request.enabled
+        current_user.auto_recharge_credits = request.credits if request.enabled else None
+        current_user.auto_recharge_threshold = request.threshold or 10.0
+
+        db.commit()
+        db.refresh(current_user)
+
+        logger.info(
+            f"Auto-recharge {'enabled' if request.enabled else 'disabled'} for user {current_user.id}"
+            f"{f' - {request.credits} credits at {request.threshold} threshold' if request.enabled else ''}"
+        )
+
+        return AutoRechargeSettings(
+            enabled=current_user.auto_recharge_enabled,
+            credits=current_user.auto_recharge_credits,
+            threshold=current_user.auto_recharge_threshold
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update auto-recharge settings: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update auto-recharge settings"
         )
 
 
@@ -338,10 +484,12 @@ async def stripe_webhook(
                 user_id = int(metadata['user_id'])
                 credits = int(metadata['credits'])
                 amount_paid_cents = session['amount_total']
+                enable_auto_recharge = metadata.get('enable_auto_recharge', 'False') == 'True'
 
                 logger.info(
                     f"Payment successful for user {user_id}: "
                     f"{credits} credits, ${amount_paid_cents/100:.2f} paid"
+                    f"{' (auto-recharge enabled)' if enable_auto_recharge else ''}"
                 )
 
                 # Get user from database
@@ -351,16 +499,41 @@ async def stripe_webhook(
                     logger.error(f"User {user_id} not found for webhook!")
                     raise HTTPException(status_code=404, detail="User not found")
 
+                # Handle auto-recharge setup if enabled
+                bonus_credits = 0
+                if enable_auto_recharge:
+                    # Retrieve payment method from session
+                    payment_intent_id = session.get('payment_intent')
+                    if payment_intent_id:
+                        # Get payment intent to retrieve payment method
+                        payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+                        payment_method_id = payment_intent.get('payment_method')
+
+                        if payment_method_id:
+                            # Save payment method ID
+                            user.stripe_payment_method_id = payment_method_id
+                            logger.info(f"Saved payment method {payment_method_id} for user {user_id}")
+
+                    # Enable auto-recharge with this credit package
+                    user.auto_recharge_enabled = True
+                    user.auto_recharge_credits = credits
+                    user.auto_recharge_threshold = 10.0  # Default threshold
+
+                    # Add bonus credits for enabling auto-recharge
+                    bonus_credits = 20
+                    logger.info(f"Auto-recharge enabled for user {user_id} with {bonus_credits} bonus credits")
+
                 # Add credits (row is locked, safe from concurrent modifications)
-                user.credits += credits
+                total_credits = credits + bonus_credits
+                user.credits += total_credits
                 new_balance = user.credits
 
-                # Create transaction record with Stripe session ID
+                # Create transaction record for purchased credits
                 transaction = CreditTransaction(
                     user_id=user_id,
                     project_id=None,
                     amount=credits,
-                    balance_after=new_balance,
+                    balance_after=user.credits if not bonus_credits else user.credits - bonus_credits,
                     transaction_type=TransactionType.PURCHASE,
                     tokens_used=None,
                     prompt_tokens=None,
@@ -369,10 +542,28 @@ async def stripe_webhook(
                     stripe_session_id=session_id  # Store session ID for idempotency
                 )
                 db.add(transaction)
+
+                # Create bonus transaction if auto-recharge was enabled
+                if bonus_credits > 0:
+                    bonus_transaction = CreditTransaction(
+                        user_id=user_id,
+                        project_id=None,
+                        amount=bonus_credits,
+                        balance_after=new_balance,
+                        transaction_type=TransactionType.BONUS,
+                        tokens_used=None,
+                        prompt_tokens=None,
+                        completion_tokens=None,
+                        description=f"Auto-recharge bonus: +{bonus_credits} credits",
+                        stripe_session_id=None
+                    )
+                    db.add(bonus_transaction)
+
                 db.commit()
 
                 logger.info(
-                    f"✓ Credits added: User {user_id} received {credits} credits. "
+                    f"✓ Credits added: User {user_id} received {credits} credits"
+                    f"{f' + {bonus_credits} bonus' if bonus_credits > 0 else ''}. "
                     f"New balance: {new_balance}"
                 )
 

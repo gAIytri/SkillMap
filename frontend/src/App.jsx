@@ -1,9 +1,10 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Box } from '@mui/material';
+import { Box, IconButton } from '@mui/material';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
+import CloseIcon from '@mui/icons-material/Close';
 
 // Theme and Context
 import theme from './styles/theme';
@@ -70,7 +71,41 @@ function App() {
               },
             },
           }}
-        />
+        >
+          {(t) => (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#ffffff',
+                padding: '12px 16px',
+                borderRadius: '8px',
+              }}
+            >
+              {t.icon}
+              <div style={{ flex: 1 }}>{t.message}</div>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast.remove(t.id);
+                }}
+                sx={{
+                  color: '#999',
+                  padding: '4px',
+                  marginLeft: '8px',
+                  '&:hover': {
+                    color: '#333',
+                    bgcolor: 'rgba(0, 0, 0, 0.05)',
+                  },
+                }}
+              >
+                <CloseIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </div>
+          )}
+        </Toaster>
         <ErrorBoundary>
           <Router>
             <AuthProvider>

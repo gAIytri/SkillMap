@@ -653,3 +653,132 @@ For detailed deployment instructions, see:
 
 ## License
 Proprietary - All rights reserved
+
+---
+
+## Auto-Recharge System (Added 2025-11-19)
+
+### Overview
+Implemented a complete auto-recharge system that automatically charges users when their credit balance falls below a threshold (default: 10 credits).
+
+### Database Schema Changes
+
+**File:** `backend/models/user.py`
+
+Added 5 new columns to User model:
+```python
+auto_recharge_enabled = Column(Boolean, nullable=False, default=False)
+auto_recharge_credits = Column(Integer, nullable=True)
+auto_recharge_threshold = Column(Float, nullable=False, default=10.0)
+stripe_customer_id = Column(String(255), nullable=True, index=True)
+stripe_payment_method_id = Column(String(255), nullable=True)
+```
+
+**Migration:** `backend/migrations/add_auto_recharge.py`
+```bash
+cd backend && source venv/bin/activate
+python migrations/add_auto_recharge.py
+```
+
+### New API Endpoints
+
+#### GET `/api/credits/auto-recharge`
+Get user's auto-recharge settings
+```json
+{
+  "enabled": true,
+  "credits": 100,
+  "threshold": 10.0
+}
+```
+
+#### POST `/api/credits/auto-recharge`
+Update auto-recharge settings
+```json
+{
+  "enabled": true,
+  "credits": 100,
+  "threshold": 10.0
+}
+```
+
+### Modified Endpoints
+
+#### POST `/api/credits/create-checkout-session`
+Added `enable_auto_recharge` parameter:
+- Creates Stripe Customer if enabled
+- Sets `setup_future_usage: 'off_session'`
+- Saves payment method for future charges
+
+#### POST `/api/credits/webhook`
+Enhanced to handle auto-recharge setup:
+- Saves payment method ID from payment intent
+- Enables auto-recharge when flag is true
+- Adds 20 bonus credits for enabling auto-recharge
+- Creates separate BONUS transaction
+
+### Background Job
+
+**File:** `backend/jobs/auto_recharge_job.py`
+
+**Purpose:** Monitors users and auto-charges when credits fall below threshold
+
+**How it works:**
+1. Queries users where:
+   - `auto_recharge_enabled = TRUE`
+   - `credits < auto_recharge_threshold`  
+   - Has `stripe_payment_method_id`
+2. Creates off-session payment via Stripe
+3. Adds credits + 20 bonus
+4. Creates PURCHASE and BONUS transactions
+
+**Running:**
+```bash
+# Manual test
+cd backend && source venv/bin/activate
+python jobs/auto_recharge_job.py
+
+# Cron (production)
+0 * * * * cd /path/to/backend && source venv/bin/activate && python jobs/auto_recharge_job.py
+```
+
+### Credit Packages & Bonuses
+
+**Packages:**
+- 50 credits: $5.00 (8-12 tailorings)
+- 100 credits: $9.00 (16-25 tailorings)
+- 250 credits: $20.00 (41-62 tailorings)
+- 500 credits: $35.00 (83-125 tailorings)
+
+**Auto-Recharge Bonus:** +20 credits on every auto-recharge
+
+**Tailoring Cost:** 4-6 credits per resume tailor
+
+### Files Modified
+1. `backend/models/user.py` - Auto-recharge fields
+2. `backend/routers/credits.py` - Endpoints + webhook
+3. `backend/migrations/add_auto_recharge.py` - Migration
+
+### Files Created
+1. `backend/jobs/auto_recharge_job.py` - Background job
+2. `backend/AUTO_RECHARGE_SETUP.md` - Setup guide
+
+### Production Setup
+1. Run migration on Neon DB
+2. Set up cron job (hourly recommended)
+3. Monitor logs for first 24 hours
+4. See `AUTO_RECHARGE_SETUP.md` for details
+
+### Testing
+```bash
+# 1. Enable auto-recharge on frontend
+# 2. Make test purchase with Stripe test card
+# 3. Verify payment method saved:
+SELECT stripe_payment_method_id FROM users WHERE id = YOUR_ID;
+
+# 4. Test auto-charge by lowering credits:
+UPDATE users SET credits = 5 WHERE id = YOUR_ID;
+
+# 5. Run background job:
+python jobs/auto_recharge_job.py
+```

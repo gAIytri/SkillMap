@@ -738,5 +738,460 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...  # or pk_live_... for real payments
 - Safari 14+
 - Opera 76+
 
+---
+
+## Recent Changes (2025-11-19)
+
+### Profile Page Redesign
+
+#### 1. Credit Recharge Cards Styling (Profile.jsx)
+
+**Changes:**
+- Removed "Most Popular" badge and special styling
+- Made all credit package cards uniform in appearance
+- Removed green border from popular package
+- Removed hover transform effects on cards
+- Removed card click selection state
+- All cards now have consistent 1px gray border
+
+**Updated Credit Packages:**
+Updated to show tailoring ranges based on 4-6 credits per tailoring:
+- **50 Credits** ($5.00 - $0.10/credit): 8-12 resume tailorings
+- **100 Credits** ($9.00 - $0.09/credit, SAVE 10%): 16-25 resume tailorings
+
+**Code Changes:**
+```javascript
+// All cards now have uniform styling
+<Card
+  sx={{
+    height: '100%',
+    border: '1px solid',
+    borderColor: '#e0e0e0',  // Uniform gray border
+    bgcolor: '#ffffff',
+    cursor: 'default',  // No pointer cursor
+  }}
+>
+
+// Updated tailoring counts
+<Typography variant="body2">
+  ✓ {pkg.tailorings} resume tailorings
+</Typography>
+```
+
+#### 2. Beta Modal Implementation (Profile.jsx)
+
+**Purpose:** Display beta notice instead of Stripe checkout during beta phase
+
+**Features:**
+- Modal appears when user clicks any "Get Credits" button
+- Explains beta phase and 100 free credits
+- Stripe checkout code preserved (commented out) for future use
+- Easy to switch to production by uncommenting Stripe code
+
+**Implementation:**
+```javascript
+// State
+const [showBetaModal, setShowBetaModal] = useState(false);
+
+// Modified handleRecharge
+const handleRecharge = async (_credits) => {
+  setShowBetaModal(true);
+
+  // PRODUCTION CODE (uncomment when ready):
+  // setRechargeLoading(true);
+  // try {
+  //   const { url } = await creditsService.createCheckoutSession(credits, autoRecharge);
+  //   window.location.href = url;
+  // } catch (error) {
+  //   toast.error('Failed to start checkout. Please try again.');
+  //   setRechargeLoading(false);
+  // }
+};
+
+// Beta Modal Component
+<Dialog open={showBetaModal} onClose={() => setShowBetaModal(false)} maxWidth="sm" fullWidth>
+  <DialogTitle>
+    <Box display="flex" alignItems="center" gap={2}>
+      <Typography variant="h6" fontWeight={700}>Beta Version</Typography>
+    </Box>
+  </DialogTitle>
+  <DialogContent>
+    <Typography variant="body1" paragraph>
+      Thank you for trying SkillMap! We're currently in <strong>beta version</strong> and are working hard to bring you the best experience.
+    </Typography>
+    <Typography variant="body1" paragraph>
+      During this beta phase, all users receive <strong>100 free credits</strong> to test our resume tailoring features.
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      💡 Credit recharging will be available soon. Stay tuned for updates!
+    </Typography>
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setShowBetaModal(false)} variant="contained" fullWidth>
+      Got it!
+    </Button>
+  </DialogActions>
+</Dialog>
+```
+
+**Component Imports Added:**
+```javascript
+import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+```
+
+### Project Editor Redesign
+
+#### 1. Vertical Sidebar Implementation (ProjectEditor.jsx)
+
+**Major Change:** Replaced two horizontal bars with vertical sidebar on left side
+
+**Layout Changes:**
+1. **Sidebar (10% width, min 140px, max 180px):**
+   - Back to Dashboard button
+   - Project name display
+   - Document tabs (Resume, Cover Letter, Email) - vertical
+   - Action buttons (Replace, Download, Tailor) - vertical stack
+
+2. **Main Content Area:**
+   - PDF preview and formatted sections moved up
+   - Better screen real estate usage
+   - Responsive: sidebar only on desktop, original layout on mobile
+
+**Sidebar Structure:**
+```javascript
+{!isMobile && (
+  <Box
+    sx={{
+      width: '10%',
+      minWidth: '140px',
+      maxWidth: '180px',
+      bgcolor: '#f8f9fa',
+      borderRight: '1px solid #e0e0e0',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      position: 'sticky',
+      top: 0,
+      p: 2,
+    }}
+  >
+    {/* Back to Dashboard */}
+    <Button
+      onClick={() => navigate('/dashboard')}
+      startIcon={<ArrowBackIcon />}
+      sx={{
+        mb: 2,
+        justifyContent: 'flex-start',
+        color: colorPalette.primary.darkGreen,
+        '&:hover': { bgcolor: 'rgba(41, 183, 112, 0.1)' },
+      }}
+    >
+      Dashboard
+    </Button>
+
+    {/* Project Name */}
+    <Typography
+      variant="caption"
+      sx={{
+        mb: 3,
+        color: 'text.secondary',
+        fontSize: '0.7rem',
+        fontWeight: 600,
+      }}
+    >
+      {project?.project_name}
+    </Typography>
+
+    {/* Document Tabs - Vertical */}
+    <Box sx={{ mt: 2, mb: 2 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          fontSize: '0.65rem',
+          fontWeight: 700,
+          letterSpacing: 1,
+          mb: 1,
+          display: 'block',
+        }}
+      >
+        DOCUMENTS
+      </Typography>
+      <Button
+        fullWidth
+        onClick={() => setDocumentTab(0)}
+        startIcon={<DescriptionIcon />}
+        variant={documentTab === 0 ? 'contained' : 'text'}
+        sx={{ justifyContent: 'flex-start', mb: 0.5 }}
+      >
+        Resume
+      </Button>
+      <Button
+        fullWidth
+        onClick={() => setDocumentTab(1)}
+        startIcon={<EmailIcon />}
+        variant={documentTab === 1 ? 'contained' : 'text'}
+        sx={{ justifyContent: 'flex-start', mb: 0.5 }}
+      >
+        Cover Letter
+      </Button>
+      <Button
+        fullWidth
+        onClick={() => setDocumentTab(2)}
+        startIcon={<SendIcon />}
+        variant={documentTab === 2 ? 'contained' : 'text'}
+        sx={{ justifyContent: 'flex-start' }}
+      >
+        Email
+      </Button>
+    </Box>
+
+    {/* Action Buttons */}
+    <Box sx={{ mt: 'auto' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          fontSize: '0.65rem',
+          fontWeight: 700,
+          letterSpacing: 1,
+          mb: 1,
+          display: 'block',
+        }}
+      >
+        ACTIONS
+      </Typography>
+      <Button
+        fullWidth
+        variant="outlined"
+        onClick={() => fileInputRef.current?.click()}
+        sx={{ mb: 1 }}
+      >
+        Replace
+      </Button>
+      <Button
+        fullWidth
+        variant="outlined"
+        onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
+        sx={{ mb: 1 }}
+      >
+        Download
+      </Button>
+      <Button
+        fullWidth
+        variant="contained"
+        onClick={() => setJobDescDrawerOpen(true)}
+        sx={{
+          bgcolor: colorPalette.primary.brightGreen,
+          '&:hover': { bgcolor: colorPalette.primary.green },
+        }}
+      >
+        Tailor
+      </Button>
+    </Box>
+  </Box>
+)}
+```
+
+**Mobile Responsiveness:**
+- Sidebar hidden on mobile (`!isMobile` wrapper)
+- Original horizontal tabs and header preserved for mobile
+- Uses Material-UI `useMediaQuery` for breakpoint detection:
+```javascript
+const theme = useTheme();
+const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+```
+
+#### 2. Manual PDF Compilation Feature (ProjectEditor.jsx)
+
+**Problem:** PDF was auto-reloading on every section reorder, causing unnecessary API calls
+
+**Solution:** Added manual compile button with pending changes tracking
+
+**Implementation:**
+
+1. **New States:**
+```javascript
+const [pendingChanges, setPendingChanges] = useState(false);
+const [compiling, setCompiling] = useState(false);
+```
+
+2. **Modified Section Reordering:**
+```javascript
+const handleDragEnd = async (event) => {
+  const { active, over } = event;
+
+  if (over && active.id !== over.id) {
+    const oldIndex = sectionOrder.indexOf(active.id);
+    const newIndex = sectionOrder.indexOf(over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      // Optimistic UI update
+      const newOrder = arrayMove(sectionOrder, oldIndex, newIndex);
+      setSectionOrder(newOrder);
+
+      try {
+        // Persist to backend
+        await projectService.updateSectionOrder(projectId, newOrder);
+        setPendingChanges(true);  // Mark as having pending changes
+        toast.success('Section order updated. Click "Compile" to see changes in PDF.');
+
+        // NO PDF RELOAD HERE - user must click compile
+      } catch (error) {
+        console.error('Error updating section order:', error);
+        setSectionOrder(sectionOrder); // Revert on error
+        toast.error('Failed to update section order');
+      }
+    }
+  }
+};
+```
+
+3. **Compile Function:**
+```javascript
+const handleCompile = async () => {
+  try {
+    setCompiling(true);
+    setPdfLoading(true);
+
+    // Clean up old PDF URL
+    if (pdfUrl) {
+      URL.revokeObjectURL(pdfUrl);
+    }
+
+    // Reload PDF preview
+    await loadPdfPreview();
+
+    setPendingChanges(false);
+    toast.success('PDF compiled successfully!');
+  } catch (error) {
+    console.error('Error compiling PDF:', error);
+    toast.error('Failed to compile PDF');
+  } finally {
+    setCompiling(false);
+    setPdfLoading(false);
+  }
+};
+```
+
+4. **Compile Button (in zoom controls area):**
+```javascript
+<Button
+  variant="contained"
+  size="small"
+  onClick={handleCompile}
+  disabled={!pendingChanges || compiling}
+  startIcon={compiling ? <CircularProgress size={14} /> : null}
+  sx={{
+    ml: 2,
+    bgcolor: pendingChanges ? colorPalette.primary.brightGreen : '#cccccc',
+    color: '#ffffff',
+    '&:hover': {
+      bgcolor: pendingChanges ? colorPalette.primary.green : '#cccccc',
+    },
+    '&:disabled': {
+      bgcolor: '#cccccc',
+      color: '#ffffff',
+    },
+  }}
+>
+  {compiling ? 'Compiling...' : pendingChanges ? 'Compile ⚡' : 'Compiled ✓'}
+</Button>
+```
+
+**User Experience:**
+- Button disabled when no pending changes
+- Green color when changes pending
+- Gray when compiled
+- Shows loading state during compilation
+- Toast notification on section reorder to remind user to compile
+- Manual control prevents unnecessary PDF regenerations
+
+### Credits Service Updates
+
+#### Auto-Recharge API Integration (creditsService.js)
+
+**New Methods:**
+
+```javascript
+// Modified checkout to support auto-recharge
+createCheckoutSession: async (credits, enableAutoRecharge = false) => {
+  const response = await api.post('/api/credits/create-checkout-session', {
+    credits,
+    enable_auto_recharge: enableAutoRecharge,
+  });
+  return response.data;
+},
+
+// Get user's auto-recharge settings
+getAutoRechargeSettings: async () => {
+  const response = await api.get('/api/credits/auto-recharge');
+  return response.data;
+},
+
+// Update auto-recharge settings
+updateAutoRechargeSettings: async (enabled, credits = null, threshold = 10.0) => {
+  const response = await api.post('/api/credits/auto-recharge', {
+    enabled,
+    credits,
+    threshold,
+  });
+  return response.data;
+},
+```
+
+**Auto-Recharge Bonus:**
+- Changed from 100 bonus credits to 20 bonus credits for auto-recharge purchases
+- Backend automatically adds 20 bonus credits when auto-recharge triggers
+
+---
+
+## Production Deployment Checklist
+
+### Before Enabling Stripe Payments:
+
+1. **Profile Page (Profile.jsx):**
+   - [ ] Comment out beta modal trigger in `handleRecharge`
+   - [ ] Uncomment Stripe checkout code
+   - [ ] Test checkout flow end-to-end
+
+2. **Backend:**
+   - [ ] Verify Stripe webhook endpoint is accessible
+   - [ ] Test auto-recharge background job
+   - [ ] Verify database has all auto-recharge columns
+
+3. **Testing:**
+   - [ ] Test successful payment flow
+   - [ ] Test failed payment handling
+   - [ ] Test auto-recharge with low credits
+   - [ ] Test payment method saving
+
+---
+
+## Design Decisions
+
+### Why Vertical Sidebar?
+- Better use of horizontal screen space for PDF preview
+- More intuitive document navigation
+- Cleaner separation of controls vs content
+- Industry standard pattern (similar to VS Code, Figma, etc.)
+- 10% width provides enough space for buttons without wasting screen real estate
+
+### Why Manual Compile?
+- Reduces unnecessary API calls
+- Gives user control over when to regenerate PDF
+- Prevents jarring auto-refreshes during section reordering
+- Clear visual feedback of pending changes
+- Performance improvement (no regeneration on every drag)
+
+### Why Beta Modal?
+- Allows deployment without payment processing
+- Preserves Stripe code for easy activation later
+- Clear communication to users about beta status
+- No code deletion - just commenting out
+- Easy to switch to production mode
+
+---
+
 ## License
 Proprietary - All rights reserved

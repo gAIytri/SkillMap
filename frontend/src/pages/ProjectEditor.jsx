@@ -18,7 +18,8 @@ import {
   AccordionDetails,
   Chip,
   Drawer,
-  Fab,
+  Menu,
+  MenuItem,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -62,19 +63,18 @@ const ProjectEditor = () => {
   const { user, refreshUser } = useAuth();
   const fileInputRef = useRef(null);
   const [project, setProject] = useState(null);
-  const [latexContent, setLatexContent] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [reorderingPdf, setReorderingPdf] = useState(false);
   const [jobDescDrawerOpen, setJobDescDrawerOpen] = useState(false);
   const [error, setError] = useState('');
+  const [pendingChanges, setPendingChanges] = useState(false); // Track if there are unsaved changes
+  const [compiling, setCompiling] = useState(false); // Track if PDF is being compiled
   const [extractedData, setExtractedData] = useState(null); // LLM extracted JSON
-  const [downloadingRecreated, setDownloadingRecreated] = useState(false);
   const [activeTab, setActiveTab] = useState(0); // 0 = formatted, 1 = raw JSON
   const [documentTab, setDocumentTab] = useState(0); // 0 = Resume, 1 = Cover Letter, 2 = Email
   const [coverLetter, setCoverLetter] = useState(null);
@@ -84,6 +84,7 @@ const ProjectEditor = () => {
   const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
   const [showRechargeDialog, setShowRechargeDialog] = useState(false);
   const [rechargeDialogBlocking, setRechargeDialogBlocking] = useState(false);
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null);
   const [sectionOrder, setSectionOrder] = useState([
     'personal_info',
     'professional_summary',
@@ -143,7 +144,6 @@ const ProjectEditor = () => {
     try {
       const projectData = await projectService.getProject(projectId);
       setProject(projectData);
-      setLatexContent(projectData.tailored_latex_content);
 
       // Load JD: prefer last_tailoring_jd, fallback to job_description
       const jdToLoad = projectData.last_tailoring_jd || projectData.job_description || '';
@@ -286,30 +286,6 @@ const ProjectEditor = () => {
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setError('');
-
-    try {
-      // Save the LaTeX content and job description
-      await projectService.updateProject(projectId, {
-        tailored_latex_content: latexContent,
-        job_description: jobDescription,
-      });
-
-      // Reload PDF
-      await loadPdfPreview();
-
-      toast.success('Project saved successfully!');
-    } catch (err) {
-      console.error('Save error:', err);
-      const errorMsg = 'Failed to save project. Please try again.';
-      setError(errorMsg);
-      toast.error(errorMsg);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleDownloadPDF = async () => {
     setDownloading(true);
@@ -355,28 +331,6 @@ const ProjectEditor = () => {
     }
   };
 
-  const handleDownloadRecreatedDOCX = async () => {
-    setDownloadingRecreated(true);
-    try {
-      // Download from PROJECT endpoint (not base_resume)
-      const docxBlob = await projectService.downloadProjectDOCX(projectId);
-
-      // Create download link
-      const url = window.URL.createObjectURL(docxBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${project?.project_name || 'resume'}_tailored.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      toast.success('Tailored DOCX downloaded successfully!');
-    } catch (err) {
-      toast.error('Failed to download DOCX. Please try again.');
-    } finally {
-      setDownloadingRecreated(false);
-    }
-  };
 
   const handleTailorResume = async () => {
     if (!jobDescription || jobDescription.trim().length < 10) {
@@ -481,7 +435,7 @@ const ProjectEditor = () => {
         const changes = finalResult.changes_made || [];
         if (changes.length > 0) {
           toast.success(
-            (t) => (
+            (_t) => (
               <div>
                 <strong>Resume tailored successfully!</strong>
                 <div style={{ marginTop: '8px', fontSize: '12px' }}>
@@ -573,31 +527,45 @@ const ProjectEditor = () => {
     try {
       console.log('Updating section order to:', newOrder);
 
-      // Show reordering state
-      setReorderingPdf(true);
-
       // Update backend
       const response = await projectService.updateSectionOrder(projectId, newOrder);
       console.log('Backend response:', response);
 
-      // Force PDF reload by revoking old URL and loading new one
+      // Mark as having pending changes (user needs to click Compile)
+      setPendingChanges(true);
+      toast.success('Section order updated. Click "Compile" to see changes in PDF.');
+
+    } catch (err) {
+      console.error('Failed to update section order:', err);
+      // Revert on error
+      setSectionOrder(sectionOrder);
+      toast.error('Failed to update section order. Please try again.');
+    }
+  };
+
+  // Compile/Regenerate PDF with current changes
+  const handleCompile = async () => {
+    try {
+      setCompiling(true);
+      setPdfLoading(true);
+
+      // Revoke old PDF URL
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
       }
 
-      // Small delay to ensure backend has generated new PDF
-      setTimeout(async () => {
-        await loadPdfPreview();
-        setReorderingPdf(false);
-        console.log('PDF reloaded with new section order');
-      }, 500);
+      // Reload PDF preview
+      await loadPdfPreview();
 
+      // Clear pending changes flag
+      setPendingChanges(false);
+      toast.success('PDF compiled successfully!');
     } catch (err) {
-      console.error('Failed to update section order:', err);
-      setReorderingPdf(false);
-      // Revert on error
-      setSectionOrder(sectionOrder);
-      toast.error('Failed to update section order. Please try again.');
+      console.error('Failed to compile PDF:', err);
+      toast.error('Failed to compile PDF. Please try again.');
+    } finally {
+      setCompiling(false);
+      setPdfLoading(false);
     }
   };
 
@@ -1025,7 +993,7 @@ const ProjectEditor = () => {
   }
 
   return (
-    <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <Box sx={{ height: 'calc(100vh - 48px)', display: 'flex', position: 'relative' }}>
       {/* Full-Screen Loading Overlay for Resume Upload */}
       {uploading && (
         <Box
@@ -1054,7 +1022,287 @@ const ProjectEditor = () => {
         </Box>
       )}
 
-      {/* Compact Professional Header */}
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleResumeUpload}
+        accept=".docx,.doc,.pdf,.jpg,.jpeg,.png,.bmp,.tiff,.tif"
+        style={{ display: 'none' }}
+      />
+
+      {/* Download Menu */}
+      <Menu
+        anchorEl={downloadMenuAnchor}
+        open={Boolean(downloadMenuAnchor)}
+        onClose={() => setDownloadMenuAnchor(null)}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            handleDownloadPDF();
+            setDownloadMenuAnchor(null);
+          }}
+          disabled={downloading}
+        >
+          <DescriptionIcon sx={{ mr: 1, fontSize: 18 }} />
+          Download as PDF
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleDownloadDOCX();
+            setDownloadMenuAnchor(null);
+          }}
+          disabled={downloading}
+        >
+          <DescriptionIcon sx={{ mr: 1, fontSize: 18 }} />
+          Download as DOCX
+        </MenuItem>
+      </Menu>
+
+      {/* Left Vertical Sidebar (10% width) - Desktop Only */}
+      {!isMobile && (
+        <Box
+          sx={{
+            width: '10%',
+            minWidth: '140px',
+            maxWidth: '180px',
+            bgcolor: '#f8f9fa',
+            borderRight: '2px solid #e1e8ed',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            py: 2,
+            px: 1,
+            gap: 1,
+            overflow: 'auto',
+          }}
+        >
+          {/* Back to Dashboard Button */}
+          <Button
+            onClick={() => navigate('/dashboard')}
+            size="small"
+            startIcon={<ArrowBackIcon />}
+            sx={{
+              color: colorPalette.primary.darkGreen,
+              textTransform: 'none',
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: '0.75rem',
+              justifyContent: 'flex-start',
+              px: 1,
+              '&:hover': {
+                bgcolor: 'rgba(76, 175, 80, 0.1)',
+              },
+            }}
+          >
+            Dashboard
+          </Button>
+
+          {/* Project Name */}
+          <Typography
+            variant="caption"
+            sx={{
+              px: 1,
+              py: 1,
+              color: '#666',
+              fontWeight: 600,
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={project?.project_name}
+          >
+            {project?.project_name}
+          </Typography>
+
+          {/* Document Tabs - Vertical */}
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                px: 1,
+                pb: 1,
+                color: '#666',
+                fontWeight: 600,
+                display: 'block',
+              }}
+            >
+              DOCUMENTS
+            </Typography>
+            <Button
+              fullWidth
+              onClick={() => setDocumentTab(0)}
+              startIcon={<DescriptionIcon />}
+              sx={{
+                justifyContent: 'flex-start',
+                color: documentTab === 0 ? '#fff' : colorPalette.primary.darkGreen,
+                bgcolor: documentTab === 0 ? colorPalette.primary.darkGreen : 'transparent',
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.8rem',
+                px: 1.5,
+                py: 1,
+                mb: 0.5,
+                '&:hover': {
+                  bgcolor: documentTab === 0 ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                },
+              }}
+            >
+              Resume
+            </Button>
+            <Button
+              fullWidth
+              onClick={() => setDocumentTab(1)}
+              startIcon={<EmailIcon />}
+              sx={{
+                justifyContent: 'flex-start',
+                color: documentTab === 1 ? '#fff' : colorPalette.primary.darkGreen,
+                bgcolor: documentTab === 1 ? colorPalette.primary.darkGreen : 'transparent',
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.8rem',
+                px: 1.5,
+                py: 1,
+                mb: 0.5,
+                '&:hover': {
+                  bgcolor: documentTab === 1 ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                },
+              }}
+            >
+              Cover Letter
+            </Button>
+            <Button
+              fullWidth
+              onClick={() => setDocumentTab(2)}
+              startIcon={<SendIcon />}
+              sx={{
+                justifyContent: 'flex-start',
+                color: documentTab === 2 ? '#fff' : colorPalette.primary.darkGreen,
+                bgcolor: documentTab === 2 ? colorPalette.primary.darkGreen : 'transparent',
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.8rem',
+                px: 1.5,
+                py: 1,
+                '&:hover': {
+                  bgcolor: documentTab === 2 ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                },
+              }}
+            >
+              Email
+            </Button>
+          </Box>
+
+          {/* Action Buttons */}
+          <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                px: 1,
+                pb: 1,
+                color: '#666',
+                fontWeight: 600,
+                display: 'block',
+              }}
+            >
+              ACTIONS
+            </Typography>
+
+            {/* Replace Resume Button */}
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              fullWidth
+              size="small"
+              variant="outlined"
+              startIcon={uploading ? <CircularProgress size={14} /> : <DescriptionIcon />}
+              sx={{
+                color: colorPalette.primary.darkGreen,
+                borderColor: colorPalette.primary.darkGreen,
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.75rem',
+                py: 1,
+                '&:hover': {
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                  borderColor: colorPalette.primary.darkGreen,
+                },
+                '&:disabled': {
+                  borderColor: '#cccccc',
+                  color: '#666666',
+                },
+              }}
+            >
+              {uploading ? 'Replacing...' : 'Replace'}
+            </Button>
+
+            {/* Download Button */}
+            <Button
+              onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
+              disabled={downloading}
+              fullWidth
+              size="small"
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              sx={{
+                color: colorPalette.primary.darkGreen,
+                borderColor: colorPalette.primary.darkGreen,
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.75rem',
+                py: 1,
+                '&:hover': {
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                  borderColor: colorPalette.primary.darkGreen,
+                },
+                '&:disabled': {
+                  borderColor: '#cccccc',
+                  color: '#666666',
+                },
+              }}
+            >
+              {downloading ? 'Downloading...' : 'Download'}
+            </Button>
+
+            {/* Tailor Resume Button */}
+            <Button
+              onClick={() => setJobDescDrawerOpen(true)}
+              disabled={tailoring || !extractedData}
+              fullWidth
+              size="small"
+              variant="contained"
+              sx={{
+                bgcolor: colorPalette.primary.darkGreen,
+                color: '#ffffff',
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.75rem',
+                py: 1,
+                '&:hover': {
+                  bgcolor: '#1a8050',
+                },
+                '&:disabled': {
+                  bgcolor: '#cccccc',
+                  color: '#666666',
+                },
+              }}
+            >
+              Tailor
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* Mobile-Only Header */}
+      {isMobile && (
       <Box
         sx={{
           height: isMobile ? '48px' : '40px',
@@ -1113,7 +1361,7 @@ const ProjectEditor = () => {
         </Box>
 
         {/* Right: Action Buttons */}
-        <Box display="flex" alignItems="center" gap={isMobile ? 0.25 : 0.5} flexShrink={0}>
+        <Box display="flex" alignItems="center" gap={isMobile ? 0.5 : 1} flexShrink={0}>
           <input
             type="file"
             ref={fileInputRef}
@@ -1128,63 +1376,93 @@ const ProjectEditor = () => {
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
               size="small"
-              startIcon={uploading ? <CircularProgress size={14} sx={{ color: '#111111' }} /> : null}
+              variant="contained"
+              startIcon={uploading ? <CircularProgress size={14} sx={{ color: '#ffffff' }} /> : null}
               sx={{
-                color: '#111111',
+                bgcolor: colorPalette.primary.darkGreen,
+                color: '#ffffff',
                 textTransform: 'none',
                 fontFamily: 'Poppins, sans-serif',
                 fontSize: '0.75rem',
                 minWidth: 'auto',
-                px: 1,
+                px: 2,
                 py: 0.5,
-                '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
+                '&:hover': {
+                  bgcolor: '#1a8050',
+                },
                 '&:disabled': {
-                  color: '#666',
-                  opacity: 0.7,
+                  bgcolor: '#cccccc',
+                  color: '#666666',
                 },
               }}
             >
-              {uploading ? 'Replacing...' : 'Replace'}
+              {uploading ? 'Replacing...' : 'Replace Resume'}
             </Button>
           )}
 
-          {/* Download PDF */}
+          {/* Download Button with Dropdown */}
           <Button
-            onClick={handleDownloadPDF}
+            onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
             disabled={downloading}
             size="small"
+            variant="contained"
+            startIcon={<DownloadIcon />}
             sx={{
-              color: '#111111',
+              bgcolor: colorPalette.primary.darkGreen,
+              color: '#ffffff',
               textTransform: 'none',
               fontFamily: 'Poppins, sans-serif',
               fontSize: isMobile ? '0.65rem' : '0.75rem',
               minWidth: 'auto',
-              px: isMobile ? 0.5 : 1,
+              px: isMobile ? 1.5 : 2,
               py: isMobile ? 0.3 : 0.5,
-              '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
+              '&:hover': {
+                bgcolor: '#1a8050',
+              },
+              '&:disabled': {
+                bgcolor: '#cccccc',
+                color: '#666666',
+              },
             }}
           >
-            PDF
+            Download
           </Button>
 
-          {/* Download DOCX */}
-          <Button
-            onClick={handleDownloadDOCX}
-            disabled={downloading}
-            size="small"
-            sx={{
-              color: '#111111',
-              textTransform: 'none',
-              fontFamily: 'Poppins, sans-serif',
-              fontSize: isMobile ? '0.65rem' : '0.75rem',
-              minWidth: 'auto',
-              px: isMobile ? 0.5 : 1,
-              py: isMobile ? 0.3 : 0.5,
-              '&:hover': { bgcolor: 'rgba(17,17,17,0.1)' },
+          {/* Download Menu */}
+          <Menu
+            anchorEl={downloadMenuAnchor}
+            open={Boolean(downloadMenuAnchor)}
+            onClose={() => setDownloadMenuAnchor(null)}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
             }}
           >
-            DOCX
-          </Button>
+            <MenuItem
+              onClick={() => {
+                handleDownloadPDF();
+                setDownloadMenuAnchor(null);
+              }}
+              disabled={downloading}
+            >
+              <DescriptionIcon sx={{ mr: 1, fontSize: 18 }} />
+              Download as PDF
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                handleDownloadDOCX();
+                setDownloadMenuAnchor(null);
+              }}
+              disabled={downloading}
+            >
+              <DescriptionIcon sx={{ mr: 1, fontSize: 18 }} />
+              Download as DOCX
+            </MenuItem>
+          </Menu>
 
           {/* Tailor Resume Button */}
           <Button
@@ -1199,7 +1477,7 @@ const ProjectEditor = () => {
               fontFamily: 'Poppins, sans-serif',
               fontSize: isMobile ? '0.65rem' : '0.75rem',
               minWidth: 'auto',
-              px: isMobile ? 0.75 : 1.5,
+              px: isMobile ? 1.5 : 2.5,
               py: isMobile ? 0.3 : 0.5,
               '&:hover': {
                 bgcolor: '#1a8050',
@@ -1212,36 +1490,12 @@ const ProjectEditor = () => {
           >
             {isMobile ? 'Tailor' : 'Tailor Resume'}
           </Button>
-
-          {/* Save Button */}
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={saving}
-            size="small"
-            sx={{
-              bgcolor: '#29B770',
-              color: '#111111',
-              textTransform: 'none',
-              fontFamily: 'Poppins, sans-serif',
-              fontSize: isMobile ? '0.65rem' : '0.75rem',
-              ml: isMobile ? 0.25 : 0.5,
-              px: isMobile ? 0.75 : 1.5,
-              py: isMobile ? 0.3 : 0.5,
-              boxShadow: 'none',
-              '&:hover': {
-                bgcolor: '#1a8050',
-                boxShadow: '0 2px 8px rgba(41,183,112,0.3)',
-              },
-            }}
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
         </Box>
       </Box>
+      )}
 
-      {/* 2-Column Layout: PDF Preview (flex) + Extracted Data (fixed) */}
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', bgcolor: '#f5f7fa', position: 'relative' }}>
+      {/* Main Content Area - 90% width on desktop, full width on mobile */}
+      <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', flex: 1, overflow: 'hidden', bgcolor: '#f5f7fa', position: 'relative' }}>
         {/* Left: PDF Viewer - Takes remaining space */}
         <Box
           sx={{
@@ -1253,19 +1507,24 @@ const ProjectEditor = () => {
             bgcolor: '#ffffff',
           }}
         >
-          {/* Document Tabs: Resume | Cover Letter | Email */}
+          {/* Document Tabs: Mobile Only (Desktop uses sidebar) */}
+          {isMobile && (
           <Box
             sx={{
               borderBottom: 1,
               borderColor: 'divider',
               bgcolor: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
             <Tabs
               value={documentTab}
-              onChange={(e, newValue) => setDocumentTab(newValue)}
+              onChange={(_e, newValue) => setDocumentTab(newValue)}
               sx={{
                 minHeight: '48px',
+                flex: 1,
                 '& .MuiTab-root': {
                   minHeight: '48px',
                   textTransform: 'none',
@@ -1277,7 +1536,20 @@ const ProjectEditor = () => {
               <Tab icon={<EmailIcon />} iconPosition="start" label="Cover Letter" />
               <Tab icon={<SendIcon />} iconPosition="start" label="Email" />
             </Tabs>
+            <IconButton
+              onClick={() => setMobileDrawerOpen(true)}
+              sx={{
+                mr: 1,
+                color: colorPalette.primary.darkGreen,
+                '&:hover': {
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                },
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
           </Box>
+          )}
 
           {/* Zoom Controls (only for Resume tab) */}
           {documentTab === 0 && (
@@ -1343,6 +1615,34 @@ const ProjectEditor = () => {
                   }}
                 >
                   +
+                </Button>
+
+                {/* Compile Button */}
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleCompile}
+                  disabled={!pendingChanges || compiling}
+                  startIcon={compiling ? <CircularProgress size={14} sx={{ color: '#ffffff' }} /> : null}
+                  sx={{
+                    ml: 2,
+                    bgcolor: pendingChanges ? colorPalette.primary.brightGreen : '#cccccc',
+                    color: '#ffffff',
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 0.5,
+                    '&:hover': {
+                      bgcolor: pendingChanges ? '#1a8050' : '#cccccc',
+                    },
+                    '&:disabled': {
+                      bgcolor: '#cccccc',
+                      color: '#999999',
+                    },
+                  }}
+                >
+                  {compiling ? 'Compiling...' : pendingChanges ? 'Compile ⚡' : 'Compiled ✓'}
                 </Button>
               </Box>
             </Box>
@@ -1561,51 +1861,18 @@ const ProjectEditor = () => {
         </Box>
 
         {/* Right: Extracted Data with Tabs - Drawer on Mobile, Fixed Sidebar on Desktop/Tablet */}
-        {isMobile ? (
-          /* Mobile: Floating Action Button to open drawer */
-          <Fab
-            color="primary"
-            onClick={() => setMobileDrawerOpen(true)}
-            sx={{
-              position: 'fixed',
-              bottom: 16,
-              right: 16,
-              zIndex: 1000,
-              bgcolor: colorPalette.primary.darkGreen,
-              '&:hover': {
-                bgcolor: '#1a8050',
-              },
-            }}
-          >
-            <MenuIcon />
-          </Fab>
-        ) : (
+        {!isMobile && (
           /* Desktop/Tablet: Fixed Sidebar */
           <Box
             sx={{
-              width: isTablet ? '45%' : '40%',
+              width: isTablet ? '35%' : '30%',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
               bgcolor: '#ffffff',
             }}
           >
-            <Box
-              sx={{
-                px: 2,
-                py: 0.4,
-                border: '2px solid',
-                borderColor: colorPalette.primary.darkGreen,
-                bgcolor: 'rgba(76, 175, 80, 0.04)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
-                Extracted Data (LLM)
-              </Typography>
-            </Box>
+            
 
             {/* Tabs for Formatted / Raw JSON */}
             <Tabs

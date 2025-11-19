@@ -106,16 +106,12 @@ def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColo
     new_run = OxmlElement('w:r')
     rPr = OxmlElement('w:rPr')
 
-    # Set hyperlink style (blue + underline)
+    # Set hyperlink style (blue color, no underline)
     if color:
         c = OxmlElement('w:color')
         # RGBColor is a tuple (r, g, b), not an object with .r, .g, .b
         c.set(qn('w:val'), '%02x%02x%02x' % (color[0], color[1], color[2]))
         rPr.append(c)
-
-    u = OxmlElement('w:u')
-    u.set(qn('w:val'), 'single')
-    rPr.append(u)
 
     # Set font size
     if size:
@@ -176,8 +172,13 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
 
     Format:
     NAME (centered, 18pt, bold)
-    Current Role | location | email | phone (centered, 10pt)
-    LinkedIn | GitHub | Portfolio (centered, 10pt, blue links)
+
+    If 1-2 links:
+        Current Role | location | email | phone | LinkedIn | GitHub (centered, 10pt)
+
+    If 3+ links:
+        Current Role | location | email | phone (centered, 10pt)
+        LinkedIn | GitHub | Portfolio (centered, 10pt, blue links)
 
     Uses paragraphs with EXACTLY spacing for precise control.
     """
@@ -194,7 +195,7 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
     name_para.paragraph_format.line_spacing = Pt(18)  # Exact 18pt for 18pt font
     name_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
 
-    # Paragraph 2: Contact info (10pt) - combined with links in single paragraph for tightness
+    # Paragraph 2: Contact info (10pt) - with smart link placement
     contact_parts = []
 
     # Add current_role FIRST if present
@@ -210,6 +211,11 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
 
     header_links = personal_info.get('header_links', [])
 
+    # Determine if links should be on same line or separate line
+    # If 1-2 links: add to same line
+    # If 3+ links: put on separate line
+    links_on_same_line = len(header_links) <= 2
+
     if contact_parts or header_links:
         contact_links_para = doc.add_paragraph()
         contact_links_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -224,12 +230,13 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
             contact_run = contact_links_para.add_run(' | '.join(contact_parts))
             contact_run.font.size = Pt(10)
             contact_run.font.name = 'Calibri'
-            # Line break before links
-            if header_links:
+
+        # Add links on same line (if 1-2 links) or next line (if 3+ links)
+        if header_links:
+            # If 3+ links, add line break before links
+            if not links_on_same_line:
                 contact_links_para.add_run('\n')
 
-        # Add links on next line
-        if header_links:
             for idx, link in enumerate(header_links):
                 text = link.get('text', '')
                 url = link.get('url', None)
@@ -237,8 +244,8 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
                 if not text:
                     continue
 
-                # Add separator if not first link
-                if idx > 0:
+                # Add separator before link (including first link if on same line with contact info)
+                if idx > 0 or (links_on_same_line and contact_parts):
                     separator_run = contact_links_para.add_run(' | ')
                     separator_run.font.size = Pt(10)
                     separator_run.font.name = 'Calibri'
