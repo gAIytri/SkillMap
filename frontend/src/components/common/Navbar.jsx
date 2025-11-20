@@ -68,20 +68,21 @@ const Navbar = () => {
 
         {isAuthenticated && user ? (
           <Box display="flex" alignItems="center" gap={isMobile ? 1 : 2}>
-            {!isMobile && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/dashboard')}
-                sx={{
-                  color: '#ffffff',
-                  '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  },
-                }}
-              >
-                Projects
-              </Button>
-            )}
+            <Button
+              color="inherit"
+              onClick={() => navigate('/dashboard')}
+              size={isMobile ? 'small' : 'medium'}
+              sx={{
+                color: '#ffffff',
+                fontSize: isMobile ? '0.75rem' : '0.875rem',
+                px: isMobile ? 1 : 2,
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                },
+              }}
+            >
+              Projects
+            </Button>
             {!isSmallMobile && (
               <Chip
                 icon={<AccountBalanceWalletIcon sx={{ color: '#ffffff !important', fontSize: isMobile ? 16 : 20 }} />}
@@ -132,16 +133,6 @@ const Navbar = () => {
               <MenuItem disabled>
                 <Typography variant="body2">{user?.email}</Typography>
               </MenuItem>
-              {isMobile && (
-                <MenuItem
-                  onClick={() => {
-                    navigate('/dashboard');
-                    handleClose();
-                  }}
-                >
-                  Projects
-                </MenuItem>
-              )}
               <MenuItem
                 onClick={() => {
                   navigate('/profile');

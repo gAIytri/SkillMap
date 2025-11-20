@@ -315,13 +315,13 @@ def add_section_header(doc: Document, title: str, keep_with_next: bool = False):
     return para
 
 
-def add_professional_summary(doc: Document, summary: str):
+def add_professional_summary(doc: Document, summary: str, section_name: str = 'PROFESSIONAL SUMMARY'):
     """Add professional summary section"""
     if not summary:
         return
 
     # Keep header with content (entire section should stay together)
-    add_section_header(doc, 'PROFESSIONAL SUMMARY', keep_with_next=True)
+    add_section_header(doc, section_name, keep_with_next=True)
 
     summary_para = doc.add_paragraph(sanitize_text(summary))
     summary_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # JUSTIFY aligned (both left and right edges)
@@ -337,7 +337,7 @@ def add_professional_summary(doc: Document, summary: str):
         summary_para.runs[0].font.name = 'Calibri'
 
 
-def add_education_section(doc: Document, education: List[Dict[str, Any]]):
+def add_education_section(doc: Document, education: List[Dict[str, Any]], section_name: str = 'EDUCATION'):
     """
     Add education section
 
@@ -352,7 +352,7 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         return
 
     # Keep header with content (entire section should stay together)
-    add_section_header(doc, 'EDUCATION', keep_with_next=True)
+    add_section_header(doc, section_name, keep_with_next=True)
 
     for edu in education:
         # School name and location (bold) with date on same line
@@ -409,7 +409,7 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]]):
         degree_run.font.size = Pt(10)
 
 
-def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
+def add_experience_section(doc: Document, experience: List[Dict[str, Any]], section_name: str = 'EXPERIENCE'):
     """
     Add experience section
 
@@ -426,7 +426,7 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
         return
 
     # Don't use keep_with_next here - allow section to span pages
-    add_section_header(doc, 'EXPERIENCE', keep_with_next=False)
+    add_section_header(doc, section_name, keep_with_next=False)
 
     for idx, exp in enumerate(experience):
         # Job header (Heading 2)
@@ -516,7 +516,7 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]]):
                 bullet_para.paragraph_format.keep_with_next = True
 
 
-def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
+def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_name: str = 'PROJECTS'):
     """
     Add projects section
 
@@ -533,7 +533,7 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
         return
 
     # Don't use keep_with_next here - allow section to span pages
-    add_section_header(doc, 'PROJECTS', keep_with_next=False)
+    add_section_header(doc, section_name, keep_with_next=False)
 
     for idx, project in enumerate(projects):
         # Project header (Heading 2) with date on right
@@ -661,7 +661,7 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]]):
                 bullet_para.paragraph_format.keep_with_next = True
 
 
-def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):
+def add_skills_section(doc: Document, skills: List[Dict[str, Any]], section_name: str = 'TECHNICAL SKILLS'):
     """
     Add technical skills section
 
@@ -675,7 +675,7 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):
         return
 
     # Keep header with content (entire section should stay together)
-    add_section_header(doc, 'TECHNICAL SKILLS', keep_with_next=True)
+    add_section_header(doc, section_name, keep_with_next=True)
 
     for skill_cat in skills:
         category = skill_cat.get('category', '')
@@ -705,7 +705,7 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]]):
             items_run.font.size = Pt(10)
 
 
-def add_certifications_section(doc: Document, certifications: List[str]):
+def add_certifications_section(doc: Document, certifications: List[str], section_name: str = 'CERTIFICATIONS'):
     """
     Add certifications section
 
@@ -720,7 +720,7 @@ def add_certifications_section(doc: Document, certifications: List[str]):
         return
 
     # Keep header with content (entire section should stay together)
-    add_section_header(doc, 'CERTIFICATIONS', keep_with_next=True)
+    add_section_header(doc, section_name, keep_with_next=True)
 
     for cert in certifications:
         add_bullet_paragraph(doc, cert, font_size=10, keep_together=True)
@@ -749,6 +749,25 @@ def generate_resume_from_json(
     Returns:
         bytes: Generated DOCX file as bytes
     """
+    # Extract custom section names from resume_json
+    custom_section_names = resume_json.get('section_names', {})
+
+    # Default section names
+    default_section_names = {
+        'personal_info': 'PERSONAL INFORMATION',
+        'professional_summary': 'PROFESSIONAL SUMMARY',
+        'experience': 'EXPERIENCE',
+        'projects': 'PROJECTS',
+        'education': 'EDUCATION',
+        'skills': 'TECHNICAL SKILLS',
+        'certifications': 'CERTIFICATIONS',
+    }
+
+    # Helper function to get section name (custom or default)
+    def get_section_name(key: str) -> str:
+        """Get custom section name if exists, otherwise return default"""
+        return custom_section_names.get(key, default_section_names.get(key, key.upper()))
+
     try:
         # Load base resume as style reference (or create new document)
         if base_resume_docx:
@@ -816,27 +835,33 @@ def generate_resume_from_json(
         section_builders = {
             'professional_summary': lambda: add_professional_summary(
                 doc,
-                resume_json.get('professional_summary', '')
+                resume_json.get('professional_summary', ''),
+                get_section_name('professional_summary')
             ),
             'education': lambda: add_education_section(
                 doc,
-                resume_json.get('education', [])
+                resume_json.get('education', []),
+                get_section_name('education')
             ),
             'experience': lambda: add_experience_section(
                 doc,
-                resume_json.get('experience', [])
+                resume_json.get('experience', []),
+                get_section_name('experience')
             ),
             'projects': lambda: add_projects_section(
                 doc,
-                resume_json.get('projects', [])
+                resume_json.get('projects', []),
+                get_section_name('projects')
             ),
             'skills': lambda: add_skills_section(
                 doc,
-                resume_json.get('skills', [])
+                resume_json.get('skills', []),
+                get_section_name('skills')
             ),
             'certifications': lambda: add_certifications_section(
                 doc,
-                resume_json.get('certifications', [])
+                resume_json.get('certifications', []),
+                get_section_name('certifications')
             ),
         }
 
