@@ -16,7 +16,6 @@ const ActionSidebar = ({
   downloading,
   tailoring,
   extractedData,
-  fileInputRef,
   onReplaceClick,
   onDownloadClick,
   onTailorClick,
@@ -304,15 +303,6 @@ const ActionSidebar = ({
             <CloseIcon />
           </IconButton>
         </Box>
-
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={() => {}} // Handler is already on the main file input
-          accept=".docx,.doc,.pdf,.jpg,.jpeg,.png,.bmp,.tiff,.tif"
-          style={{ display: 'none' }}
-        />
 
         {/* Action Buttons */}
         <Box display="flex" flexDirection="column" gap={2}>

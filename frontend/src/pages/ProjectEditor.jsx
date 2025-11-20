@@ -21,8 +21,8 @@ import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import { useAuth } from '../context/AuthContext';
 import RechargeDialog from '../components/credits/RechargeDialog';
-import { useTailorResume } from '../hooks/useTailorResume';
-import { useResumeUpload } from '../hooks/useResumeUpload';
+import { useTailorResume } from '../hooks/useTailorResume.jsx';
+import { useResumeUpload } from '../hooks/useResumeUpload.jsx';
 import ActionSidebar from '../components/project-editor/ActionSidebar';
 import DocumentViewer from '../components/project-editor/DocumentViewer';
 import ExtractedDataPanel from '../components/project-editor/ExtractedDataPanel';
@@ -751,7 +751,6 @@ const ProjectEditor = () => {
         downloading={downloading}
         tailoring={tailoring}
         extractedData={extractedData}
-        fileInputRef={fileInputRef}
         onReplaceClick={() => fileInputRef.current?.click()}
         onDownloadClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
         onTailorClick={() => setJobDescDrawerOpen(true)}

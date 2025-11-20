@@ -472,7 +472,7 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
             total_width = company_width + separator_width + subtext_width
 
             # If text would exceed 5.5 inches, wrap subtext to line 2
-            wrap_subtext = (total_width > 5.5) and subtext
+            wrap_subtext = (total_width > 7.5) and subtext
 
             # Add company name (always on line 1)
             company_run = job_para.add_run(company)

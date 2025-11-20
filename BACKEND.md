@@ -278,11 +278,13 @@ Stream progress to frontend
 - Requires authorized origins configuration in Google Cloud Console
 - Frontend may need CORS adjustments
 
-## Environment Variables (.env)
+## Environment Variables
+
+### Local Development (.env)
 
 ```bash
-# Database
-DATABASE_URL=sqlite:///./skillmap.db
+# Database (uses LIVE Neon database shared with production)
+DATABASE_URL=postgresql://neondb_owner:npg_GoAXaFcxLQ61@ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
 
 # Security
 SECRET_KEY=your-secret-key-min-32-chars
@@ -296,6 +298,7 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 
 # CORS
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 
 # File Upload
 MAX_UPLOAD_SIZE=10485760
@@ -303,6 +306,7 @@ UPLOAD_DIR=./uploads
 
 # OpenAI (REQUIRED)
 OPENAI_API_KEY=sk-proj-your-key
+OPENAI_MODEL=gpt-4o-2024-08-06
 
 # LangSmith (Optional but recommended)
 LANGCHAIN_TRACING_V2=true
@@ -314,8 +318,51 @@ LANGCHAIN_PROJECT=SkillMap
 STRIPE_SECRET_KEY=sk_test_your-key
 STRIPE_PUBLISHABLE_KEY=pk_test_your-key
 STRIPE_WEBHOOK_SECRET=whsec_your-key  # Get from 'stripe listen'
+STRIPE_SUCCESS_URL=http://localhost:5173/profile?payment=success
+STRIPE_CANCEL_URL=http://localhost:5173/profile?payment=cancelled
 
 # Credit System Settings
+LOW_CREDIT_THRESHOLD=10.0
+MINIMUM_CREDITS_FOR_TAILOR=5.0
+TOKENS_PER_CREDIT=2000
+```
+
+### Production Environment Variables (Railway)
+
+```bash
+# Database
+DATABASE_URL=postgresql://neondb_owner:npg_GoAXaFcxLQ61@ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
+
+# Security
+SECRET_KEY=sjnkx_hgEFwxCZMmno5kLHob52rmYjfTybqSCbjFDA4xEmzekxx6D66zHweASMeS
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_MINUTES=1440
+
+# OpenAI
+OPENAI_API_KEY=sk-proj-your-production-key
+OPENAI_MODEL=gpt-4o-2024-08-06
+
+# LangSmith (Agent Monitoring)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+LANGCHAIN_API_KEY=lsv2_pt_your-production-key
+LANGCHAIN_PROJECT=SkillMap-Production
+
+# Stripe (Production - use LIVE keys)
+STRIPE_SECRET_KEY=sk_live_your-production-key
+STRIPE_PUBLISHABLE_KEY=pk_live_your-production-key
+STRIPE_WEBHOOK_SECRET=whsec_your-production-webhook-secret
+STRIPE_SUCCESS_URL=https://skill-map-six.vercel.app/profile?payment=success
+STRIPE_CANCEL_URL=https://skill-map-six.vercel.app/profile?payment=cancelled
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+
+# CORS
+FRONTEND_URL=https://skill-map-six.vercel.app
+
+# Credits
 LOW_CREDIT_THRESHOLD=10.0
 MINIMUM_CREDITS_FOR_TAILOR=5.0
 TOKENS_PER_CREDIT=2000
@@ -355,6 +402,25 @@ TOKENS_PER_CREDIT=2000
 - `GET /api/credits/packages` - Get available credit packages
 - `POST /api/credits/create-checkout-session` - Create Stripe checkout
 - `POST /api/credits/webhook` - Stripe webhook handler (internal)
+
+## Quick Start
+
+### Local Development
+```bash
+cd backend
+source venv/bin/activate  # Windows: venv\Scripts\activate
+uvicorn main:app --reload
+```
+**Runs on:** http://localhost:8000
+**API Docs:** http://localhost:8000/docs
+
+### Production URLs
+- **Backend:** https://skillmap-production.up.railway.app
+- **Frontend:** https://skill-map-six.vercel.app
+- **Database:** Neon PostgreSQL (us-east-1 region, shared between local and production)
+
+### Important Note
+The Neon PostgreSQL database is shared between local development and production environments. Always activate the virtual environment before making any migrations or running backend operations.
 
 ## Setup Instructions
 
@@ -462,94 +528,64 @@ stripe listen --forward-to http://localhost:8000/api/credits/webhook
 - Production URL: https://skill-map-six.vercel.app
 - Auto-deploys from GitHub main branch
 
-### Neon PostgreSQL Configuration
+---
 
-**Features**:
-- **Connection Pooling**: Built-in pooler for efficient connections
+## Neon PostgreSQL Database Setup
+
+### Why Neon?
+- **Serverless PostgreSQL** with instant branching
+- **No cold starts** (unlike traditional serverless databases)
 - **Auto-scaling**: Automatically scales compute based on load
 - **Auto-suspend**: Suspends after inactivity to save costs
+- **Connection Pooling**: Built-in pooler for efficient connections
 - **Point-in-time Recovery**: Automatic backups with restore capability
 - **Branch Support**: Create database branches for testing
+- **Generous free tier** for development
+- **Seamless scaling** from dev to production
 
-**Local Development**:
-```bash
-# Local .env uses the same Neon database as production
-DATABASE_URL=postgresql://neondb_owner:npg_GoAXaFcxLQ61@ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
+### Creating Neon Project
+
+1. Go to https://neon.tech/ and sign up/login
+2. Click "Create Project"
+3. Configure project:
+   - Project name: `skillmap-production`
+   - Region: `us-east-1` (choose closest to your users)
+   - PostgreSQL version: 16 (latest)
+4. Click "Create Project"
+
+### Connection String Format
+
+After creation, copy your connection string from the Neon dashboard:
+```
+postgresql://username:password@ep-xxx-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
 ```
 
-**Why Neon?**
-- Serverless PostgreSQL with instant branching
-- No cold starts (unlike traditional serverless DBs)
-- Generous free tier for development
-- Seamless scaling from dev to production
-
-### Railway Deployment Configuration
-
-**Environment Variables (Production)**:
-```bash
-# Database
-DATABASE_URL=postgresql://neondb_owner:npg_GoAXaFcxLQ61@ep-rough-cherry-ahd984kf-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
-
-# Security
-SECRET_KEY=sjnkx_hgEFwxCZMmno5kLHob52rmYjfTybqSCbjFDA4xEmzekxx6D66zHweASMeS
-JWT_ALGORITHM=HS256
-JWT_EXPIRATION_MINUTES=1440
-
-# OpenAI
-OPENAI_API_KEY=sk-proj-your-key
-OPENAI_MODEL=gpt-4o-2024-08-06
-
-# LangSmith (Agent Monitoring)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=lsv2_pt_your-key
-LANGCHAIN_PROJECT=SkillMap
-
-# Stripe (Production - use live keys)
-STRIPE_SECRET_KEY=sk_live_your-key
-STRIPE_PUBLISHABLE_KEY=pk_live_your-key
-STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
-STRIPE_SUCCESS_URL=https://skill-map-six.vercel.app/profile?payment=success
-STRIPE_CANCEL_URL=https://skill-map-six.vercel.app/profile?payment=cancelled
-
-# Google OAuth
-GOOGLE_CLIENT_ID=xxxxxx
-GOOGLE_CLIENT_SECRET=xxxxxxx
-
-# CORS
-FRONTEND_URL=https://skill-map-six.vercel.app
-
-# Credits
-LOW_CREDIT_THRESHOLD=10.0
-MINIMUM_CREDITS_FOR_TAILOR=5.0
-```
-
-**Deployment Files**:
-- `Procfile`: Uvicorn command for Railway
-- `requirements.txt`: Python dependencies
-- `runtime.txt`: Python version (optional)
-
-### Production Deployment Workflow
+### Running Migrations
 
 ```bash
-# 1. Test locally with Neon database
 cd backend
 source venv/bin/activate
-uvicorn main:app --reload
 
-# 2. Commit changes
-git add .
-git commit -m "Your changes"
-git push origin main
+# Update DATABASE_URL in .env with your Neon connection string
 
-# 3. Auto-deploy
-# Railway automatically deploys backend (2-5 min)
-# Vercel automatically deploys frontend (1-2 min)
+# Create all database tables
+python -c "
+from config.database import engine, Base
+from models.user import User
+from models.project import Project
+from models.credit_transaction import CreditTransaction
+Base.metadata.create_all(bind=engine)
+print('✓ Database tables created!')
+"
+
+# Verify tables were created
+psql "YOUR_NEON_CONNECTION_STRING" -c "\dt"
 ```
 
-### Database Migration to Neon
+### Database Schema
 
-Already completed! Tables created:
+The following tables will be created:
+
 ```sql
 -- Users table
 CREATE TABLE users (
@@ -559,6 +595,11 @@ CREATE TABLE users (
     full_name VARCHAR,
     google_id VARCHAR,
     credits FLOAT DEFAULT 100.0,
+    auto_recharge_enabled BOOLEAN DEFAULT FALSE,
+    auto_recharge_credits INTEGER,
+    auto_recharge_threshold FLOAT DEFAULT 10.0,
+    stripe_customer_id VARCHAR(255),
+    stripe_payment_method_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -609,9 +650,380 @@ CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_credit_transactions_user_id ON credit_transactions(user_id);
 CREATE INDEX idx_credit_transactions_created_at ON credit_transactions(created_at DESC);
 CREATE INDEX idx_credit_transactions_stripe_session_id ON credit_transactions(stripe_session_id);
+CREATE INDEX idx_users_stripe_customer_id ON users(stripe_customer_id);
 ```
 
-### Production Checklist
+### Database Backup Configuration
+
+1. Go to Neon dashboard
+2. Navigate to "Backups" tab
+3. Enable automatic daily backups
+4. Set retention period (7-30 days recommended)
+5. Configure point-in-time recovery settings
+
+### Testing Database Connection
+
+```bash
+# Test connection with Python
+python -c "
+import psycopg2
+conn = psycopg2.connect('YOUR_NEON_CONNECTION_STRING')
+print('✓ Database connection successful!')
+conn.close()
+"
+```
+
+---
+
+## Railway Production Deployment
+
+### Prerequisites
+
+- GitHub account
+- Railway account (sign up at https://railway.app/)
+- Neon database connection string
+- All required API keys (OpenAI, Stripe, Google OAuth)
+
+### Required Deployment Files
+
+#### 1. Procfile
+Create `backend/Procfile`:
+```
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+#### 2. requirements.txt
+Generate from your virtual environment:
+```bash
+cd backend
+source venv/bin/activate
+pip freeze > requirements.txt
+```
+
+#### 3. runtime.txt (Optional)
+Specify Python version:
+```
+python-3.11
+```
+
+### Railway Deployment Steps
+
+1. **Sign up for Railway**: https://railway.app/
+2. **Create New Project**:
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Connect your GitHub account
+   - Select your SkillMap repository
+   - Choose the `backend` directory as root
+
+3. **Configure Environment Variables**:
+   Click "Variables" tab and add all production variables (see Environment Variables section above)
+
+4. **Deploy**:
+   - Railway will auto-deploy
+   - Wait for build to complete (5-10 minutes first time)
+   - Monitor deployment logs for any errors
+
+5. **Get Backend URL**:
+   - After successful deployment, copy your Railway URL
+   - Format: `https://your-app-name.up.railway.app`
+
+6. **Test Backend**:
+   ```bash
+   curl https://your-app-name.up.railway.app/
+   # Should return: {"message": "SkillMap API is running"}
+   ```
+
+### Deployment Workflow
+
+The production deployment follows this workflow:
+
+```bash
+# 1. Develop and test locally
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload
+
+# 2. Test changes thoroughly with Neon database
+
+# 3. Commit changes to git
+git add .
+git commit -m "Your descriptive commit message"
+git push origin main
+
+# 4. Auto-deploy
+# Railway automatically detects the push and deploys backend (~2-5 min)
+# Vercel automatically deploys frontend (~1-2 min)
+
+# 5. Monitor deployment
+# Check Railway logs for any errors
+# Verify deployment at production URL
+```
+
+### Vercel Frontend Deployment
+
+1. **Sign up for Vercel**: https://vercel.com/
+2. **Import Project**:
+   - Click "Add New..." → "Project"
+   - Import your GitHub repository
+   - Vercel auto-detects Vite project
+
+3. **Configure Project**:
+   - Framework Preset: Vite
+   - Root Directory: `frontend`
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+
+4. **Add Environment Variables**:
+   Go to Settings → Environment Variables:
+   ```bash
+   VITE_API_URL=https://your-backend.up.railway.app
+   VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+   VITE_STRIPE_PUBLISHABLE_KEY=pk_live_your-key
+   ```
+
+5. **Deploy**: Click "Deploy" and wait 2-3 minutes
+
+---
+
+## Production Configuration
+
+### Google OAuth Setup
+
+1. Go to https://console.cloud.google.com/
+2. Navigate to "APIs & Services" → "Credentials"
+3. Edit your OAuth 2.0 Client ID
+4. Add **Authorized JavaScript origins**:
+   ```
+   https://your-frontend.vercel.app
+   ```
+5. Add **Authorized redirect URIs**:
+   ```
+   https://your-frontend.vercel.app
+   https://your-frontend.vercel.app/login
+   ```
+6. Save changes
+
+### Stripe Webhook Configuration
+
+1. Go to https://dashboard.stripe.com/
+2. Switch to **Live Mode** (toggle in top-right)
+3. Navigate to Developers → Webhooks
+4. Click "Add endpoint"
+5. Configure webhook:
+   - Endpoint URL: `https://your-backend.up.railway.app/api/credits/webhook`
+   - Description: "SkillMap Production Webhook"
+   - Events to send:
+     - `checkout.session.completed`
+     - `payment_intent.payment_failed`
+6. Copy the **Webhook Signing Secret** (format: `whsec_xxxxx`)
+7. Update Railway environment variables:
+   ```bash
+   STRIPE_WEBHOOK_SECRET=whsec_xxxxx
+   STRIPE_SECRET_KEY=sk_live_xxxxx  # Use LIVE key for production
+   ```
+
+### Testing Stripe Webhook
+
+```bash
+# Use Stripe CLI to test webhook locally first
+stripe listen --forward-to https://your-backend.up.railway.app/api/credits/webhook
+
+# In another terminal, trigger test event
+stripe trigger checkout.session.completed
+```
+
+---
+
+## Production Deployment Checklist
+
+### Pre-Deployment
+- [ ] Test all features locally with Neon database
+- [ ] Verify all environment variables are set correctly
+- [ ] Generate requirements.txt and Procfile
+- [ ] Run database migrations on Neon
+- [ ] Test Stripe webhooks locally
+
+### Backend Deployment (Railway)
+- [x] Railway project created
+- [x] GitHub repository connected
+- [x] Environment variables configured
+- [x] Backend deployed successfully
+- [x] Health check endpoint returns 200
+- [ ] Production Stripe keys configured
+- [ ] Stripe webhook endpoint configured in Stripe Dashboard
+
+### Frontend Deployment (Vercel)
+- [x] Vercel project created
+- [x] GitHub repository connected
+- [x] Environment variables configured
+- [x] Frontend deployed successfully
+- [x] Frontend can connect to backend API
+
+### Database (Neon)
+- [x] Neon project created
+- [x] Database tables created and indexed
+- [ ] Automatic backups enabled
+- [ ] Backup retention configured (7-30 days)
+- [ ] Connection pooling verified
+
+### Security
+- [x] Strong SECRET_KEY set (32+ random characters)
+- [x] CORS configured for production domain
+- [x] PostgreSQL connection uses SSL
+- [ ] Stripe webhook signature verification working
+- [ ] Google OAuth redirect URIs configured
+
+### Monitoring
+- [ ] Railway metrics dashboard enabled
+- [ ] Vercel Analytics enabled
+- [ ] LangSmith monitoring configured
+- [ ] Stripe email notifications enabled
+- [ ] Error tracking configured (e.g., Sentry)
+
+### Optional
+- [ ] Custom domain configured
+- [ ] SSL certificate configured
+- [ ] Rate limiting implemented
+- [ ] CDN configured for static assets
+
+---
+
+## Troubleshooting Deployment Issues
+
+### Backend Returns 500 Error
+```bash
+# Check Railway logs
+# Go to Railway dashboard → Deployments → View Logs
+# Look for Python exceptions or startup errors
+```
+
+**Common causes:**
+- Missing environment variables
+- Database connection failed
+- OpenAI API key invalid
+- Module import errors
+
+### Frontend Can't Connect to Backend
+```bash
+# Check browser console for CORS errors
+# Verify VITE_API_URL is correct
+# Check backend FRONTEND_URL matches Vercel URL exactly
+```
+
+**Solution:** Ensure `FRONTEND_URL` in Railway has no trailing slash
+
+### Stripe Webhook Not Working
+```bash
+# Go to Stripe Dashboard → Developers → Webhooks
+# Check webhook logs for errors
+# Verify webhook secret matches Railway environment variable
+```
+
+**Common causes:**
+- Wrong webhook secret
+- Webhook endpoint URL incorrect
+- Events not selected in Stripe Dashboard
+
+### Database Connection Error
+```bash
+# Verify DATABASE_URL is correct in Railway
+# Check Neon database is active (auto-suspends after inactivity)
+# Go to Neon dashboard → should show "Active" status
+```
+
+**Solution:** Wake up database by visiting Neon dashboard
+
+### Google OAuth Fails
+**Cause:** Redirect URIs not configured properly
+
+**Solution:** Verify authorized redirect URIs in Google Console match exactly (no trailing slashes)
+
+### LibreOffice PDF Conversion Fails
+**Cause:** LibreOffice not installed in Railway container
+
+**Solution:** Add to Railway buildpack or use Dockerfile with LibreOffice installed
+
+### High Memory Usage
+**Cause:** Large resume files or concurrent processing
+
+**Solution:**
+- Upgrade Railway plan
+- Implement file size limits
+- Add request queuing
+
+---
+
+## Monitoring & Maintenance
+
+### Railway Monitoring
+- **View Logs**: Railway Dashboard → Deployments → View Logs
+- **Monitor Metrics**: CPU usage, memory usage, response time
+- **Set Up Alerts**: Configure alerts for:
+  - High CPU usage (>80%)
+  - High memory usage (>80%)
+  - Error rate (>5%)
+  - Response time degradation
+
+### Vercel Monitoring
+- **Enable Analytics**: Vercel Dashboard → Analytics
+- **Monitor**:
+  - Page load times
+  - Core Web Vitals (LCP, FID, CLS)
+  - Error tracking
+  - Geographic distribution of users
+
+### Neon Database Monitoring
+- **Connection Stats**: View in Neon dashboard
+- **Query Performance**: Monitor slow queries
+- **Storage Usage**: Track database size growth
+- **Automatic Backups**: Verify backups are running
+- **Branch Usage**: Monitor database branches
+
+### LangSmith Monitoring
+- **Track Agent Execution**: View all agent traces
+- **Monitor Token Usage**: Track OpenAI API costs
+- **Debug Reasoning**: Analyze agent decision-making
+- **Performance Metrics**: Monitor response times
+- **Access**: https://smith.langchain.com/
+
+### Stripe Monitoring
+- **Dashboard**: https://dashboard.stripe.com/
+- **Enable Notifications** for:
+  - Failed payments
+  - Webhook failures
+  - Chargebacks and disputes
+  - Unusual activity
+
+---
+
+## Cost Estimation
+
+### Free Tier (Testing/Development)
+- **Neon**: Free tier (512 MB storage, 0.5 GB RAM)
+- **Railway**: $5 credit free per month
+- **Vercel**: Free tier (100 GB bandwidth)
+- **OpenAI**: Pay-per-use
+- **Stripe**: Free (2.9% + $0.30 per transaction)
+- **Total**: ~$0-10/month
+
+### Production Tier (Low-Medium Traffic)
+- **Neon**: ~$10-20/month (Pro plan)
+- **Railway**: ~$20-30/month (Pro plan)
+- **Vercel**: Free tier (sufficient for <100GB bandwidth)
+- **OpenAI**: ~$20-100/month (depends on usage)
+- **Stripe**: Free (pay per transaction)
+- **Total**: ~$50-150/month
+
+### Scaling Considerations
+- **High Traffic**: Consider upgrading Railway and Neon plans
+- **Database Growth**: Monitor storage and upgrade as needed
+- **API Costs**: OpenAI costs scale with usage
+- **CDN**: Consider adding Cloudflare for static asset caching
+
+---
+
+## Production Checklist Summary
 
 - [x] Set strong `SECRET_KEY` (32+ random characters)
 - [x] Use PostgreSQL (Neon) instead of SQLite
@@ -623,33 +1035,10 @@ CREATE INDEX idx_credit_transactions_stripe_session_id ON credit_transactions(st
 - [ ] Set production Stripe keys (currently using test keys)
 - [ ] Configure production webhook endpoint in Stripe Dashboard
 - [ ] Enable Neon automatic backups
-- [ ] Set up monitoring (Sentry, LangSmith)
+- [ ] Set up monitoring (Railway, Vercel, LangSmith)
 - [ ] Configure custom domain (optional)
-
-### Monitoring & Maintenance
-
-**Railway Monitoring**:
-- View logs: Railway Dashboard → Deployments → View Logs
-- Monitor metrics: CPU, memory, response time
-- Set up alerts for high error rates
-
-**Neon Monitoring**:
-- View connection stats in Neon dashboard
-- Monitor query performance
-- Enable automatic backups (7-30 day retention)
-
-**LangSmith Monitoring**:
-- Track agent execution traces
-- Monitor token usage and costs
-- Debug agent reasoning steps
-- View: https://smith.langchain.com/
-
-### Deployment Guides
-
-For detailed deployment instructions, see:
-- **[DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md)** - Complete step-by-step guide
-- **[DEPLOYMENT_QUICK_START.md](../DEPLOYMENT_QUICK_START.md)** - Quick 45-min deployment
-- **[QUICK_START.md](../QUICK_START.md)** - Local development + production URLs
+- [ ] Implement rate limiting
+- [ ] Set up error tracking (Sentry)
 
 ## License
 Proprietary - All rights reserved

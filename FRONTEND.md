@@ -2,6 +2,50 @@
 
 ## Recent Changes (2025-01-19)
 
+### ProjectEditor Component Refactoring
+**Major refactoring to reduce file complexity and improve maintainability**
+
+1. **Component Extractions** (`src/components/project-editor/`)
+   - **ActionSidebar.jsx**: Vertical sidebar with navigation, document tabs, and action buttons
+     - Desktop: Fixed left sidebar (10% width, 140-180px)
+     - Mobile: Slide-in drawer from left
+   - **DocumentViewer.jsx**: PDF/Cover Letter/Email viewer with tabs
+     - Includes zoom controls, compile button, and mobile tab navigation
+   - **ExtractedDataPanel.jsx**: Resume data viewer (Formatted/Raw JSON)
+     - Desktop: Fixed right panel (40-45% width)
+     - Mobile: Slide-in drawer from right
+   - **TailoringOverlay.jsx**: Full-screen modal showing real-time tailoring progress
+     - Displays agent messages with step-by-step feedback
+   - **JobDescriptionDrawer.jsx**: Left-sliding drawer for job description input
+   - **SortableSection.jsx**: Drag-and-drop wrapper for resume sections
+   - **PersonalInfoSection.jsx**: Personal information display
+   - **ProfessionalSummarySection.jsx**: Professional summary with editing and version history
+   - **ExperienceSection.jsx**: Work experience with editing and version history
+   - **ProjectsSection.jsx**: Projects with editing capability
+   - **EducationSection.jsx**: Education display
+   - **SkillsSection.jsx**: Skills with editing capability
+   - **CertificationsSection.jsx**: Certifications with editing capability
+
+2. **Custom Hooks** (`src/hooks/`)
+   - **useTailorResume.js**: Handles complex resume tailoring with streaming
+     - Manages agent messages, credit checks, success/error handling
+     - Fetches cover letter and email after tailoring
+     - Includes abort controller for cleanup (210 lines)
+   - **useResumeUpload.js**: Handles resume file upload and validation
+     - Supports multiple file formats with size validation
+     - Updates project with extracted resume JSON
+     - Includes abort controller for cleanup (95 lines)
+
+3. **Utility Functions** (`src/utils/`)
+   - **dateUtils.js**: Date formatting utilities
+     - `formatTimestamp()`: Formats ISO timestamps to readable format
+
+4. **Code Reduction**
+   - ProjectEditor.jsx reduced from ~2200+ lines to 833 lines (62% reduction)
+   - Removed 1367 lines through component extraction
+   - Cleaner, more maintainable codebase
+   - Reusable components following React best practices
+
 ### Upload Experience Improvements
 1. **Template Preview During Upload** (`pages/UploadResume.jsx`)
    - Added side-by-side layout showing template preview + status messages
@@ -49,15 +93,32 @@ React-based frontend for AI-powered resume tailoring with Stripe credit system a
 ## Project Structure
 ```
 frontend/src/
-├── assets/              # Images, logos
+├── assets/              # Images, logos, resume template preview
 ├── components/
 │   ├── common/
 │   │   ├── Navbar.jsx              # Navigation with credit display
 │   │   └── ProtectedRoute.jsx     # Auth guard
-│   └── credits/
-│       └── RechargeDialog.jsx      # Credit purchase dialog
+│   ├── credits/
+│   │   └── RechargeDialog.jsx      # Credit purchase dialog
+│   └── project-editor/
+│       ├── ActionSidebar.jsx       # Sidebar with navigation & actions
+│       ├── DocumentViewer.jsx      # PDF/Cover Letter/Email viewer
+│       ├── ExtractedDataPanel.jsx  # Resume data viewer
+│       ├── TailoringOverlay.jsx    # Tailoring progress modal
+│       ├── JobDescriptionDrawer.jsx # Job description input
+│       ├── SortableSection.jsx     # Drag-and-drop wrapper
+│       ├── PersonalInfoSection.jsx
+│       ├── ProfessionalSummarySection.jsx
+│       ├── ExperienceSection.jsx
+│       ├── ProjectsSection.jsx
+│       ├── EducationSection.jsx
+│       ├── SkillsSection.jsx
+│       └── CertificationsSection.jsx
 ├── context/
 │   └── AuthContext.jsx             # User auth & state
+├── hooks/
+│   ├── useTailorResume.js          # Resume tailoring logic
+│   └── useResumeUpload.js          # Resume upload logic
 ├── pages/
 │   ├── Dashboard.jsx               # Projects list
 │   ├── Landing.jsx                 # Landing page
@@ -75,6 +136,8 @@ frontend/src/
 │   └── userService.js              # User profile API
 ├── styles/
 │   └── theme.js                    # MUI theme & colors
+├── utils/
+│   └── dateUtils.js                # Date formatting utilities
 ├── App.jsx              # Root component with routing
 └── main.jsx             # Entry point
 ```
@@ -107,6 +170,7 @@ frontend/src/
 - Drag-and-drop file upload
 - File validation (format + size check)
 - Real-time streaming status messages via SSE
+- Template preview showing expected output
 - OCR status indicator when image extraction is used
 - Progress indicators (LinearProgress + status list)
 - Auto-redirect to dashboard after upload
@@ -166,8 +230,8 @@ Success → Navigate to Dashboard
 ### 3. Project Editor
 
 **Layout**:
-- **Desktop/Tablet**: 2-column (PDF 60%, Extracted Data 40%) + Job Description Drawer
-- **Mobile**: Full-width PDF with slide-in drawer for extracted data
+- **Desktop/Tablet**: Sidebar (10%) + PDF (50%) + Extracted Data (40%)
+- **Mobile**: Full-width PDF with slide-in drawers
 
 **Main Features**:
 - Load project data on mount
@@ -177,6 +241,7 @@ Success → Navigate to Dashboard
 - Download buttons (PDF, DOCX)
 - Replace resume functionality
 - Section drag-and-drop reordering
+- Manual compile button for PDF regeneration
 - **Responsive header** with mobile optimizations
 
 **Mobile Optimizations**:
@@ -190,24 +255,13 @@ Success → Navigate to Dashboard
 - Drawer width: 85% with max 400px
 - Project name truncates with ellipsis if too long
 
-**Agent Streaming Modal**:
-```javascript
-// Real-time progress updates during tailoring
-<Dialog open={tailoring} disableEscapeKeyDown>
-  <DialogTitle>
-    <CircularProgress size={24} />
-    Tailoring Resume
-    <LinearProgress />
-  </DialogTitle>
-  <DialogContent>
-    {agentMessages.map((msg, idx) => (
-      <Box key={idx}>
-        <Typography>{msg.message}</Typography>
-      </Box>
-    ))}
-  </DialogContent>
-</Dialog>
-```
+**Agent Streaming Modal** (`TailoringOverlay.jsx`):
+- Real-time progress updates during tailoring
+- Color-coded message cards by type (status, tool_result, final)
+- Shows role focus, skills identified, and changes made
+- Animated message appearance
+- Auto-scrolls to latest message
+- Linear progress indicator
 
 **Message Types**:
 - `{type: "status", message: "...", step: "initialization"}`
@@ -225,7 +279,7 @@ Success → Navigate to Dashboard
 **Section Reordering**:
 - Optimistic UI update (instant feedback)
 - Backend persistence via API
-- Auto PDF regeneration
+- Manual PDF regeneration via Compile button
 - Loading spinner during reorder
 - Error handling with state revert
 - 5px drag threshold (prevent accidental drags)
@@ -338,6 +392,7 @@ toast.success((t) => (
 - Toast notifications for actions
 - Loading states during operations
 - **Fully responsive** grid layout
+- **Base resume protection**: Redirects to upload if no base resume exists
 
 **Welcome Message** (for new users with no projects):
 ```javascript
@@ -482,6 +537,34 @@ const refreshUser = useCallback(async () => {
 
 **Bug Fix**: Previously caused infinite refresh loop on Profile page. Now properly memoized.
 
+## Custom Hooks
+
+### useTailorResume.js
+Handles complex resume tailoring with streaming.
+
+**Features**:
+- Validates job description and credits
+- Manages agent messages with real-time streaming
+- Handles success/error states
+- Fetches cover letter and email after tailoring
+- Refreshes user credits
+- Includes abort controller for cleanup
+
+**Returns**: `{ handleTailorResume, abortControllerRef }`
+
+### useResumeUpload.js
+Handles resume file upload and validation.
+
+**Features**:
+- Validates file format and size
+- Uploads resume with SSE streaming
+- Extracts resume JSON
+- Updates project data
+- Refreshes PDF preview
+- Includes abort controller for cleanup
+
+**Returns**: `{ handleResumeUpload, abortControllerRef }`
+
 ## Routing
 
 ```javascript
@@ -494,7 +577,7 @@ const refreshUser = useCallback(async () => {
   <Route path="/dashboard" element={
     <ProtectedRoute><Dashboard /></ProtectedRoute>
   } />
-  <Route path="/upload" element={
+  <Route path="/upload-resume" element={
     <ProtectedRoute><UploadResume /></ProtectedRoute>
   } />
   <Route path="/project/:id" element={
@@ -506,12 +589,23 @@ const refreshUser = useCallback(async () => {
 </Routes>
 ```
 
-## Environment Variables (.env)
+## Environment Variables
 
+### Local Development (`.env`)
 ```bash
 VITE_API_URL=http://localhost:8000
 VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
+
+### Production (`.env.production`)
+```bash
+VITE_API_URL=https://skillmap-production.up.railway.app
+VITE_GOOGLE_CLIENT_ID=your-production-client-id.apps.googleusercontent.com
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...  # or pk_live_... for real payments
+```
+
+**Note**: Vite automatically uses `.env.production` when building for production (`npm run build`).
 
 ## Setup Instructions
 
@@ -536,49 +630,30 @@ npm run build
 # Output in dist/
 ```
 
-## User Flows
+## Production Deployment
 
-### First-Time User
-```
-Register → Upload Resume (with OCR support) → Dashboard (empty) →
-Create Project → Enter Job Description → Tailor Resume →
-Download DOCX/PDF
-```
+### Current Deployment
+- **URL**: https://skill-map-six.vercel.app
+- **Platform**: Vercel
+- **Auto-deploy**: On push to main branch
 
-### Returning User
-```
-Login → Dashboard (with projects) → Select Project →
-View/Edit → Tailor (if needed) → Download
-```
+### Deployment Steps
+1. Push to GitHub main branch
+2. Vercel auto-deploys (1-2 minutes)
+3. Check deployment status in Vercel dashboard
 
-### Credit Purchase
-```
-Profile Page → Click "Recharge Credits" → Select Package →
-Redirect to Stripe Checkout → Complete Payment →
-Redirect back with success → Credits Updated in Navbar
-```
+### Vercel Configuration
+- Framework: Vite
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Root Directory: `frontend`
 
-### Low Credits Flow
-```
-Try to Tailor (< 5 credits) → Error toast →
-Recharge Dialog opens (blocking) → Purchase Credits →
-Return to editor → Tailor successfully
-```
-
-## Styling
-
-### MUI Theme
-```javascript
-export const colorPalette = {
-  primary: '#29B770',
-  primaryDark: '#072D1F',
-  secondary: '#F4F4F4',
-};
-```
-
-### Navbar Gradient
-```javascript
-background: 'linear-gradient(135deg, #072D1F 0%, #29B770 100%)'
+### SPA Routing
+Create `vercel.json` in project root:
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
+}
 ```
 
 ## Common Issues
@@ -648,548 +723,11 @@ Use Stripe test cards:
 - Decline: `4000 0000 0000 0002`
 - Any future expiry, any CVC, any ZIP
 
-## Landing Page Features
-
-### Auth-Based CTAs
-
-**For Non-Logged-In Users**:
-- Hero section shows "Get Started Free" + "Login" buttons
-- Prominent "100 FREE credits" incentive badge with gold star icon
-- Bottom CTA section visible with signup button
-- Second "100 FREE credits" badge in bottom CTA
-
-**For Logged-In Users**:
-- Hero section shows single "Go to Dashboard" button
-- No signup incentive badges (not needed)
-- Bottom CTA section **completely hidden**
-- Clean, streamlined experience
-
-**Signup Incentive Design**:
-```javascript
-{!isAuthenticated && (
-  <Chip
-    icon={<StarIcon sx={{ color: '#FFD700' }} />}
-    label="Sign up and get 100 FREE credits to start!"
-    sx={{
-      bgcolor: colorPalette.primary.darkGreen,
-      color: '#FFFFFF',
-      fontWeight: 700,
-      boxShadow: '0 4px 12px rgba(7, 45, 31, 0.3)'
-    }}
-  />
-)}
-```
-
-### Updated Feature Cards
-1. **Upload Any Resume Format**: DOCX, PDF, or Images (JPG, PNG) - AI extraction
-2. **AI-Powered Tailoring**: Paste job description, get resume + cover letter + email
-3. **Manage Projects**: Organized with version history
-4. **Download PDF or DOCX**: Your choice, instantly generated
-
-## Deployment
-
-### Production Build
-```bash
-npm run build
-# Deploy dist/ folder to hosting service
-```
-
-### Hosting Options
-- **Vercel** (recommended for React apps)
-- Netlify
-- AWS S3 + CloudFront
-- GitHub Pages
-
-### Environment Variables
-
-**Local Development** (`.env`):
-```bash
-VITE_API_URL=http://localhost:8000
-VITE_GOOGLE_CLIENT_ID=your-google-client-id
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
-```
-
-**Production** (`.env.production`):
-```bash
-VITE_API_URL=https://skillmap-production.up.railway.app
-VITE_GOOGLE_CLIENT_ID=your-production-client-id
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...  # or pk_live_... for real payments
-```
-
-**Note**: Vite automatically uses `.env.production` when building for production (`npm run build`).
-
-### SPA Routing Configuration
-
-**Vercel** (`vercel.json`):
-```json
-{
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
-}
-```
-
-**Netlify** (`_redirects`):
-```
-/* /index.html 200
-```
-
 ## Browser Support
 - Chrome/Edge 90+
 - Firefox 88+
 - Safari 14+
 - Opera 76+
-
----
-
-## Recent Changes (2025-11-19)
-
-### Profile Page Redesign
-
-#### 1. Credit Recharge Cards Styling (Profile.jsx)
-
-**Changes:**
-- Removed "Most Popular" badge and special styling
-- Made all credit package cards uniform in appearance
-- Removed green border from popular package
-- Removed hover transform effects on cards
-- Removed card click selection state
-- All cards now have consistent 1px gray border
-
-**Updated Credit Packages:**
-Updated to show tailoring ranges based on 4-6 credits per tailoring:
-- **50 Credits** ($5.00 - $0.10/credit): 8-12 resume tailorings
-- **100 Credits** ($9.00 - $0.09/credit, SAVE 10%): 16-25 resume tailorings
-
-**Code Changes:**
-```javascript
-// All cards now have uniform styling
-<Card
-  sx={{
-    height: '100%',
-    border: '1px solid',
-    borderColor: '#e0e0e0',  // Uniform gray border
-    bgcolor: '#ffffff',
-    cursor: 'default',  // No pointer cursor
-  }}
->
-
-// Updated tailoring counts
-<Typography variant="body2">
-  ✓ {pkg.tailorings} resume tailorings
-</Typography>
-```
-
-#### 2. Beta Modal Implementation (Profile.jsx)
-
-**Purpose:** Display beta notice instead of Stripe checkout during beta phase
-
-**Features:**
-- Modal appears when user clicks any "Get Credits" button
-- Explains beta phase and 100 free credits
-- Stripe checkout code preserved (commented out) for future use
-- Easy to switch to production by uncommenting Stripe code
-
-**Implementation:**
-```javascript
-// State
-const [showBetaModal, setShowBetaModal] = useState(false);
-
-// Modified handleRecharge
-const handleRecharge = async (_credits) => {
-  setShowBetaModal(true);
-
-  // PRODUCTION CODE (uncomment when ready):
-  // setRechargeLoading(true);
-  // try {
-  //   const { url } = await creditsService.createCheckoutSession(credits, autoRecharge);
-  //   window.location.href = url;
-  // } catch (error) {
-  //   toast.error('Failed to start checkout. Please try again.');
-  //   setRechargeLoading(false);
-  // }
-};
-
-// Beta Modal Component
-<Dialog open={showBetaModal} onClose={() => setShowBetaModal(false)} maxWidth="sm" fullWidth>
-  <DialogTitle>
-    <Box display="flex" alignItems="center" gap={2}>
-      <Typography variant="h6" fontWeight={700}>Beta Version</Typography>
-    </Box>
-  </DialogTitle>
-  <DialogContent>
-    <Typography variant="body1" paragraph>
-      Thank you for trying SkillMap! We're currently in <strong>beta version</strong> and are working hard to bring you the best experience.
-    </Typography>
-    <Typography variant="body1" paragraph>
-      During this beta phase, all users receive <strong>100 free credits</strong> to test our resume tailoring features.
-    </Typography>
-    <Typography variant="body2" color="text.secondary">
-      💡 Credit recharging will be available soon. Stay tuned for updates!
-    </Typography>
-  </DialogContent>
-  <DialogActions>
-    <Button onClick={() => setShowBetaModal(false)} variant="contained" fullWidth>
-      Got it!
-    </Button>
-  </DialogActions>
-</Dialog>
-```
-
-**Component Imports Added:**
-```javascript
-import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-```
-
-### Project Editor Redesign
-
-#### 1. Vertical Sidebar Implementation (ProjectEditor.jsx)
-
-**Major Change:** Replaced two horizontal bars with vertical sidebar on left side
-
-**Layout Changes:**
-1. **Sidebar (10% width, min 140px, max 180px):**
-   - Back to Dashboard button
-   - Project name display
-   - Document tabs (Resume, Cover Letter, Email) - vertical
-   - Action buttons (Replace, Download, Tailor) - vertical stack
-
-2. **Main Content Area:**
-   - PDF preview and formatted sections moved up
-   - Better screen real estate usage
-   - Responsive: sidebar only on desktop, original layout on mobile
-
-**Sidebar Structure:**
-```javascript
-{!isMobile && (
-  <Box
-    sx={{
-      width: '10%',
-      minWidth: '140px',
-      maxWidth: '180px',
-      bgcolor: '#f8f9fa',
-      borderRight: '1px solid #e0e0e0',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      position: 'sticky',
-      top: 0,
-      p: 2,
-    }}
-  >
-    {/* Back to Dashboard */}
-    <Button
-      onClick={() => navigate('/dashboard')}
-      startIcon={<ArrowBackIcon />}
-      sx={{
-        mb: 2,
-        justifyContent: 'flex-start',
-        color: colorPalette.primary.darkGreen,
-        '&:hover': { bgcolor: 'rgba(41, 183, 112, 0.1)' },
-      }}
-    >
-      Dashboard
-    </Button>
-
-    {/* Project Name */}
-    <Typography
-      variant="caption"
-      sx={{
-        mb: 3,
-        color: 'text.secondary',
-        fontSize: '0.7rem',
-        fontWeight: 600,
-      }}
-    >
-      {project?.project_name}
-    </Typography>
-
-    {/* Document Tabs - Vertical */}
-    <Box sx={{ mt: 2, mb: 2 }}>
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.secondary',
-          fontSize: '0.65rem',
-          fontWeight: 700,
-          letterSpacing: 1,
-          mb: 1,
-          display: 'block',
-        }}
-      >
-        DOCUMENTS
-      </Typography>
-      <Button
-        fullWidth
-        onClick={() => setDocumentTab(0)}
-        startIcon={<DescriptionIcon />}
-        variant={documentTab === 0 ? 'contained' : 'text'}
-        sx={{ justifyContent: 'flex-start', mb: 0.5 }}
-      >
-        Resume
-      </Button>
-      <Button
-        fullWidth
-        onClick={() => setDocumentTab(1)}
-        startIcon={<EmailIcon />}
-        variant={documentTab === 1 ? 'contained' : 'text'}
-        sx={{ justifyContent: 'flex-start', mb: 0.5 }}
-      >
-        Cover Letter
-      </Button>
-      <Button
-        fullWidth
-        onClick={() => setDocumentTab(2)}
-        startIcon={<SendIcon />}
-        variant={documentTab === 2 ? 'contained' : 'text'}
-        sx={{ justifyContent: 'flex-start' }}
-      >
-        Email
-      </Button>
-    </Box>
-
-    {/* Action Buttons */}
-    <Box sx={{ mt: 'auto' }}>
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.secondary',
-          fontSize: '0.65rem',
-          fontWeight: 700,
-          letterSpacing: 1,
-          mb: 1,
-          display: 'block',
-        }}
-      >
-        ACTIONS
-      </Typography>
-      <Button
-        fullWidth
-        variant="outlined"
-        onClick={() => fileInputRef.current?.click()}
-        sx={{ mb: 1 }}
-      >
-        Replace
-      </Button>
-      <Button
-        fullWidth
-        variant="outlined"
-        onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
-        sx={{ mb: 1 }}
-      >
-        Download
-      </Button>
-      <Button
-        fullWidth
-        variant="contained"
-        onClick={() => setJobDescDrawerOpen(true)}
-        sx={{
-          bgcolor: colorPalette.primary.brightGreen,
-          '&:hover': { bgcolor: colorPalette.primary.green },
-        }}
-      >
-        Tailor
-      </Button>
-    </Box>
-  </Box>
-)}
-```
-
-**Mobile Responsiveness:**
-- Sidebar hidden on mobile (`!isMobile` wrapper)
-- Original horizontal tabs and header preserved for mobile
-- Uses Material-UI `useMediaQuery` for breakpoint detection:
-```javascript
-const theme = useTheme();
-const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-```
-
-#### 2. Manual PDF Compilation Feature (ProjectEditor.jsx)
-
-**Problem:** PDF was auto-reloading on every section reorder, causing unnecessary API calls
-
-**Solution:** Added manual compile button with pending changes tracking
-
-**Implementation:**
-
-1. **New States:**
-```javascript
-const [pendingChanges, setPendingChanges] = useState(false);
-const [compiling, setCompiling] = useState(false);
-```
-
-2. **Modified Section Reordering:**
-```javascript
-const handleDragEnd = async (event) => {
-  const { active, over } = event;
-
-  if (over && active.id !== over.id) {
-    const oldIndex = sectionOrder.indexOf(active.id);
-    const newIndex = sectionOrder.indexOf(over.id);
-
-    if (oldIndex !== -1 && newIndex !== -1) {
-      // Optimistic UI update
-      const newOrder = arrayMove(sectionOrder, oldIndex, newIndex);
-      setSectionOrder(newOrder);
-
-      try {
-        // Persist to backend
-        await projectService.updateSectionOrder(projectId, newOrder);
-        setPendingChanges(true);  // Mark as having pending changes
-        toast.success('Section order updated. Click "Compile" to see changes in PDF.');
-
-        // NO PDF RELOAD HERE - user must click compile
-      } catch (error) {
-        console.error('Error updating section order:', error);
-        setSectionOrder(sectionOrder); // Revert on error
-        toast.error('Failed to update section order');
-      }
-    }
-  }
-};
-```
-
-3. **Compile Function:**
-```javascript
-const handleCompile = async () => {
-  try {
-    setCompiling(true);
-    setPdfLoading(true);
-
-    // Clean up old PDF URL
-    if (pdfUrl) {
-      URL.revokeObjectURL(pdfUrl);
-    }
-
-    // Reload PDF preview
-    await loadPdfPreview();
-
-    setPendingChanges(false);
-    toast.success('PDF compiled successfully!');
-  } catch (error) {
-    console.error('Error compiling PDF:', error);
-    toast.error('Failed to compile PDF');
-  } finally {
-    setCompiling(false);
-    setPdfLoading(false);
-  }
-};
-```
-
-4. **Compile Button (in zoom controls area):**
-```javascript
-<Button
-  variant="contained"
-  size="small"
-  onClick={handleCompile}
-  disabled={!pendingChanges || compiling}
-  startIcon={compiling ? <CircularProgress size={14} /> : null}
-  sx={{
-    ml: 2,
-    bgcolor: pendingChanges ? colorPalette.primary.brightGreen : '#cccccc',
-    color: '#ffffff',
-    '&:hover': {
-      bgcolor: pendingChanges ? colorPalette.primary.green : '#cccccc',
-    },
-    '&:disabled': {
-      bgcolor: '#cccccc',
-      color: '#ffffff',
-    },
-  }}
->
-  {compiling ? 'Compiling...' : pendingChanges ? 'Compile ⚡' : 'Compiled ✓'}
-</Button>
-```
-
-**User Experience:**
-- Button disabled when no pending changes
-- Green color when changes pending
-- Gray when compiled
-- Shows loading state during compilation
-- Toast notification on section reorder to remind user to compile
-- Manual control prevents unnecessary PDF regenerations
-
-### Credits Service Updates
-
-#### Auto-Recharge API Integration (creditsService.js)
-
-**New Methods:**
-
-```javascript
-// Modified checkout to support auto-recharge
-createCheckoutSession: async (credits, enableAutoRecharge = false) => {
-  const response = await api.post('/api/credits/create-checkout-session', {
-    credits,
-    enable_auto_recharge: enableAutoRecharge,
-  });
-  return response.data;
-},
-
-// Get user's auto-recharge settings
-getAutoRechargeSettings: async () => {
-  const response = await api.get('/api/credits/auto-recharge');
-  return response.data;
-},
-
-// Update auto-recharge settings
-updateAutoRechargeSettings: async (enabled, credits = null, threshold = 10.0) => {
-  const response = await api.post('/api/credits/auto-recharge', {
-    enabled,
-    credits,
-    threshold,
-  });
-  return response.data;
-},
-```
-
-**Auto-Recharge Bonus:**
-- Changed from 100 bonus credits to 20 bonus credits for auto-recharge purchases
-- Backend automatically adds 20 bonus credits when auto-recharge triggers
-
----
-
-## Production Deployment Checklist
-
-### Before Enabling Stripe Payments:
-
-1. **Profile Page (Profile.jsx):**
-   - [ ] Comment out beta modal trigger in `handleRecharge`
-   - [ ] Uncomment Stripe checkout code
-   - [ ] Test checkout flow end-to-end
-
-2. **Backend:**
-   - [ ] Verify Stripe webhook endpoint is accessible
-   - [ ] Test auto-recharge background job
-   - [ ] Verify database has all auto-recharge columns
-
-3. **Testing:**
-   - [ ] Test successful payment flow
-   - [ ] Test failed payment handling
-   - [ ] Test auto-recharge with low credits
-   - [ ] Test payment method saving
-
----
-
-## Design Decisions
-
-### Why Vertical Sidebar?
-- Better use of horizontal screen space for PDF preview
-- More intuitive document navigation
-- Cleaner separation of controls vs content
-- Industry standard pattern (similar to VS Code, Figma, etc.)
-- 10% width provides enough space for buttons without wasting screen real estate
-
-### Why Manual Compile?
-- Reduces unnecessary API calls
-- Gives user control over when to regenerate PDF
-- Prevents jarring auto-refreshes during section reordering
-- Clear visual feedback of pending changes
-- Performance improvement (no regeneration on every drag)
-
-### Why Beta Modal?
-- Allows deployment without payment processing
-- Preserves Stripe code for easy activation later
-- Clear communication to users about beta status
-- No code deletion - just commenting out
-- Easy to switch to production mode
 
 ---
 
