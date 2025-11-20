@@ -14,12 +14,12 @@ import { useNavigate } from 'react-router-dom';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { colorPalette } from '../styles/theme';
 import resumeService from '../services/resumeService';
+import templatePreview from '../assets/resume-template-preview.png';
 
 const UploadResume = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const [statusMessages, setStatusMessages] = useState([]);
   const navigate = useNavigate();
   const abortControllerRef = useRef(null); // For cancelling requests
   const theme = useTheme();
@@ -79,7 +79,6 @@ const UploadResume = () => {
 
     setUploading(true);
     setError('');
-    setStatusMessages([]);
 
     // Create new AbortController for this upload
     const uploadAbortController = new AbortController();
@@ -90,10 +89,8 @@ const UploadResume = () => {
       const result = await resumeService.uploadResume(
         selectedFile,
         (message) => {
-          // Handle status updates
-          if (message.type === 'status') {
-            setStatusMessages(prev => [...prev, message.message]);
-          } else if (message.type === 'error') {
+          // Handle status updates (not displayed, but errors are processed)
+          if (message.type === 'error') {
             throw new Error(message.message);
           }
         },
@@ -329,7 +326,7 @@ const UploadResume = () => {
                   }}
                 >
                   <img
-                    src="/src/assets/resume-template-preview.png"
+                    src={templatePreview}
                     alt="Resume Template Preview"
                     style={{
                       width: '100%',

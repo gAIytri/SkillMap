@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies including LaTeX and LibreOffice
+# Install system dependencies including LaTeX, LibreOffice, Poppler, and Tesseract
 RUN apt-get update && apt-get install -y \
     texlive-latex-base \
     texlive-latex-extra \
@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     texlive-fonts-extra \
     libreoffice \
     libreoffice-writer \
+    poppler-utils \
+    tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
