@@ -8,7 +8,7 @@ import os
 
 from config.database import init_db
 from config.settings import settings
-from routers import auth, users, resumes, projects, credits
+from routers import auth, users, resumes, projects, credits, admin
 
 
 @asynccontextmanager
@@ -47,6 +47,7 @@ app.include_router(users.router)
 app.include_router(resumes.router)
 app.include_router(projects.router)
 app.include_router(credits.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

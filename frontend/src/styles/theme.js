@@ -12,6 +12,11 @@ const colorPalette = {
     mediumGreen: '#98C7AC',
     gray: '#F4F4F4',
   },
+  accent: {
+    gold: '#FFB300',
+    orange: '#FF8A00',
+    blue: '#2196F3',
+  },
   text: {
     primary: '#111111',
     secondary: '#072D1F',

@@ -11,6 +11,7 @@ from langsmith import traceable
 from config.settings import settings
 import logging
 import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +456,20 @@ def generate_cover_letter(
         # Extract key info from resume
         personal_info = resume_data.get('personal_info', {})
         candidate_name = personal_info.get('name', 'Candidate Name')
+        candidate_email = personal_info.get('email', '')
+        candidate_phone = personal_info.get('phone', '')
+        candidate_location = personal_info.get('location', '')
+
+        # Get LinkedIn or portfolio links
+        header_links = personal_info.get('header_links', [])
+        linkedin_link = ''
+        portfolio_link = ''
+        for link in header_links:
+            link_text = link.get('text', '').lower()
+            if 'linkedin' in link_text:
+                linkedin_link = link.get('url', '')
+            elif 'portfolio' in link_text or 'github' in link_text or 'website' in link_text:
+                portfolio_link = link.get('url', '')
 
         # Get skills from all categories
         skills = []
@@ -501,10 +516,32 @@ STRUCTURE:
 
 TONE: Professional, confident, specific, and genuine."""
 
+        # Build contact info block
+        contact_info_lines = [candidate_name]
+        if candidate_location:
+            contact_info_lines.append(candidate_location)
+        if candidate_phone:
+            contact_info_lines.append(candidate_phone)
+        if candidate_email:
+            contact_info_lines.append(candidate_email)
+        if linkedin_link:
+            contact_info_lines.append(linkedin_link)
+        if portfolio_link:
+            contact_info_lines.append(portfolio_link)
+
+        contact_info = '\n'.join(contact_info_lines)
+
+        # Get today's date in mm/dd/yy format
+        today_date = datetime.now().strftime("%m/%d/%y")
+
         user_prompt = f"""Generate a cover letter for this application:
 
 CANDIDATE INFORMATION:
 Name: {candidate_name}
+Email: {candidate_email}
+Phone: {candidate_phone}
+Location: {candidate_location}
+LinkedIn: {linkedin_link}
 Top Skills: {', '.join(skills[:12])}
 Recent Position: {recent_exp.get('title', 'N/A')} at {recent_exp.get('company', 'N/A')}
 
@@ -519,22 +556,38 @@ HIRING MANAGER: {hiring_manager or 'Hiring Manager'}
 CONTEXT (brief job description excerpt for tone):
 {job_description[:500]}...
 
-FORMAT:
-{candidate_name}
-[Date]
+FORMAT REQUIREMENTS:
+Use proper business letter format with the following structure:
+
+[Candidate's Full Contact Information Block - include name, location, phone, email, and LinkedIn/portfolio if available]
+
+{today_date}
+
+[Company Information Block - include company name and "Hiring Team" or hiring manager if known]
 
 Dear {hiring_manager or 'Hiring Manager'},
 
-[Opening paragraph - express interest in {role_focus}]
+[Opening paragraph - express interest in the specific role]
 
-[Body paragraphs - highlight how skills match required skills and experience aligns with responsibilities]
+[Body paragraphs - 2-3 paragraphs highlighting:
+ - How your skills and experience match the required skills
+ - Specific achievements that align with key responsibilities
+ - Technical expertise relevant to the role
+ - Genuine interest in the company/role]
 
-[Closing paragraph - call to action and next steps]
+[Closing paragraph - call to action and enthusiasm for next steps]
 
 Sincerely,
 {candidate_name}
 
-Generate the cover letter now in this exact format:"""
+IMPORTANT:
+- Include ALL available contact information in the header (location, phone, email, LinkedIn)
+- Use the actual date {today_date} in the letter (NOT a placeholder like [Today's Date])
+- Add a company address block after the date
+- Keep professional formatting and spacing
+- Make it compelling and specific to the role
+
+Generate the complete cover letter now:"""
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -624,9 +677,24 @@ def generate_recruiter_email(
         # Parse resume JSON
         resume_data = json.loads(resume_json) if isinstance(resume_json, str) else resume_json
 
-        # Extract candidate name
+        # Extract candidate info
         personal_info = resume_data.get('personal_info', {})
         candidate_name = personal_info.get('name', 'Candidate Name')
+
+        # Get recent experience details
+        experience = resume_data.get('experience', [])
+        recent_exp = experience[0] if experience else {}
+        recent_title = recent_exp.get('title', 'N/A')
+        recent_company = recent_exp.get('company', 'N/A')
+
+        # Get top skills
+        skills = []
+        for skill_cat in resume_data.get('skills', []):
+            skills.extend(skill_cat.get('skills', []))
+
+        # Get notable projects
+        projects = resume_data.get('projects', [])
+        top_project = projects[0] if projects else {}
 
         # Extract job summary data
         summary_data = job_summary.get("summary", {}) if isinstance(job_summary, dict) else {}
@@ -650,41 +718,63 @@ def generate_recruiter_email(
 
         # Build email generation prompt
         system_prompt = """You are an expert at crafting professional job application emails.
-Generate a concise, impactful email to send to a recruiter after applying for a position.
+Generate a tailored, impactful email to send to a recruiter after applying for a position.
 
 REQUIREMENTS:
-1. Short and concise (under 150 words)
+1. Concise length (120-140 words) - brief but tailored
 2. Professional but personable tone
 3. Mention that application has been submitted
-4. Express enthusiasm for the role
-5. Highlight 1-2 key qualifications very briefly
-6. Request consideration and next steps
-7. Include clear call to action
+4. Express genuine enthusiasm for the role and company
+5. Highlight 2 key qualifications with specific details (experience or skills)
+6. Show clear alignment between candidate's background and job requirements
+7. Mention 1-2 specific technical skills relevant to the role
+8. Include clear call to action
+9. Make it feel personalized and thoughtful, not generic
 
 STRUCTURE:
-Subject: [Create compelling subject line]
+Subject: [Create compelling, specific subject line mentioning role and key qualification]
 
 Body:
 Dear Hiring Manager,
 
-[Opening - mention application submission]
-[Brief highlight of 1-2 key qualifications]
-[Express enthusiasm for role/company]
-[Call to action - request next steps]
+[Opening - mention application submission and express enthusiasm for role]
+
+[Body - In 2-3 concise sentences, highlight key qualifications that align with job requirements:
+ - Mention current role and relevant experience
+ - Reference 1-2 specific technical skills or achievements
+ - Show fit with the role]
+
+[Closing - Express interest in discussing further and next steps]
 
 Best regards,
 [Name]
 
-TONE: Professional, confident, concise, and genuine."""
+TONE: Professional, confident, specific, genuine, and enthusiastic."""
 
         user_prompt = f"""Generate a recruiter email for this application:
 
-CANDIDATE: {candidate_name}
-JOB TITLE: {job_title}
-COMPANY: {company_name}
+CANDIDATE INFORMATION:
+Name: {candidate_name}
+Current/Recent Role: {recent_title} at {recent_company}
+Top Skills: {', '.join(skills[:15])}
+Notable Project: {top_project.get('name', 'N/A')} - {top_project.get('description', '')[:100] if top_project.get('description') else 'N/A'}
+
+JOB APPLICATION:
+Job Title: {job_title}
+Company: {company_name}
+Role Focus: {role_focus}
 
 KEY JOB REQUIREMENTS (from analysis):
-Required Skills: {', '.join(required_skills[:8])}
+Required Skills: {', '.join(required_skills[:10])}
+Key Responsibilities: {', '.join(summary_data.get('key_responsibilities', [])[:3])}
+
+INSTRUCTIONS:
+- Make the email feel personalized to this specific role and company
+- Highlight how the candidate's experience with {recent_company} and skills align with {company_name}'s needs
+- Mention 1-2 specific technical skills from the required skills that the candidate has
+- Keep it brief but impactful - don't be too wordy
+- Keep it professional but show genuine enthusiasm
+- Length: 120-140 words maximum
 
 Generate the email with subject line and body now:"""
 

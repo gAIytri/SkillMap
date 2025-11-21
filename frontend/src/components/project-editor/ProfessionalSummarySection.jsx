@@ -29,21 +29,27 @@ const ProfessionalSummarySection = ({
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           {renderSectionTitle(sectionKey, true)}
         </AccordionSummary>
-        <AccordionDetails sx={{ pt: 0.5, pb: 1.5, px: isMobile ? 1.5 : 2 }}>
-          <Paper elevation={0} sx={{ p: isMobile ? 1 : 1.5, mb: 1, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
+        <AccordionDetails sx={{ pt: 2, pb: 3, px: isMobile ? 2 : 3 }}>
+          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: '#2c3e50', color: '#fff' }}>
             {isEditing ? (
               <TextField
                 value={tempData}
                 onChange={(e) => onTempDataChange(e.target.value)}
                 multiline
-                rows={4}
+                rows={8}
                 fullWidth
-                size="small"
+                variant="standard"
                 autoFocus
-                sx={{ '& .MuiInputBase-root': { fontSize: isMobile ? '14px' : '12px' } }}
+                placeholder="Enter professional summary..."
+                InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 } }}
+                InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                sx={{
+                  '& .MuiInput-underline:before': { borderBottomColor: '#566573' },
+                  '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
+                }}
               />
             ) : (
-              <Typography variant="body2" sx={{ fontSize: isMobile ? '13px' : '12px' }}>
+              <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#ecf0f1' }}>
                 {data}
               </Typography>
             )}

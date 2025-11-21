@@ -267,16 +267,15 @@ const DocumentViewer = ({
 
         {/* Cover Letter Tab */}
         {documentTab === 1 && (
-          <Box sx={{ width: '100%', height: '100%', p: 3, overflow: 'auto' }}>
+          <Box sx={{ width: '100%', height: '100%', p: 1, overflow: 'auto' }}>
             {coverLetter ? (
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h6" fontWeight={600} color="#2c3e50">
                     Cover Letter
                   </Typography>
                   <Button
                     startIcon={<DownloadIcon />}
-                    variant="outlined"
                     size="small"
                     onClick={() => {
                       // Download as .txt file
@@ -334,16 +333,15 @@ const DocumentViewer = ({
 
         {/* Email Tab */}
         {documentTab === 2 && (
-          <Box sx={{ width: '100%', height: '100%', p: 3, overflow: 'auto' }}>
+          <Box sx={{ width: '100%', height: '100%', p: 1, overflow: 'auto' }}>
             {email ? (
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h6" fontWeight={600} color="#2c3e50">
                     Recruiter Email
                   </Typography>
                   <Button
                     startIcon={<ContentCopyIcon />}
-                    variant="outlined"
                     size="small"
                     onClick={() => {
                       const emailText = `Subject: ${email.subject}\n\n${email.body}`;

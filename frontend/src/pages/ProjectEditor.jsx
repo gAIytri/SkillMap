@@ -263,7 +263,9 @@ const ProjectEditor = () => {
     setEditingSection(sectionKey);
 
     // Copy the entire section data for editing
-    if (sectionKey === 'professional_summary') {
+    if (sectionKey === 'personal_info') {
+      setTempSectionData(JSON.parse(JSON.stringify(extractedData.personal_info))); // Deep copy
+    } else if (sectionKey === 'professional_summary') {
       setTempSectionData(extractedData.professional_summary);
     } else if (sectionKey === 'experience') {
       setTempSectionData(JSON.parse(JSON.stringify(extractedData.experience))); // Deep copy
@@ -299,6 +301,18 @@ const ProjectEditor = () => {
 
   // Helper to update temp section data
   const updateTempField = (index, field, value) => {
+    // If index is null and value is an array, replace entire array (for add/delete operations)
+    if (index === null && Array.isArray(value)) {
+      setTempSectionData(value);
+      return;
+    }
+
+    // If index is null and field is provided, update object field (for PersonalInfo)
+    if (index === null && field && typeof tempSectionData === 'object' && !Array.isArray(tempSectionData)) {
+      setTempSectionData({ ...tempSectionData, [field]: value });
+      return;
+    }
+
     if (Array.isArray(tempSectionData)) {
       const updated = [...tempSectionData];
       if (field) {
@@ -465,13 +479,12 @@ const ProjectEditor = () => {
                 [sectionKey]: e.target.value
               }));
             }}
-            size="small"
+            variant="standard"
             sx={{
               flex: 1,
               '& .MuiInputBase-root': {
                 fontSize: isMobile ? '0.8rem' : '0.875rem',
                 fontWeight: 700,
-                height: isMobile ? '36px' : '32px',
               }
             }}
           />
@@ -540,6 +553,9 @@ const ProjectEditor = () => {
             expanded={expandedSections[sectionKey]}
             onToggle={() => handleToggleSection(sectionKey)}
             renderSectionTitle={renderSectionTitle}
+            isEditing={editingSection === 'personal_info'}
+            tempData={tempSectionData}
+            updateTempField={updateTempField}
           />
         );
 
@@ -595,6 +611,9 @@ const ProjectEditor = () => {
             expanded={expandedSections[sectionKey]}
             onToggle={() => handleToggleSection(sectionKey)}
             renderSectionTitle={renderSectionTitle}
+            isEditing={editingSection === 'education'}
+            tempData={tempSectionData}
+            updateTempField={updateTempField}
           />
         );
 

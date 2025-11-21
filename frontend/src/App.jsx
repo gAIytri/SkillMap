@@ -10,10 +10,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import theme from './styles/theme';
 import GlobalStyles from './styles/globalStyles';
 import { AuthProvider } from './context/AuthContext';
+import { AdminProvider } from './context/AdminContext';
 
 // Components
 import Navbar from './components/common/Navbar';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import ProtectedAdminRoute from './components/common/ProtectedAdminRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
@@ -24,6 +26,10 @@ import Dashboard from './pages/Dashboard';
 import UploadResume from './pages/UploadResume';
 import ProjectEditor from './pages/ProjectEditor';
 import Profile from './pages/Profile';
+
+// Admin Pages
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -109,57 +115,78 @@ function App() {
         <ErrorBoundary>
           <Router>
             <AuthProvider>
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: '100vh',
-                }}
-              >
-                <Navbar />
-                <Box component="main" sx={{ flexGrow: 1 }}>
-                  <Routes>
-                    {/* Public Routes */}
-                    <Route path="/" element={<Landing />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
+              <AdminProvider>
+                <Routes>
+                  {/* Admin Routes (without Navbar) */}
+                  <Route path="/admin/login" element={<AdminLogin />} />
+                  <Route
+                    path="/admin/dashboard"
+                    element={
+                      <ProtectedAdminRoute>
+                        <AdminDashboard />
+                      </ProtectedAdminRoute>
+                    }
+                  />
 
-                    {/* Protected Routes */}
-                    <Route
-                      path="/dashboard"
-                      element={
-                        <ProtectedRoute>
-                          <Dashboard />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/upload-resume"
-                      element={
-                        <ProtectedRoute>
-                          <UploadResume />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/project/:projectId"
-                      element={
-                        <ProtectedRoute>
-                          <ProjectEditor />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/profile"
-                      element={
-                        <ProtectedRoute>
-                          <Profile />
-                        </ProtectedRoute>
-                      }
-                    />
-                  </Routes>
-                </Box>
-              </Box>
+                  {/* Regular User Routes (with Navbar) */}
+                  <Route
+                    path="/*"
+                    element={
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          minHeight: '100vh',
+                        }}
+                      >
+                        <Navbar />
+                        <Box component="main" sx={{ flexGrow: 1 }}>
+                          <Routes>
+                            {/* Public Routes */}
+                            <Route path="/" element={<Landing />} />
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/register" element={<Register />} />
+
+                            {/* Protected Routes */}
+                            <Route
+                              path="/dashboard"
+                              element={
+                                <ProtectedRoute>
+                                  <Dashboard />
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/upload-resume"
+                              element={
+                                <ProtectedRoute>
+                                  <UploadResume />
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/project/:projectId"
+                              element={
+                                <ProtectedRoute>
+                                  <ProjectEditor />
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/profile"
+                              element={
+                                <ProtectedRoute>
+                                  <Profile />
+                                </ProtectedRoute>
+                              }
+                            />
+                          </Routes>
+                        </Box>
+                      </Box>
+                    }
+                  />
+                </Routes>
+              </AdminProvider>
             </AuthProvider>
           </Router>
         </ErrorBoundary>
