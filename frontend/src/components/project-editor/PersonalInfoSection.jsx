@@ -1,15 +1,11 @@
-import { Box, Typography, Paper, TextField, Accordion, AccordionSummary, AccordionDetails, useTheme, useMediaQuery, IconButton, Button } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button } from '@mui/material';
+import { colorPalette } from '../../styles/theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import SortableSection from './SortableSection';
 
 const PersonalInfoSection = ({
   sectionKey,
   data,
-  expanded,
-  onToggle,
-  renderSectionTitle,
   isEditing,
   tempData,
   updateTempField
@@ -20,17 +16,8 @@ const PersonalInfoSection = ({
   if (!data) return null;
 
   return (
-    <SortableSection key={sectionKey} id={sectionKey}>
-      <Accordion
-        expanded={expanded || false}
-        onChange={onToggle}
-        sx={{ mb: 1 }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          {renderSectionTitle(sectionKey, true)}
-        </AccordionSummary>
-        <AccordionDetails sx={{ pt: 2, pb: 3, px: isMobile ? 2 : 3 }}>
-          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: '#2c3e50', color: '#fff' }}>
+    <Box>
+      <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
             {isEditing ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 <TextField
@@ -39,9 +26,9 @@ const PersonalInfoSection = ({
                   onChange={(e) => updateTempField(null, 'name', e.target.value)}
                   fullWidth
                   variant="standard"
-                  InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                   InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                 />
                 <TextField
                   label="Email"
@@ -49,9 +36,9 @@ const PersonalInfoSection = ({
                   onChange={(e) => updateTempField(null, 'email', e.target.value)}
                   fullWidth
                   variant="standard"
-                  InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                   InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                 />
                 <TextField
                   label="Phone"
@@ -59,9 +46,9 @@ const PersonalInfoSection = ({
                   onChange={(e) => updateTempField(null, 'phone', e.target.value)}
                   fullWidth
                   variant="standard"
-                  InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                   InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                 />
                 <TextField
                   label="Location"
@@ -69,12 +56,12 @@ const PersonalInfoSection = ({
                   onChange={(e) => updateTempField(null, 'location', e.target.value)}
                   fullWidth
                   variant="standard"
-                  InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                   InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                 />
                 <Box>
-                  <Typography variant="caption" sx={{ color: '#bdc3c7', mb: 1, display: 'block' }}>
+                  <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
                     Links
                   </Typography>
                   {(tempData?.header_links || []).map((link, idx) => (
@@ -91,7 +78,7 @@ const PersonalInfoSection = ({
                           fullWidth
                           variant="standard"
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                         <TextField
                           placeholder="URL"
@@ -104,7 +91,7 @@ const PersonalInfoSection = ({
                           fullWidth
                           variant="standard"
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                       </Box>
                       <IconButton
@@ -138,24 +125,24 @@ const PersonalInfoSection = ({
                   {data.name}
                 </Typography>
                 {data.email && (
-                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#ecf0f1' }}>
+                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#fff' }}>
                     {data.email}
                   </Typography>
                 )}
                 {data.phone && (
-                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#ecf0f1' }}>
+                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#fff' }}>
                     {data.phone}
                   </Typography>
                 )}
                 {data.location && (
-                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#ecf0f1' }}>
+                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#fff' }}>
                     {data.location}
                   </Typography>
                 )}
                 {data.header_links && data.header_links.length > 0 && (
                   <Box sx={{ mt: 1.5 }}>
                     {data.header_links.map((link, idx) => (
-                      <Typography key={idx} variant="body2" display="block" sx={{ ml: 0, color: '#ecf0f1', mb: 0.3 }}>
+                      <Typography key={idx} variant="body2" display="block" sx={{ ml: 0, color: '#fff', mb: 0.3 }}>
                         {link.text} {link.url && `(${link.url})`}
                       </Typography>
                     ))}
@@ -163,10 +150,8 @@ const PersonalInfoSection = ({
                 )}
               </Box>
             )}
-          </Paper>
-        </AccordionDetails>
-      </Accordion>
-    </SortableSection>
+      </Paper>
+    </Box>
   );
 };
 

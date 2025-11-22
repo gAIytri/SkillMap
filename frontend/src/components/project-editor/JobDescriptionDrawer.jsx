@@ -40,7 +40,7 @@ const JobDescriptionDrawer = ({
             bgcolor: 'rgba(76, 175, 80, 0.04)',
           }}
         >
-          <Typography variant="h6" fontWeight={700} color="#2c3e50" gutterBottom>
+          <Typography variant="h6" fontWeight={700} color="colorPalette.primary.darkGreen" gutterBottom>
             Job Description
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -49,7 +49,7 @@ const JobDescriptionDrawer = ({
         </Box>
 
         {/* Job Description TextField */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 3, bgcolor: '#fafbfc' }}>
+        <Box sx={{ flex: 1, overflow: 'auto', p: 3, bgcolor: colorPalette.secondary.gray }}>
           <TextField
             fullWidth
             multiline

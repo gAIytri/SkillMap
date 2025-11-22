@@ -259,6 +259,106 @@ const Landing = () => {
           </Container>
         </Box>
       )}
+
+      {/* Footer */}
+      <Box
+        component="footer"
+        sx={{
+          bgcolor: '#000',
+          color: '#fff',
+          py: 4,
+          mt: 'auto',
+        }}
+      >
+        <Container maxWidth="lg">
+          <Grid container spacing={4}>
+            {/* About Section */}
+            <Grid item xs={12} md={4}>
+              <Typography variant="h6" fontWeight={700} gutterBottom>
+                SkillMap
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#bbb', lineHeight: 1.8 }}>
+                AI-powered resume tailoring platform that helps you create perfect resumes for every job application.
+              </Typography>
+            </Grid>
+
+            {/* Quick Links */}
+            <Grid item xs={12} md={4}>
+              <Typography variant="h6" fontWeight={700} gutterBottom>
+                Quick Links
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
+                  onClick={() => navigate('/login')}
+                >
+                  Login
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
+                  onClick={() => navigate('/register')}
+                >
+                  Sign Up
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                >
+                  Back to Top
+                </Typography>
+              </Box>
+            </Grid>
+
+            {/* Contact */}
+            <Grid item xs={12} md={4}>
+              <Typography variant="h6" fontWeight={700} gutterBottom>
+                Contact
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#bbb', lineHeight: 1.8 }}>
+                Need help? Reach out to us at:
+              </Typography>
+              <Typography variant="body2" sx={{ color: colorPalette.primary.brightGreen, mt: 1 }}>
+                support@skillmap.com
+              </Typography>
+            </Grid>
+          </Grid>
+
+          {/* Bottom Bar */}
+          <Box
+            sx={{
+              borderTop: '1px solid #333',
+              mt: 4,
+              pt: 3,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: 2,
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#888' }}>
+              © {new Date().getFullYear()} SkillMap. All rights reserved.
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 3 }}>
+              <Typography
+                variant="body2"
+                sx={{ color: '#888', cursor: 'pointer', '&:hover': { color: '#fff' } }}
+              >
+                Privacy Policy
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: '#888', cursor: 'pointer', '&:hover': { color: '#fff' } }}
+              >
+                Terms of Service
+              </Typography>
+            </Box>
+          </Box>
+        </Container>
+      </Box>
     </Box>
   );
 };

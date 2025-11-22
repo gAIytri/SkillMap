@@ -1,15 +1,11 @@
-import { Box, Paper, TextField, Accordion, AccordionSummary, AccordionDetails, useTheme, useMediaQuery, Typography, IconButton, Button } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { Box, Paper, TextField, useTheme, useMediaQuery, Typography, IconButton, Button } from '@mui/material';
+import { colorPalette } from '../../styles/theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import SortableSection from './SortableSection';
 
 const CertificationsSection = ({
   sectionKey,
   data,
-  expanded,
-  onToggle,
-  renderSectionTitle,
   isEditing,
   tempData,
   updateTempField
@@ -20,17 +16,8 @@ const CertificationsSection = ({
   if (!data || data.length === 0) return null;
 
   return (
-    <SortableSection key={sectionKey} id={sectionKey}>
-      <Accordion
-        expanded={expanded || false}
-        onChange={onToggle}
-        sx={{ mb: 1 }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          {renderSectionTitle(sectionKey, true)}
-        </AccordionSummary>
-        <AccordionDetails sx={{ pt: 2, pb: 3, px: isMobile ? 2 : 3 }}>
-          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: '#2c3e50', color: '#fff' }}>
+    <Box>
+          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
             {isEditing ? (
               // EDITING MODE
               <>
@@ -42,9 +29,9 @@ const CertificationsSection = ({
                       fullWidth
                       variant="standard"
                       placeholder={`Certification ${idx + 1}`}
-                      InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                      InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                       InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                      sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                      sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                     />
                     <IconButton
                       size="small"
@@ -74,14 +61,12 @@ const CertificationsSection = ({
               // VIEW MODE
               <ul style={{ margin: 0, paddingLeft: '20px', fontSize: isMobile ? '14px' : '13px', lineHeight: 1.8 }}>
                 {data.map((cert, idx) => (
-                  <li key={idx} style={{ color: '#ecf0f1', marginBottom: '8px' }}>{cert}</li>
+                  <li key={idx} style={{ color: '#fff', marginBottom: '8px' }}>{cert}</li>
                 ))}
               </ul>
             )}
-          </Paper>
-        </AccordionDetails>
-      </Accordion>
-    </SortableSection>
+      </Paper>
+    </Box>
   );
 };
 

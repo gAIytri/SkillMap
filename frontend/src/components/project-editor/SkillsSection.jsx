@@ -1,15 +1,11 @@
-import { Box, Typography, Paper, TextField, Accordion, AccordionSummary, AccordionDetails, useTheme, useMediaQuery, IconButton, Button } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button } from '@mui/material';
+import { colorPalette } from '../../styles/theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import SortableSection from './SortableSection';
 
 const SkillsSection = ({
   sectionKey,
   data,
-  expanded,
-  onToggle,
-  renderSectionTitle,
   isEditing,
   tempData,
   updateTempField
@@ -20,17 +16,8 @@ const SkillsSection = ({
   if (!data || data.length === 0) return null;
 
   return (
-    <SortableSection key={sectionKey} id={sectionKey}>
-      <Accordion
-        expanded={expanded || false}
-        onChange={onToggle}
-        sx={{ mb: 1 }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          {renderSectionTitle(sectionKey, true)}
-        </AccordionSummary>
-        <AccordionDetails sx={{ pt: 2, pb: 3, px: isMobile ? 2 : 3 }}>
-          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: '#2c3e50', color: '#fff' }}>
+    <Box>
+          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
             {isEditing ? (
               // EDITING MODE
               <>
@@ -43,9 +30,9 @@ const SkillsSection = ({
                         onChange={(e) => updateTempField(idx, 'category', e.target.value)}
                         fullWidth
                         variant="standard"
-                        InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                        InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                         InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
                       <TextField
                         label="Skills (comma-separated)"
@@ -53,9 +40,9 @@ const SkillsSection = ({
                         onChange={(e) => updateTempField(idx, 'skills', e.target.value.split(',').map(s => s.trim()))}
                         fullWidth
                         variant="standard"
-                        InputLabelProps={{ style: { color: '#bdc3c7' } }}
+                        InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                         InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' } }}
-                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: '#566573' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
                     </Box>
                     <IconButton
@@ -87,14 +74,12 @@ const SkillsSection = ({
               data.map((skillCat, idx) => (
                 <Box key={idx} sx={{ mb: 1.5, fontSize: isMobile ? '14px' : '13px' }}>
                   <Typography variant="caption" fontWeight={600} sx={{ fontSize: isMobile ? '14px' : '13px', color: '#fff' }}>{skillCat.category}:</Typography>
-                  <Typography variant="caption" sx={{ ml: 1, fontSize: isMobile ? '13px' : '12px', color: '#ecf0f1' }}>{skillCat.skills.join(', ')}</Typography>
+                  <Typography variant="caption" sx={{ ml: 1, fontSize: isMobile ? '13px' : '12px', color: '#fff' }}>{skillCat.skills.join(', ')}</Typography>
                 </Box>
               ))
             )}
-          </Paper>
-        </AccordionDetails>
-      </Accordion>
-    </SortableSection>
+      </Paper>
+    </Box>
   );
 };
 

@@ -11,6 +11,7 @@ import theme from './styles/theme';
 import GlobalStyles from './styles/globalStyles';
 import { AuthProvider } from './context/AuthContext';
 import { AdminProvider } from './context/AdminContext';
+import { ProjectProvider } from './context/ProjectContext';
 
 // Components
 import Navbar from './components/common/Navbar';
@@ -115,8 +116,9 @@ function App() {
         <ErrorBoundary>
           <Router>
             <AuthProvider>
-              <AdminProvider>
-                <Routes>
+              <ProjectProvider>
+                <AdminProvider>
+                  <Routes>
                   {/* Admin Routes (without Navbar) */}
                   <Route path="/admin/login" element={<AdminLogin />} />
                   <Route
@@ -186,7 +188,8 @@ function App() {
                     }
                   />
                 </Routes>
-              </AdminProvider>
+                </AdminProvider>
+              </ProjectProvider>
             </AuthProvider>
           </Router>
         </ErrorBoundary>

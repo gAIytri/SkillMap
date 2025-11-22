@@ -1,1 +1,2 @@
 - alwys enter venv environment before doing any migration changes or runnning or anything in backend
+- in future always updae the existing md file unles they have creossed 1000 lines , only the create new

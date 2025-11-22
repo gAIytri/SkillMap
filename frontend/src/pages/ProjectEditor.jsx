@@ -93,11 +93,15 @@ const ProjectEditor = () => {
     skills: 'Skills',
     certifications: 'Certifications',
   });
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(35); // Width as percentage (25-45%)
+  const [isResizing, setIsResizing] = useState(false);
 
   // Section-level editing state
   const [editingSection, setEditingSection] = useState(null); // Which section is being edited (e.g., 'professional_summary', 'experience', etc.)
   const [tempSectionData, setTempSectionData] = useState(null); // Temporary data for the entire section while editing
 
+  const [selectedSection, setSelectedSection] = useState('personal_info'); // Currently selected section tab (default: personal_info)
+  const [viewingPreviousVersion, setViewingPreviousVersion] = useState(false); // Track if user is viewing a previous version
   const [expandedSections, setExpandedSections] = useState({
     personal_info: false,
     professional_summary: false,
@@ -118,9 +122,13 @@ const ProjectEditor = () => {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // Right drawer for extracted data
   const [mobileLeftDrawerOpen, setMobileLeftDrawerOpen] = useState(false); // Left drawer for actions
 
-  // Drag and drop sensors
+  // Drag and drop sensors with activation constraint
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px movement required before drag starts
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -258,6 +266,76 @@ const ProjectEditor = () => {
     setPdfZoom(newZoom);
   };
 
+  // Sidebar resize handlers
+  const handleResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+
+      // Calculate the available width (full width minus 10% left sidebar)
+      const leftSidebarWidth = window.innerWidth * 0.1;
+      const availableWidth = window.innerWidth - leftSidebarWidth;
+
+      // Mouse position relative to the available area (after left sidebar)
+      const mouseXRelative = e.clientX - leftSidebarWidth;
+
+      // Calculate what percentage the RIGHT sidebar should be
+      // (distance from right edge of screen to mouse)
+      const distanceFromRight = window.innerWidth - e.clientX;
+      const newWidth = (distanceFromRight / availableWidth) * 100;
+
+      // Clamp between 25% and 45%
+      const clampedWidth = Math.min(Math.max(newWidth, 25), 45);
+      setRightSidebarWidth(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+
+      // Prevent iframe and other elements from capturing mouse events during resize
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach(iframe => {
+        iframe.style.pointerEvents = 'none';
+      });
+
+      // Add overlay to prevent any element from interfering
+      const overlay = document.createElement('div');
+      overlay.id = 'resize-overlay';
+      overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; cursor: ew-resize;';
+      document.body.appendChild(overlay);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      // Re-enable iframe pointer events
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach(iframe => {
+        iframe.style.pointerEvents = 'auto';
+      });
+
+      // Remove overlay
+      const overlay = document.getElementById('resize-overlay');
+      if (overlay) {
+        overlay.remove();
+      }
+    };
+  }, [isResizing]);
+
   // Section-level editing handlers
   const handleStartEditingSection = (sectionKey) => {
     setEditingSection(sectionKey);
@@ -291,12 +369,20 @@ const ProjectEditor = () => {
     setEditingSection(null);
     setTempSectionData(null);
     setPendingChanges(true);
-    toast.success('Section updated. Click "Compile" to see changes.');
   };
 
   const handleCancelEditingSection = () => {
     setEditingSection(null);
     setTempSectionData(null);
+  };
+
+  // Restore a previous version
+  const handleRestoreVersion = (sectionKey, versionData) => {
+    const updatedData = { ...extractedData };
+    updatedData[sectionKey] = versionData;
+
+    setExtractedData(updatedData);
+    setPendingChanges(true);
   };
 
   // Helper to update temp section data
@@ -437,7 +523,6 @@ const ProjectEditor = () => {
 
       // Clear pending changes flag
       setPendingChanges(false);
-      toast.success('PDF compiled successfully!');
     } catch (err) {
       console.error('Failed to compile PDF:', err);
       toast.error('Failed to compile PDF. Please try again.');
@@ -564,13 +649,12 @@ const ProjectEditor = () => {
           <ProfessionalSummarySection
             sectionKey={sectionKey}
             data={extractedData.professional_summary}
-            expanded={expandedSections[sectionKey]}
-            onToggle={() => handleToggleSection(sectionKey)}
-            renderSectionTitle={renderSectionTitle}
             isEditing={editingSection === 'professional_summary'}
             tempData={tempSectionData}
             onTempDataChange={setTempSectionData}
             history={history}
+            onViewingPreviousVersion={setViewingPreviousVersion}
+            onRestoreVersion={handleRestoreVersion}
           />
         );
 
@@ -579,13 +663,12 @@ const ProjectEditor = () => {
           <ExperienceSection
             sectionKey={sectionKey}
             data={extractedData.experience}
-            expanded={expandedSections[sectionKey]}
-            onToggle={() => handleToggleSection(sectionKey)}
-            renderSectionTitle={renderSectionTitle}
             isEditing={editingSection === 'experience'}
             tempData={tempSectionData}
             updateTempField={updateTempField}
             history={history}
+            onViewingPreviousVersion={setViewingPreviousVersion}
+            onRestoreVersion={handleRestoreVersion}
           />
         );
 
@@ -594,12 +677,12 @@ const ProjectEditor = () => {
           <ProjectsSection
             sectionKey={sectionKey}
             data={extractedData.projects}
-            expanded={expandedSections[sectionKey]}
-            onToggle={() => handleToggleSection(sectionKey)}
-            renderSectionTitle={renderSectionTitle}
             isEditing={editingSection === 'projects'}
             tempData={tempSectionData}
             updateTempField={updateTempField}
+            history={history}
+            onViewingPreviousVersion={setViewingPreviousVersion}
+            onRestoreVersion={handleRestoreVersion}
           />
         );
 
@@ -811,11 +894,29 @@ const ProjectEditor = () => {
           onTabChange={setActiveTab}
           extractedData={extractedData}
           sectionOrder={sectionOrder}
+          sectionNames={sectionNames}
+          onSectionNameChange={(sectionKey, newName) => {
+            setSectionNames(prev => ({
+              ...prev,
+              [sectionKey]: newName
+            }));
+          }}
+          selectedSection={selectedSection}
+          onSelectedSectionChange={setSelectedSection}
+          viewingPreviousVersion={viewingPreviousVersion}
           sensors={sensors}
           onDragEnd={handleDragEnd}
           renderSection={renderSection}
           mobileDrawerOpen={mobileDrawerOpen}
           onMobileDrawerClose={() => setMobileDrawerOpen(false)}
+          editingSection={editingSection}
+          onStartEditingSection={handleStartEditingSection}
+          onSaveSection={handleSaveSection}
+          onCancelEditingSection={handleCancelEditingSection}
+          renderSectionTitle={renderSectionTitle}
+          width={rightSidebarWidth}
+          onResizeStart={handleResizeStart}
+          isResizing={isResizing}
         />
       </Box>
 

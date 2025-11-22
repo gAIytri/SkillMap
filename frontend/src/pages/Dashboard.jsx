@@ -32,13 +32,19 @@ import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import { useProjects } from '../context/ProjectContext';
 
 const Dashboard = () => {
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // Use ProjectContext for cached project data
+  const {
+    projects,
+    loading: projectsLoading,
+    fetchProjects,
+    deleteProject: deleteProjectFromCache,
+  } = useProjects();
+
+  const [localError, setLocalError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [hasBaseResume, setHasBaseResume] = useState(false);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [newProjectData, setNewProjectData] = useState({
     project_name: '',
@@ -51,33 +57,18 @@ const Dashboard = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  const loadDashboard = async () => {
-    try {
-      // Check if user has base resume
+    // Load projects from cache (or fetch if not cached)
+    const loadDashboard = async () => {
       try {
-        await resumeService.getBaseResume();
-        setHasBaseResume(true);
+        // Fetch projects (uses cache if already fetched)
+        await fetchProjects();
       } catch (err) {
-        if (err.response?.status === 404) {
-          setHasBaseResume(false);
-          // Redirect to upload if no base resume
-          navigate('/upload-resume');
-          return;
-        }
+        setLocalError('Failed to load dashboard. Please try again.');
       }
+    };
 
-      // Load projects
-      const projectsData = await projectService.getAllProjects();
-      setProjects(projectsData);
-    } catch (err) {
-      setError('Failed to load dashboard. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    loadDashboard();
+  }, [fetchProjects]);
 
   const handleCreateProject = async () => {
     if (!newProjectData.project_name.trim()) {
@@ -101,9 +92,9 @@ const Dashboard = () => {
 
     const toastId = toast.loading('Deleting project...');
     try {
-      await projectService.deleteProject(projectToDelete);
-      setProjects(projects.filter((p) => p.id !== projectToDelete));
+      await deleteProjectFromCache(projectToDelete);
       toast.success('Project deleted successfully!', { id: toastId });
+      setDeleteConfirmOpen(false);
     } catch (err) {
       toast.error('Failed to delete project. Please try again.', { id: toastId });
     } finally {
@@ -119,19 +110,6 @@ const Dashboard = () => {
   const filteredProjects = projects.filter((project) =>
     project.project_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (loading) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="calc(100vh - 64px)"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   return (
     <Container maxWidth="lg" sx={{ py: isMobile ? 2 : 4, px: isMobile ? 2 : 3 }}>
@@ -169,9 +147,9 @@ const Dashboard = () => {
         </Button>
       </Box>
 
-      {error && (
+      {localError && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
+          {localError}
         </Alert>
       )}
 
@@ -192,7 +170,16 @@ const Dashboard = () => {
       />
 
       {/* Projects Grid */}
-      {filteredProjects.length === 0 ? (
+      {projectsLoading ? (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="300px"
+        >
+          <CircularProgress />
+        </Box>
+      ) : filteredProjects.length === 0 ? (
         <Box
           display="flex"
           flexDirection="column"

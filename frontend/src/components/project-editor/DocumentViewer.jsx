@@ -123,7 +123,7 @@ const DocumentViewer = ({
         >
           {/* Hide "PDF Preview" text on mobile to save space */}
           {!isMobile && (
-            <Typography variant="subtitle2" fontWeight={700} color="#2c3e50">
+            <Typography variant="subtitle2" fontWeight={700} color="colorPalette.primary.darkGreen">
               PDF Preview
             </Typography>
           )}
@@ -134,7 +134,7 @@ const DocumentViewer = ({
               onClick={onZoomOut}
               disabled={pdfZoom <= 60}
               sx={{
-                color: '#2c3e50',
+                color: 'colorPalette.primary.darkGreen',
                 borderColor: 'transparent',
                 textTransform: 'none',
                 fontSize: isMobile ? '0.75rem' : '0.85rem',
@@ -150,7 +150,7 @@ const DocumentViewer = ({
             >
               -
             </Button>
-            <Typography variant="caption" sx={{ minWidth: isMobile ? '40px' : '50px', textAlign: 'center', color: '#2c3e50', fontSize: isMobile ? '0.7rem' : '0.8rem', fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ minWidth: isMobile ? '40px' : '50px', textAlign: 'center', color: 'colorPalette.primary.darkGreen', fontSize: isMobile ? '0.7rem' : '0.8rem', fontWeight: 600 }}>
               {pdfZoom}%
             </Typography>
             <Button
@@ -159,7 +159,7 @@ const DocumentViewer = ({
               onClick={onZoomIn}
               disabled={pdfZoom >= 200}
               sx={{
-                color: '#2c3e50',
+                color: 'colorPalette.primary.darkGreen',
                 borderColor: 'transparent',
                 textTransform: 'none',
                 fontSize: isMobile ? '0.75rem' : '0.85rem',
@@ -236,7 +236,7 @@ const DocumentViewer = ({
                   justifyContent: 'center',
                   alignItems: 'flex-start',
                   overflow: 'auto',
-                  bgcolor: '#e0e0e0',
+                  bgcolor: 'colorPalette.secondary.lightGreen',
                 }}
               >
                 <iframe
@@ -271,7 +271,7 @@ const DocumentViewer = ({
             {coverLetter ? (
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6" fontWeight={600} color="#2c3e50">
+                  <Typography variant="h6" fontWeight={600} color="colorPalette.primary.darkGreen">
                     Cover Letter
                   </Typography>
                   <Button
@@ -298,7 +298,7 @@ const DocumentViewer = ({
                   sx={{
                     p: 3,
                     bgcolor: '#fff',
-                    border: '1px solid #e0e0e0',
+                    border: '1px solid colorPalette.secondary.lightGreen',
                     whiteSpace: 'pre-wrap',
                     fontFamily: '"Times New Roman", serif',
                     fontSize: '14px',
@@ -337,7 +337,7 @@ const DocumentViewer = ({
             {email ? (
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6" fontWeight={600} color="#2c3e50">
+                  <Typography variant="h6" fontWeight={600} color="colorPalette.primary.darkGreen">
                     Recruiter Email
                   </Typography>
                   <Button
@@ -358,18 +358,18 @@ const DocumentViewer = ({
                   sx={{
                     p: 3,
                     bgcolor: '#fff',
-                    border: '1px solid #e0e0e0',
+                    border: '1px solid colorPalette.secondary.lightGreen',
                   }}
                 >
                   <Typography variant="subtitle2" color="text.secondary" mb={1}>
                     Subject:
                   </Typography>
-                  <Typography variant="body1" fontWeight={600} mb={3} sx={{ color: '#2c3e50' }}>
+                  <Typography variant="body1" fontWeight={600} mb={3} sx={{ color: 'colorPalette.primary.darkGreen' }}>
                     {email.subject}
                   </Typography>
                   <Box
                     sx={{
-                      borderTop: '1px solid #e0e0e0',
+                      borderTop: '1px solid colorPalette.secondary.lightGreen',
                       pt: 3,
                     }}
                   >

@@ -298,7 +298,7 @@ const ActionSidebar = ({
           <IconButton
             size="small"
             onClick={onMobileDrawerClose}
-            sx={{ color: '#2c3e50' }}
+            sx={{ color: colorPalette.primary.darkGreen }}
           >
             <CloseIcon />
           </IconButton>

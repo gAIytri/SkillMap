@@ -342,6 +342,21 @@ CRITICAL BALANCE PRINCIPLE:
 5. EDUCATION & CERTIFICATIONS:
    - Keep as-is unless relevant to job requirements
 
+6. DATE FORMATTING (CRITICAL - APPLY CONSISTENTLY):
+   - Analyze ALL dates in education, projects, and work experience
+   - Determine the MAJORITY date format used across the resume:
+     * If majority uses "MM/YYYY" format (e.g., "05/2025") → use that format for ALL dates
+     * If majority uses "Month YYYY" format (e.g., "May 2025") → use that format for ALL dates
+   - If there's no clear majority or you're unsure → DEFAULT to "Month YYYY" format (e.g., "May 2025")
+   - CONSISTENCY RULE: Once you determine the format, apply it to EVERY date field:
+     * education[].graduation_date
+     * projects[].start_date and projects[].end_date
+     * experience[].start_date and experience[].end_date
+   - Example transformations:
+     * "5/2025" → "May 2025" (if Month YYYY is chosen)
+     * "May 2025" → "05/2025" (if MM/YYYY is chosen)
+     * "2025-05" → "May 2025" or "05/2025" (based on majority format)
+
 OUTPUT REQUIREMENTS:
 - Return ONLY valid JSON matching the exact structure provided
 - Every section must be present with same field names
