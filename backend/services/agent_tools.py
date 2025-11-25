@@ -300,38 +300,80 @@ CURRENT RESUME (JSON):
 
 TAILORING INSTRUCTIONS:
 
-CRITICAL BALANCE PRINCIPLE:
-- Base ALL changes strictly on the job description provided
-- Make MEANINGFUL improvements that align with JD requirements
-- Do NOT be excessive - avoid over-engineering or adding unnecessary complexity
-- Do NOT reduce content too much - maintain substance and impact
-- Every modification must be JUSTIFIED by something in the job description
-- Stay authentic to the candidate's actual experience while optimizing presentation
+SMART TAILORING APPROACH:
+- Analyze alignment between current resume and job requirements
+- Make SUBSTANTIAL changes where there's misalignment
+- Make REFINED improvements where content already aligns well
+- Always elevate language quality to be clear, professional, and impactful
+- Work ONLY with existing experience - never fabricate
 
 1. PROFESSIONAL SUMMARY (paragraph format):
-   - Rewrite to directly address the role focus and required skills from job summary
-   - Highlight most relevant skills and experience from the resume
-   - Use strong, confident language
-   - Keep as a single paragraph (3-4 sentences)
-   - Incorporate ATS keywords naturally
-   - Balance: Impactful but not exaggerated
+   - Rewrite to emphasize the role_focus from job summary
+   - Lead with the most relevant experience for THIS specific role
+   - Naturally weave in 2-4 keywords from required_skills
+   - Use professional, confident language that matches the job's tone
+   - Keep as single paragraph, 3-4 sentences, focused and compelling
 
-2. WORK EXPERIENCE BULLET POINTS (CRITICAL - MAJOR CHANGES):
-   - Transform EVERY bullet point to be more technical and impactful
-   - Prioritize bullets that align with required_skills and key_responsibilities
-   - Choose the most appropriate action verbs based on the actual work done and JD requirements
-   - Let the job description guide your verb selection - use technical verbs that match the role
-   - Add technical depth: mention frameworks, tools from required_skills
-   - Quantify impact: performance improvements, user numbers, efficiency gains
-   - Format: [Action Verb] + [What] + [How/Technology] + [Impact/Result]
-   - Balance: Make substantial improvements but stay grounded in what's in the JD
+2. WORK EXPERIENCE BULLET POINTS:
+   - For each bullet point, assess its relevance to the job:
+     * HIGH RELEVANCE (relates to required_skills or key_responsibilities):
+       → Significantly enhance with specific technologies from required_skills
+       → Add quantifiable metrics and impact where applicable
+       → Make it technical and detailed
 
-3. PROJECTS (REORGANIZE + ENHANCE):
-   - REORDER projects: Most relevant to required_skills and role_focus should come FIRST
-   - Enhance descriptions with technologies from required_skills and preferred_skills
-   - Highlight aspects that match key_responsibilities
-   - Add ATS keywords naturally in project descriptions
-   - Balance: Emphasize JD-relevant aspects without over-embellishing
+     * MEDIUM RELEVANCE (transferable but not direct match):
+       → Refine the language to be more professional
+       → Emphasize aspects that connect to job requirements
+       → Add relevant technical details
+
+     * LOW RELEVANCE (doesn't align):
+       → Keep concise, improve language quality
+       → Don't over-emphasize
+
+   - Choose action verbs that best match the actual work and the job's requirements
+   - Let the job description's language guide your verb choices naturally
+   - Include specific technologies, frameworks, and tools from required_skills
+   - Add metrics when meaningful (performance gains, scale, user impact)
+   - Format: [Professional Action Verb] + [What] + [Technical Details/Tools] + [Impact/Result]
+
+3. PROJECTS (CRITICAL - ENHANCE STRATEGICALLY):
+   ⚠️ Projects often need the most work to align with job requirements
+
+   STEP 1 - ANALYZE RELEVANCE:
+   - Which projects use technologies from required_skills? → These are HIGH priority
+   - Which projects demonstrate key_responsibilities? → These are HIGH priority
+   - Which projects are less relevant? → These are LOWER priority
+
+   STEP 2 - REORDER:
+   - Put the most relevant projects FIRST
+   - Relevance = uses required_skills technologies OR demonstrates key_responsibilities
+
+   STEP 3 - ENHANCE DESCRIPTIONS BASED ON RELEVANCE:
+
+   For HIGH RELEVANCE projects (uses required_skills technologies):
+   - Expand description to be significantly more detailed and technical
+   - Prominently feature the required_skills technologies used
+   - Add architectural details (backend structure, database design, API patterns, cloud services)
+   - Include scale and metrics if applicable (user count, data volume, performance benchmarks)
+   - Use professional technical language that matches the job description's tone
+   - Make it sound production-quality and substantial
+
+   For MEDIUM RELEVANCE projects:
+   - Enhance description with more technical detail
+   - Highlight any technologies or skills that overlap with job requirements
+   - Improve language to be more professional and clear
+   - Emphasize transferable aspects
+
+   For LOWER RELEVANCE projects:
+   - Keep description clear and professional but concise
+   - Don't over-elaborate
+   - Improve language quality
+
+   Example transformation for HIGH RELEVANCE project:
+   BEFORE: "Built an e-commerce website with payment integration"
+   AFTER: "Developed full-stack e-commerce platform using React, Node.js, and PostgreSQL with integrated Stripe payment processing, JWT authentication, and Redis caching layer, serving 5,000+ daily users with <200ms average response time"
+
+   Key principle: Make the most relevant projects feel DIRECTLY aligned with what the job requires
 
 4. SKILLS (REORGANIZE BY RELEVANCE):
    - REORDER each skill category to put required_skills FIRST
@@ -648,6 +690,182 @@ Generate the complete cover letter now:"""
             "key_points": [],
             "company_name": company_name or "Unknown Company",
             "message": f"Failed to generate cover letter: {str(e)}"
+        }
+
+
+@tool
+@traceable(name="edit_resume_content")
+def edit_resume_content(edit_instructions: str) -> dict:
+    """
+    Edits specific sections of the resume based on user instructions.
+
+    This tool:
+    - Analyzes the user's edit instructions
+    - Identifies which section(s) to modify (experience, summary, skills, projects, education)
+    - Makes targeted edits to those specific sections
+    - Returns the updated resume JSON
+    - Does NOT generate cover letter or email (editing only)
+
+    Args:
+        edit_instructions: User's instructions for what to edit in the resume
+
+    Returns:
+        dict: {
+            "success": bool,
+            "edited_json": dict (the updated resume JSON),
+            "message": str,
+            "sections_modified": list[str] (which sections were changed),
+            "changes_description": str (summary of changes made)
+        }
+    """
+    try:
+        logger.info("Editing resume content based on user instructions...")
+
+        # Get runtime context (contains resume_json)
+        context = get_runtime_context()
+        resume_json = context.get("resume_json")
+
+        if not resume_json:
+            return {
+                "success": False,
+                "edited_json": {},
+                "message": "Resume JSON not found in context",
+                "sections_modified": [],
+                "changes_description": ""
+            }
+
+        # First, identify which sections to modify
+        section_analysis_prompt = """You are a resume editing assistant. Analyze the user's edit instructions and identify which resume sections need to be modified.
+
+Resume sections available:
+- personal_info: Name, contact details, location, links
+- professional_summary: The summary paragraph at the top
+- experience: Work experience entries
+- projects: Project entries
+- skills: Skills organized by category
+- education: Education entries
+- certifications: Certifications/awards
+
+Return JSON with:
+{
+    "sections_to_modify": ["section1", "section2", ...],
+    "edit_type": "add" | "update" | "remove" | "reorder",
+    "specific_target": "description of what specifically to change",
+    "reasoning": "brief explanation"
+}"""
+
+        section_messages = [
+            SystemMessage(content=section_analysis_prompt),
+            HumanMessage(content=f"User's edit instructions: {edit_instructions}\n\nIdentify which sections need to be modified.")
+        ]
+
+        section_llm = _llm_mini.bind(response_format={"type": "json_object"})
+        section_response = section_llm.invoke(section_messages)
+        section_analysis = json.loads(section_response.content)
+
+        sections_to_modify = section_analysis.get("sections_to_modify", [])
+        edit_type = section_analysis.get("edit_type", "update")
+        specific_target = section_analysis.get("specific_target", "")
+
+        logger.info(f"Sections to modify: {sections_to_modify}, Edit type: {edit_type}")
+
+        # Now perform the actual editing
+        system_prompt = """You are an expert resume editor specializing in technical resumes.
+
+CORE PRINCIPLES:
+1. Make ONLY the changes requested by the user
+2. Work with existing information - do not fabricate details
+3. Maintain the EXACT same JSON structure
+4. Keep all other sections unchanged
+5. Be precise and targeted in your edits
+6. Maintain professional language and formatting
+7. Keep date formats consistent with the rest of the resume
+
+YOUR TASK:
+Edit the specific sections identified based on the user's instructions."""
+
+        user_prompt = f"""CURRENT RESUME (JSON):
+{json.dumps(resume_json, indent=2)}
+
+USER'S EDIT INSTRUCTIONS:
+{edit_instructions}
+
+SECTIONS TO MODIFY:
+{', '.join(sections_to_modify)}
+
+EDIT TYPE: {edit_type}
+SPECIFIC TARGET: {specific_target}
+
+INSTRUCTIONS:
+1. Focus ONLY on the sections that need modification: {', '.join(sections_to_modify)}
+2. Apply the user's requested changes precisely
+3. If adding content, integrate it naturally with existing content
+4. If updating content, make targeted changes while preserving other details
+5. If removing content, ensure the structure remains valid
+6. Keep all other sections exactly as they are
+7. Maintain consistent date formatting throughout
+8. Return the complete resume JSON with modifications applied
+
+OUTPUT REQUIREMENTS:
+- Return ONLY valid JSON matching the exact structure provided
+- Every section must be present (even if unchanged)
+- All arrays must maintain same structure
+- Ensure all quotes are properly escaped in JSON
+
+Apply the requested edits now:"""
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+
+        # Create editing LLM
+        editing_llm = ChatOpenAI(
+            model="gpt-4o",
+            api_key=settings.OPENAI_API_KEY,
+            temperature=0.3,
+            max_tokens=4096
+        )
+
+        # Bind JSON response format
+        structured_llm = editing_llm.bind(response_format={"type": "json_object"})
+
+        # Invoke and get response
+        response = structured_llm.invoke(messages)
+
+        # Extract token usage
+        token_usage = {
+            "prompt_tokens": response.response_metadata.get("token_usage", {}).get("prompt_tokens", 0),
+            "completion_tokens": response.response_metadata.get("token_usage", {}).get("completion_tokens", 0),
+            "total_tokens": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
+        logger.info(f"edit_resume_content token usage: {token_usage}")
+
+        # Parse edited JSON
+        edited_json = json.loads(response.content)
+
+        # Create change description
+        changes_description = f"Modified {', '.join(sections_to_modify)} section(s) based on your instructions: {specific_target}"
+
+        logger.info("Resume edited successfully")
+
+        return {
+            "success": True,
+            "edited_json": edited_json,
+            "message": "Resume successfully edited",
+            "sections_modified": sections_to_modify,
+            "changes_description": changes_description,
+            "token_usage": token_usage
+        }
+
+    except Exception as e:
+        logger.error(f"Resume editing failed: {e}")
+        return {
+            "success": False,
+            "edited_json": resume_json if 'resume_json' in locals() else {},
+            "message": f"Failed to edit resume: {str(e)}",
+            "sections_modified": [],
+            "changes_description": ""
         }
 
 

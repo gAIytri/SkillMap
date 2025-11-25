@@ -25,9 +25,10 @@ import {
 import { useNavigate } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
-import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
@@ -41,6 +42,7 @@ const Dashboard = () => {
     loading: projectsLoading,
     fetchProjects,
     deleteProject: deleteProjectFromCache,
+    addProject,
   } = useProjects();
 
   const [localError, setLocalError] = useState('');
@@ -76,8 +78,30 @@ const Dashboard = () => {
       return;
     }
 
+    // Check if user has a base resume
+    try {
+      const baseResume = await resumeService.getBaseResume();
+
+      // If no base resume, redirect to upload page
+      if (!baseResume || !baseResume.id) {
+        toast.error('Please upload your base resume first');
+        setOpenCreateDialog(false);
+        navigate('/upload-resume');
+        return;
+      }
+    } catch (err) {
+      // If 404 or any error, user doesn't have base resume
+      toast.error('Please upload your base resume first');
+      setOpenCreateDialog(false);
+      navigate('/upload-resume');
+      return;
+    }
+
+    // Create project if base resume exists
     try {
       const newProject = await projectService.createProject(newProjectData);
+      // Add the new project to cache immediately
+      addProject(newProject);
       setOpenCreateDialog(false);
       setNewProjectData({ project_name: '', job_description: '' });
       toast.success('Project created successfully!');
@@ -123,11 +147,21 @@ const Dashboard = () => {
         gap={isMobile ? 2 : 0}
       >
         <Box>
-          <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight={700} color={colorPalette.primary.darkGreen}>
-            Your Projects
-          </Typography>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight={700} color={colorPalette.primary.darkGreen}>
+              Your Projects
+            </Typography>
+            <InfoOutlinedIcon
+              sx={{
+                fontSize: 20,
+                color: colorPalette.secondary.mediumGreen,
+                cursor: 'help',
+              }}
+              titleAccess="Each project tailors your resume for a specific job, including a cover letter and email"
+            />
+          </Box>
           <Typography variant="body2" color="text.secondary" mt={1}>
-            Manage your tailored resumes for different job applications
+            Each project creates a tailored resume, cover letter, and email for a specific job
           </Typography>
         </Box>
         <Button
@@ -194,11 +228,42 @@ const Dashboard = () => {
           <Typography variant="h6" color="text.secondary" mb={1}>
             {projects.length === 0 ? 'No projects yet' : 'No projects found'}
           </Typography>
-          <Typography variant="body2" color="text.secondary" mb={3}>
-            {projects.length === 0
-              ? 'Create your first project to start tailoring resumes'
-              : 'Try a different search term'}
-          </Typography>
+
+          {projects.length === 0 ? (
+            // Empty state with helpful info
+            <Box maxWidth="600px" mx="auto">
+              <Alert
+                severity="info"
+                icon={<InfoOutlinedIcon />}
+                sx={{
+                  mb: 3,
+                  textAlign: 'left',
+                  bgcolor: colorPalette.secondary.lightGreen,
+                  border: `1px solid ${colorPalette.secondary.mediumGreen}`,
+                }}
+              >
+                <Typography variant="body2" fontWeight={600} mb={1}>
+                  What is a Project?
+                </Typography>
+                <Typography variant="body2" component="div">
+                  A project helps you tailor your resume for a specific job application. Each project includes:
+                  <Box component="ul" sx={{ mt: 1, pl: 2, mb: 0 }}>
+                    <li>AI-tailored resume for the job</li>
+                    <li>Custom cover letter</li>
+                    <li>Professional email draft</li>
+                    <li>Version history of all changes</li>
+                  </Box>
+                </Typography>
+              </Alert>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                Create your first project to get started!
+              </Typography>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              Try a different search term
+            </Typography>
+          )}
           {projects.length === 0 && (
             <Alert
               severity="success"
@@ -223,11 +288,13 @@ const Dashboard = () => {
           {filteredProjects.map((project) => (
             <Grid item xs={12} sm={6} md={4} key={project.id}>
               <Card
+                onClick={() => navigate(`/project/${project.id}`)}
                 sx={{
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
                   transition: 'all 0.3s ease',
+                  cursor: 'pointer',
                   '&:hover': {
                     transform: 'translateY(-4px)',
                     boxShadow: 4,
@@ -270,18 +337,13 @@ const Dashboard = () => {
                     }}
                   />
                 </CardContent>
-                <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
-                  <Button
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={() => navigate(`/project/${project.id}`)}
-                    sx={{ color: colorPalette.primary.brightGreen }}
-                  >
-                    Edit
-                  </Button>
+                <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
                   <IconButton
                     size="small"
-                    onClick={() => openDeleteConfirm(project.id)}
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent card click when deleting
+                      openDeleteConfirm(project.id);
+                    }}
                     sx={{ color: 'error.main' }}
                   >
                     <DeleteIcon />

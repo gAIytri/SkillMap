@@ -1,83 +1,17 @@
-import { Box, Typography, IconButton, Tabs, Tab, Drawer, Chip, TextField, Button } from '@mui/material';
+import { Box, Typography, IconButton, Drawer, TextField } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import { colorPalette } from '../../styles/theme';
-import {
-  DndContext,
-  closestCenter,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-// Sortable Tab Component
-const SortableTab = ({ id, label, isActive, onClick }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    cursor: isDragging ? 'grabbing' : 'grab',
-  };
-
-  // Handle click separately to ensure it fires
-  const handleClick = (e) => {
-    if (!isDragging && onClick) {
-      onClick(e);
-    }
-  };
-
-  return (
-    <Chip
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      label={label}
-      onClick={handleClick}
-      sx={{
-        bgcolor: isActive ? colorPalette.primary.darkGreen : colorPalette.secondary.lightGreen,
-        color: isActive ? '#fff' : '#333',
-        fontWeight: isActive ? 700 : 500,
-        fontSize: '0.875rem',
-        height: '32px',
-        px: 1.5,
-        cursor: isDragging ? 'grabbing' : 'pointer',
-        transition: 'all 0.2s',
-        '&:hover': {
-          bgcolor: isActive ? colorPalette.primary.darkGreen : colorPalette.secondary.lightGreen,
-        },
-      }}
-    />
-  );
-};
 
 const ExtractedDataPanel = ({
   isMobile,
   isTablet,
-  activeTab,
-  onTabChange,
   extractedData,
-  sectionOrder,
   sectionNames,
   onSectionNameChange,
   selectedSection,
-  onSelectedSectionChange,
   viewingPreviousVersion,
-  sensors,
-  onDragEnd,
   width = 35,
   onResizeStart,
   isResizing = false,
@@ -88,10 +22,9 @@ const ExtractedDataPanel = ({
   onStartEditingSection,
   onSaveSection,
   onCancelEditingSection,
-  renderSectionTitle,
 }) => {
-  // Common tab content
-  const renderTabContent = () => (
+  // Content - Always show formatted view
+  const renderContent = () => (
     <Box
       sx={{
         flex: 1,
@@ -119,67 +52,9 @@ const ExtractedDataPanel = ({
             Upload a resume to see extracted JSON data
           </Typography>
         </Box>
-      ) : activeTab === 0 ? (
-        /* Formatted View with Section Tabs */
+      ) : (
+        /* Formatted View - Section content only (tabs moved to left sidebar) */
         <>
-          {/* Section Tabs - Draggable */}
-          <Box
-            sx={{
-              bgcolor: '#ffffff',
-              borderBottom: `1px solid #111111`,
-              p: 2,
-              pb: 1,
-            }}
-          >
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={onDragEnd}
-            >
-              <SortableContext
-                items={sectionOrder}
-                strategy={horizontalListSortingStrategy}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 1,
-                  }}
-                >
-                  {sectionOrder
-                    .filter((sectionKey) => {
-                      // Only show sections that have data
-                      const data = extractedData[sectionKey];
-
-                      // For personal_info (object), check if it exists and has name
-                      if (sectionKey === 'personal_info') {
-                        return data && data.name;
-                      }
-
-                      // For professional_summary (string), check if not empty
-                      if (sectionKey === 'professional_summary') {
-                        return data && data.trim().length > 0;
-                      }
-
-                      // For arrays (experience, projects, education, skills, certifications)
-                      // Check if array exists and has at least one item
-                      return Array.isArray(data) && data.length > 0;
-                    })
-                    .map((sectionKey) => (
-                      <SortableTab
-                        key={sectionKey}
-                        id={sectionKey}
-                        label={sectionNames[sectionKey]}
-                        isActive={selectedSection === sectionKey}
-                        onClick={() => onSelectedSectionChange(sectionKey)}
-                      />
-                    ))}
-                </Box>
-              </SortableContext>
-            </DndContext>
-          </Box>
-
           {/* Section Header with Edit Controls */}
           <Box
             sx={{
@@ -242,7 +117,7 @@ const ExtractedDataPanel = ({
                       '&:hover': { opacity: 1, bgcolor: 'rgba(76, 175, 80, 0.1)' }
                     }}
                   >
-                    <EditIcon sx={{ fontSize: 18, color: colorPalette.primary.brightGreen }} />
+                    <EditIcon sx={{ fontSize: 15, color: colorPalette.primary.brightGreen }} />
                   </IconButton>
                 )}
               </>
@@ -254,32 +129,20 @@ const ExtractedDataPanel = ({
             sx={{
               flex: 1,
               overflow: 'auto',
-              p: isMobile ? 1.5 : 2,
-              paddingTop:2,
-              bgcolor: colorPalette.secondary.gray
+              p: 1,
+              paddingTop:1,
+              bgcolor: colorPalette.secondary.gray,
+              // Hide scrollbar while keeping scroll functionality
+              '&::-webkit-scrollbar': {
+                display: 'none',
+              },
+              '-ms-overflow-style': 'none',  // IE and Edge
+              'scrollbarWidth': 'none',  // Firefox
             }}
           >
             {renderSection(selectedSection)}
           </Box>
         </>
-      ) : (
-        /* Raw JSON View */
-        <Box
-          sx={{
-            height: '100%',
-            bgcolor: '#1e1e1e',
-            color: '#d4d4d4',
-            p: 2,
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflow: 'auto',
-          }}
-        >
-          {JSON.stringify(extractedData, null, 2)}
-        </Box>
       )}
     </Box>
   );
@@ -334,27 +197,9 @@ const ExtractedDataPanel = ({
             }}
           />
         </Box>
-        {/* Tabs for Formatted / Raw JSON */}
-        <Tabs
-          value={activeTab}
-          onChange={(_, newValue) => onTabChange(newValue)}
-          sx={{
-            borderBottom: `1px solid ${colorPalette.secondary.mediumGreen}`,
-            minHeight: '40px',
-            '& .MuiTab-root': {
-              minHeight: '40px',
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-            },
-          }}
-        >
-          <Tab label="Formatted View" />
-          <Tab label="Raw JSON" />
-        </Tabs>
 
-        {/* Tab Content */}
-        {renderTabContent()}
+        {/* Content - No tabs, always formatted view */}
+        {renderContent()}
       </Box>
     );
   }
@@ -395,7 +240,7 @@ const ExtractedDataPanel = ({
           }}
         >
           <Typography variant="subtitle2" fontWeight={700} color="colorPalette.primary.darkGreen">
-            Extracted Data (LLM)
+            Extracted Data
           </Typography>
           <IconButton
             size="small"
@@ -406,27 +251,8 @@ const ExtractedDataPanel = ({
           </IconButton>
         </Box>
 
-        {/* Tabs for Formatted / Raw JSON */}
-        <Tabs
-          value={activeTab}
-          onChange={(_, newValue) => onTabChange(newValue)}
-          sx={{
-            borderBottom: `1px solid ${colorPalette.secondary.mediumGreen}`,
-            minHeight: '40px',
-            '& .MuiTab-root': {
-              minHeight: '40px',
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-            },
-          }}
-        >
-          <Tab label="Formatted" />
-          <Tab label="JSON" />
-        </Tabs>
-
-        {/* Tab Content */}
-        {renderTabContent()}
+        {/* Content - No tabs, always formatted view */}
+        {renderContent()}
       </Box>
     </Drawer>
   );

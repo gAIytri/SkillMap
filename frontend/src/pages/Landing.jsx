@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, Container, Typography, Button, Grid, Card, CardContent, useTheme, useMediaQuery, Chip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +8,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DownloadIcon from '@mui/icons-material/Download';
 import FolderIcon from '@mui/icons-material/Folder';
 import StarIcon from '@mui/icons-material/Star';
+import LoginForm from '../components/auth/LoginForm';
+import SignupForm from '../components/auth/SignupForm';
 
 const Landing = () => {
   const navigate = useNavigate();
@@ -14,6 +17,7 @@ const Landing = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const [authMode, setAuthMode] = useState(null); // null, 'login', or 'signup'
 
   const features = [
     {
@@ -40,86 +44,84 @@ const Landing = () => {
 
   return (
     <Box>
-      {/* Hero Section */}
+      {/* Hero Section or Auth Forms */}
       <Box
         sx={{
           background: `linear-gradient(135deg, ${colorPalette.secondary.lightGreen} 0%, ${colorPalette.background.default} 100%)`,
           py: isMobile ? 6 : isTablet ? 8 : 12,
+          minHeight: authMode ? 'auto' : '70vh',
+          display: 'flex',
+          alignItems: authMode ? 'flex-start' : 'center',
+          justifyContent: 'center',
+          position: 'relative',
         }}
       >
-        <Container maxWidth="lg">
-          <Box textAlign="center" mb={isMobile ? 4 : 6} px={isMobile ? 2 : 0}>
-            <Typography
-              variant={isMobile ? 'h4' : isTablet ? 'h3' : 'h2'}
-              component="h1"
-              fontWeight={700}
-              color={colorPalette.primary.darkGreen}
-              gutterBottom
+        <Container maxWidth="lg" sx={{ position: 'relative', width: '100%', minHeight: authMode ? '500px' : '0' }}>
+          {/* Hero Section - Show when authMode is null */}
+          <Box
+            sx={{
+              display: authMode === null ? 'block' : 'none',
+              opacity: authMode === null ? 1 : 0,
+              transition: 'opacity 0.5s ease-in-out',
+            }}
+          >
+            <Box
+              textAlign="center"
+              mb={isMobile ? 4 : 6}
+              px={isMobile ? 2 : 0}
             >
-              Tailor Your Resume
-              <br />
-              For Every Job
-            </Typography>
-            <Typography
-              variant={isMobile ? 'body1' : 'h6'}
-              color="text.secondary"
-              maxWidth="700px"
-              mx="auto"
-              mb={2}
-            >
-              Upload any resume format (DOCX, PDF, Images), let AI tailor it for each job,
-              and download as PDF or DOCX. Land more interviews with personalized resumes,
-              cover letters, and emails.
-            </Typography>
+              <Typography
+                variant={isMobile ? 'h4' : isTablet ? 'h3' : 'h2'}
+                component="h1"
+                fontWeight={700}
+                color={colorPalette.primary.darkGreen}
+                gutterBottom
+              >
+                Tailor Your Resume
+                <br />
+                For Every Job
+              </Typography>
+              <Typography
+                variant={isMobile ? 'body1' : 'h6'}
+                color="text.secondary"
+                maxWidth="700px"
+                mx="auto"
+                mb={2}
+              >
+                Upload any resume format (DOCX, PDF, Images), let AI tailor it for each job,
+                and download as PDF or DOCX. Land more interviews with personalized resumes,
+                cover letters, and emails.
+              </Typography>
 
-            {/* Sign up incentive - Only show if NOT logged in */}
-            {!isAuthenticated && (
-              <Box display="flex" justifyContent="center" mb={3}>
-                <Chip
-                  icon={<StarIcon sx={{ color: '#FFD700 !important' }} />}
-                  label="Sign up and get 100 FREE credits to start!"
-                  sx={{
-                    bgcolor: colorPalette.primary.darkGreen,
-                    color: '#FFFFFF',
-                    fontWeight: 700,
-                    fontSize: isMobile ? '0.875rem' : '1rem',
-                    py: isMobile ? 2 : 2.5,
-                    px: isMobile ? 1 : 2,
-                    '& .MuiChip-icon': {
-                      color: '#FFD700',
-                    },
-                    boxShadow: '0 4px 12px rgba(7, 45, 31, 0.3)',
-                  }}
-                />
-              </Box>
-            )}
+              {/* Sign up incentive - Only show if NOT logged in */}
+              {!isAuthenticated && (
+                <Box display="flex" justifyContent="center" mb={3}>
+                  <Chip
+                    icon={<StarIcon sx={{ color: '#FFD700 !important' }} />}
+                    label="Sign up and get 100 FREE credits to start!"
+                    sx={{
+                      bgcolor: colorPalette.primary.darkGreen,
+                      color: '#FFFFFF',
+                      fontWeight: 700,
+                      fontSize: isMobile ? '0.875rem' : '1rem',
+                      py: isMobile ? 2 : 2.5,
+                      px: isMobile ? 1 : 2,
+                      '& .MuiChip-icon': {
+                        color: '#FFD700',
+                      },
+                      boxShadow: '0 4px 12px rgba(7, 45, 31, 0.3)',
+                    }}
+                  />
+                </Box>
+              )}
 
-            <Box display="flex" gap={isMobile ? 1 : 2} justifyContent="center" flexDirection={isMobile ? 'column' : 'row'} px={isMobile ? 2 : 0}>
-              {isAuthenticated ? (
-                /* Show Dashboard button if logged in */
-                <Button
-                  variant="contained"
-                  size={isMobile ? 'medium' : 'large'}
-                  onClick={() => navigate('/dashboard')}
-                  sx={{
-                    py: isMobile ? 1.5 : 2,
-                    px: isMobile ? 3 : 4,
-                    bgcolor: colorPalette.primary.brightGreen,
-                    fontSize: isMobile ? '1rem' : '1.1rem',
-                    '&:hover': {
-                      bgcolor: colorPalette.secondary.mediumGreen,
-                    },
-                  }}
-                >
-                  Go to Dashboard
-                </Button>
-              ) : (
-                /* Show Sign Up and Login buttons if NOT logged in */
-                <>
+              <Box display="flex" gap={isMobile ? 1 : 2} justifyContent="center" flexDirection={isMobile ? 'column' : 'row'} px={isMobile ? 2 : 0}>
+                {isAuthenticated ? (
+                  /* Show Dashboard button if logged in */
                   <Button
                     variant="contained"
                     size={isMobile ? 'medium' : 'large'}
-                    onClick={() => navigate('/register')}
+                    onClick={() => navigate('/dashboard')}
                     sx={{
                       py: isMobile ? 1.5 : 2,
                       px: isMobile ? 3 : 4,
@@ -130,25 +132,73 @@ const Landing = () => {
                       },
                     }}
                   >
-                    Get Started Free
+                    Go to Dashboard
                   </Button>
-                  <Button
-                    variant="outlined"
-                    size={isMobile ? 'medium' : 'large'}
-                    onClick={() => navigate('/login')}
-                    sx={{
-                      py: isMobile ? 1.5 : 2,
-                      px: isMobile ? 3 : 4,
-                      borderColor: colorPalette.primary.darkGreen,
-                      color: colorPalette.primary.darkGreen,
-                      fontSize: isMobile ? '1rem' : '1.1rem',
-                    }}
-                  >
-                    Login
-                  </Button>
-                </>
-              )}
+                ) : (
+                  /* Show Sign Up and Login buttons if NOT logged in */
+                  <>
+                    <Button
+                      variant="contained"
+                      size={isMobile ? 'medium' : 'large'}
+                      onClick={() => setAuthMode('signup')}
+                      sx={{
+                        py: isMobile ? 1.5 : 2,
+                        px: isMobile ? 3 : 4,
+                        bgcolor: colorPalette.primary.brightGreen,
+                        fontSize: isMobile ? '1rem' : '1.1rem',
+                        '&:hover': {
+                          bgcolor: colorPalette.secondary.mediumGreen,
+                        },
+                      }}
+                    >
+                      Get Started Free
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size={isMobile ? 'medium' : 'large'}
+                      onClick={() => setAuthMode('login')}
+                      sx={{
+                        py: isMobile ? 1.5 : 2,
+                        px: isMobile ? 3 : 4,
+                        borderColor: colorPalette.primary.darkGreen,
+                        color: colorPalette.primary.darkGreen,
+                        fontSize: isMobile ? '1rem' : '1.1rem',
+                      }}
+                    >
+                      Login
+                    </Button>
+                  </>
+                )}
+              </Box>
             </Box>
+          </Box>
+
+          {/* Login Form - Show when authMode is 'login' */}
+          <Box
+            sx={{
+              display: authMode === 'login' ? 'block' : 'none',
+              opacity: authMode === 'login' ? 1 : 0,
+              transition: 'opacity 0.5s ease-in-out',
+            }}
+          >
+            <LoginForm
+              onBack={() => setAuthMode(null)}
+              onSwitchToSignup={() => setAuthMode('signup')}
+            />
+          </Box>
+
+          {/* Signup Form - Show when authMode is 'signup' */}
+          <Box
+            sx={{
+              display: authMode === 'signup' ? 'block' : 'none',
+              opacity: authMode === 'signup' ? 1 : 0,
+              transition: 'opacity 0.5s ease-in-out',
+            }}
+          >
+            <SignupForm
+              onBack={() => setAuthMode(null)}
+              onSwitchToLogin={() => setAuthMode('login')}
+            />
           </Box>
         </Container>
       </Box>
@@ -242,7 +292,7 @@ const Landing = () => {
               <Button
                 variant="contained"
                 size={isMobile ? 'medium' : 'large'}
-                onClick={() => navigate('/register')}
+                onClick={() => setAuthMode('signup')}
                 sx={{
                   py: isMobile ? 1.5 : 2,
                   px: isMobile ? 3 : 4,
@@ -288,20 +338,30 @@ const Landing = () => {
                 Quick Links
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Typography
-                  variant="body2"
-                  sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
-                  onClick={() => navigate('/login')}
-                >
-                  Login
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
-                  onClick={() => navigate('/register')}
-                >
-                  Sign Up
-                </Typography>
+                {!isAuthenticated && (
+                  <>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
+                      onClick={() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setTimeout(() => setAuthMode('login'), 300);
+                      }}
+                    >
+                      Login
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
+                      onClick={() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setTimeout(() => setAuthMode('signup'), 300);
+                      }}
+                    >
+                      Sign Up
+                    </Typography>
+                  </>
+                )}
                 <Typography
                   variant="body2"
                   sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}

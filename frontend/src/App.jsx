@@ -21,8 +21,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
 import Landing from './pages/Landing';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import Dashboard from './pages/Dashboard';
 import UploadResume from './pages/UploadResume';
 import ProjectEditor from './pages/ProjectEditor';
@@ -138,16 +137,17 @@ function App() {
                         sx={{
                           display: 'flex',
                           flexDirection: 'column',
-                          minHeight: '100vh',
+                          height: '100vh',
+                          overflow: 'hidden',
                         }}
                       >
                         <Navbar />
-                        <Box component="main" sx={{ flexGrow: 1 }}>
+                        <Box component="main" sx={{ flexGrow: 1, overflow: 'auto' }}>
                           <Routes>
                             {/* Public Routes */}
                             <Route path="/" element={<Landing />} />
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/register" element={<Register />} />
+                            <Route path="/verify-email" element={<VerifyEmail />} />
+                            <Route path="/verify-email/:token" element={<VerifyEmail />} />
 
                             {/* Protected Routes */}
                             <Route

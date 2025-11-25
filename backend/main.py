@@ -66,6 +66,8 @@ async def health_check():
     return {"status": "healthy"}
 
 
+
+
 # Request model for LaTeX to HTML conversion
 class LaTeXToHTMLRequest(BaseModel):
     latex_content: str

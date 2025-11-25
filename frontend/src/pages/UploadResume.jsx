@@ -15,12 +15,14 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { colorPalette } from '../styles/theme';
 import resumeService from '../services/resumeService';
 import templatePreview from '../assets/resume-template-preview.png';
+import { useProjects } from '../context/ProjectContext';
 
 const UploadResume = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { refreshProjects } = useProjects(); // Get refreshProjects from context
   const abortControllerRef = useRef(null); // For cancelling requests
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -35,11 +37,11 @@ const UploadResume = () => {
     };
   }, []);
 
-  // Supported file formats
+  // Supported file formats - Only PDF, DOCX, and TXT
   const SUPPORTED_FORMATS = {
     docx: ['.docx', '.doc'],
     pdf: ['.pdf'],
-    image: ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'],
+    txt: ['.txt'],
   };
 
   const getAllowedExtensions = () => {
@@ -98,6 +100,8 @@ const UploadResume = () => {
       );
 
       if (result && result.success) {
+        // Refresh projects cache before navigating to dashboard
+        await refreshProjects();
         // Navigate to dashboard on success
         navigate('/dashboard');
       } else {
@@ -181,7 +185,7 @@ const UploadResume = () => {
                 maxWidth="700px"
                 mx="auto"
               >
-                Upload your resume in DOCX, PDF, or image format. Our AI will extract the content
+                Upload your resume in PDF, DOCX, or TXT format. Our AI will extract the content
                 and structure it for tailoring to different job applications.
               </Typography>
 

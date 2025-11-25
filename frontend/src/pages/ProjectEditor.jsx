@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import api from '../services/api';
 import {
   Box,
   Button,
@@ -64,7 +65,6 @@ const ProjectEditor = () => {
   const [pendingChanges, setPendingChanges] = useState(false); // Track if there are unsaved changes
   const [compiling, setCompiling] = useState(false); // Track if PDF is being compiled
   const [extractedData, setExtractedData] = useState(null); // LLM extracted JSON
-  const [activeTab, setActiveTab] = useState(0); // 0 = formatted, 1 = raw JSON
   const [documentTab, setDocumentTab] = useState(0); // 0 = Resume, 1 = Cover Letter, 2 = Email
   const [coverLetter, setCoverLetter] = useState(null);
   const [email, setEmail] = useState(null); // { subject, body }
@@ -114,6 +114,7 @@ const ProjectEditor = () => {
   const iframeRef = useRef(null);
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null); // For cancelling requests
+  const pdfLoadingRef = useRef(false); // Track if PDF is currently being loaded
 
   // Responsive design
   const theme = useTheme();
@@ -134,63 +135,30 @@ const ProjectEditor = () => {
     })
   );
 
-  // Custom hooks for complex operations
-  const { handleTailorResume, abortControllerRef: tailorAbortRef } = useTailorResume({
-    projectId,
-    project,
-    jobDescription,
-    extractedData,
-    user,
-    refreshUser,
-    setTailoring,
-    setError,
-    setAgentMessages,
-    setExtractedData,
-    loadPdfPreview: () => loadPdfPreview(),
-    setCoverLetter,
-    setEmail,
-    setRechargeDialogBlocking,
-    setShowRechargeDialog,
-    setJobDescription,
-  });
-
-  const { handleResumeUpload, abortControllerRef: uploadAbortRef } = useResumeUpload({
-    projectId,
-    jobDescription,
-    setUploading,
-    setError,
-    setExtractedData,
-    loadPdfPreview: () => loadPdfPreview(),
-    fileInputRef,
-  });
-
-  useEffect(() => {
-    loadProject();
-
-    // Cleanup function to abort pending requests on unmount
-    return () => {
-      if (abortControllerRef.current) {
-        console.log('Aborting pending requests on unmount');
-        abortControllerRef.current.abort();
-      }
-      if (tailorAbortRef.current) {
-        console.log('Aborting tailoring request on unmount');
-        tailorAbortRef.current.abort();
-      }
-      if (uploadAbortRef.current) {
-        console.log('Aborting upload request on unmount');
-        uploadAbortRef.current.abort();
-      }
-    };
-  }, [projectId]);
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  // Load PDF preview function (defined early for use in loadProject)
+  const loadPdfPreview = async () => {
+    // Prevent concurrent PDF loads
+    if (pdfLoadingRef.current) {
+      console.log('PDF already loading, skipping duplicate request');
+      return;
     }
-  }, [agentMessages]);
 
+    try {
+      pdfLoadingRef.current = true;
+      setPdfLoading(true);
+      const blob = await projectService.downloadProjectPDF(projectId);
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setPdfLoading(false);
+    } catch (err) {
+      console.error('Failed to load PDF preview:', err);
+      setPdfLoading(false);
+    } finally {
+      pdfLoadingRef.current = false;
+    }
+  };
+
+  // Load project data function (defined early for use in hooks)
   const loadProject = async () => {
     try {
       const projectData = await projectService.getProject(projectId);
@@ -230,18 +198,64 @@ const ProjectEditor = () => {
     }
   };
 
-  const loadPdfPreview = async () => {
-    try {
-      setPdfLoading(true);
-      const blob = await projectService.downloadProjectPDF(projectId);
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
-      setPdfLoading(false);
-    } catch (err) {
-      console.error('Failed to load PDF preview:', err);
-      setPdfLoading(false);
+  // Custom hooks for complex operations
+  const { handleTailorResume, abortControllerRef: tailorAbortRef } = useTailorResume({
+    projectId,
+    project,
+    jobDescription,
+    extractedData,
+    user,
+    refreshUser,
+    setTailoring,
+    setError,
+    setAgentMessages,
+    setExtractedData,
+    loadPdfPreview: () => loadPdfPreview(),
+    setCoverLetter,
+    setEmail,
+    setRechargeDialogBlocking,
+    setShowRechargeDialog,
+    setJobDescription,
+    setDocumentTab,
+    loadProject, // Add this to refresh project data after tailoring
+  });
+
+  const { handleResumeUpload, abortControllerRef: uploadAbortRef } = useResumeUpload({
+    projectId,
+    jobDescription,
+    setUploading,
+    setError,
+    setExtractedData,
+    loadPdfPreview: () => loadPdfPreview(),
+    fileInputRef,
+  });
+
+  useEffect(() => {
+    loadProject();
+
+    // Cleanup function to abort pending requests on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        console.log('Aborting pending requests on unmount');
+        abortControllerRef.current.abort();
+      }
+      if (tailorAbortRef.current) {
+        console.log('Aborting tailoring request on unmount');
+        tailorAbortRef.current.abort();
+      }
+      if (uploadAbortRef.current) {
+        console.log('Aborting upload request on unmount');
+        uploadAbortRef.current.abort();
+      }
+    };
+  }, [projectId]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }, [agentMessages]);
 
   // Cleanup URLs on unmount
   useEffect(() => {
@@ -362,7 +376,37 @@ const ProjectEditor = () => {
     if (!editingSection) return;
 
     const updatedData = { ...extractedData };
-    updatedData[editingSection] = tempSectionData;
+    let dataToSave = tempSectionData;
+
+    // Convert bullets array back to description string ONLY for projects
+    // Experience section keeps bullets as native array
+    if (editingSection === 'projects' && Array.isArray(dataToSave)) {
+      dataToSave = dataToSave.map(item => {
+        if (item.bullets && Array.isArray(item.bullets)) {
+          return {
+            ...item,
+            description: item.bullets.filter(b => b.trim()).join('\n'),
+            bullets: undefined // Remove bullets field
+          };
+        }
+        return item;
+      });
+    }
+
+    // For experience, just filter out empty bullets
+    if (editingSection === 'experience' && Array.isArray(dataToSave)) {
+      dataToSave = dataToSave.map(item => {
+        if (item.bullets && Array.isArray(item.bullets)) {
+          return {
+            ...item,
+            bullets: item.bullets.filter(b => b.trim()) // Keep only non-empty bullets
+          };
+        }
+        return item;
+      });
+    }
+
+    updatedData[editingSection] = dataToSave;
     // Section names are already updated in state via the TextField onChange
 
     setExtractedData(updatedData);
@@ -491,44 +535,44 @@ const ProjectEditor = () => {
     }
   };
 
-  // Compile/Regenerate PDF with current changes
   const handleCompile = async () => {
     try {
       setCompiling(true);
-      setPdfLoading(true);
 
       // Save custom section names and section order to backend
       if (extractedData) {
         const updatedResumeJson = {
           ...extractedData,
           section_names: sectionNames,
-          section_order: sectionOrder // Include section order
+          section_order: sectionOrder
         };
 
         await projectService.updateProject(projectId, {
           resume_json: updatedResumeJson,
-          section_order: sectionOrder // Also save at project level
+          section_order: sectionOrder
         });
 
         setExtractedData(updatedResumeJson);
       }
 
-      // Revoke old PDF URL
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl);
+      // Compile PDF (with smart caching)
+      const response = await api.post(`/api/projects/${projectId}/compile`, {});
+
+      if (response.data.cached) {
+        toast.success('PDF loaded from cache!');
+      } else {
+        toast.success('PDF compiled successfully!');
       }
 
       // Reload PDF preview
       await loadPdfPreview();
-
-      // Clear pending changes flag
       setPendingChanges(false);
+
     } catch (err) {
       console.error('Failed to compile PDF:', err);
       toast.error('Failed to compile PDF. Please try again.');
     } finally {
       setCompiling(false);
-      setPdfLoading(false);
     }
   };
 
@@ -859,6 +903,13 @@ const ProjectEditor = () => {
         onNavigateToDashboard={() => navigate('/dashboard')}
         mobileDrawerOpen={mobileLeftDrawerOpen}
         onMobileDrawerClose={() => setMobileLeftDrawerOpen(false)}
+        // Section navigation props
+        sectionOrder={sectionOrder}
+        sectionNames={sectionNames}
+        selectedSection={selectedSection}
+        onSelectedSectionChange={setSelectedSection}
+        sensors={sensors}
+        onDragEnd={handleDragEnd}
       />
 
       {/* Main Content Area - 90% width on desktop, full width on mobile */}
@@ -890,10 +941,7 @@ const ProjectEditor = () => {
         <ExtractedDataPanel
           isMobile={isMobile}
           isTablet={isTablet}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
           extractedData={extractedData}
-          sectionOrder={sectionOrder}
           sectionNames={sectionNames}
           onSectionNameChange={(sectionKey, newName) => {
             setSectionNames(prev => ({
@@ -902,10 +950,7 @@ const ProjectEditor = () => {
             }));
           }}
           selectedSection={selectedSection}
-          onSelectedSectionChange={setSelectedSection}
           viewingPreviousVersion={viewingPreviousVersion}
-          sensors={sensors}
-          onDragEnd={handleDragEnd}
           renderSection={renderSection}
           mobileDrawerOpen={mobileDrawerOpen}
           onMobileDrawerClose={() => setMobileDrawerOpen(false)}
@@ -913,7 +958,6 @@ const ProjectEditor = () => {
           onStartEditingSection={handleStartEditingSection}
           onSaveSection={handleSaveSection}
           onCancelEditingSection={handleCancelEditingSection}
-          renderSectionTitle={renderSectionTitle}
           width={rightSidebarWidth}
           onResizeStart={handleResizeStart}
           isResizing={isResizing}
@@ -936,6 +980,7 @@ const ProjectEditor = () => {
         tailoring={tailoring}
         extractedData={extractedData}
         onTailorResume={handleTailorResume}
+        messageHistory={project?.message_history || []}
       />
 
       {/* Recharge Credits Dialog */}

@@ -25,6 +25,16 @@ const ExperienceSection = ({
   const hasHistory = history && history.length > 0;
   const isViewingCurrent = selectedVersionIndex === history?.length;
 
+  // Update selected version when history changes (e.g., after tailoring)
+  useEffect(() => {
+    if (history && history.length > 0) {
+      // If currently viewing current version, update to new current version index
+      if (isViewingCurrent) {
+        setSelectedVersionIndex(history.length);
+      }
+    }
+  }, [history?.length]);
+
   // Notify parent when viewing state changes
   useEffect(() => {
     if (onViewingPreviousVersion) {
@@ -62,8 +72,40 @@ const ExperienceSection = ({
               // EDITING MODE
               <>
                 {tempData.map((exp, idx) => (
-                  <Box key={idx} sx={{ mb: 4, display: 'flex', gap: 2 }}>
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                  <Box
+                    key={idx}
+                    sx={{
+                      mb: 3,
+                      p: 2.5,
+                      borderRadius: '8px',
+                      bgcolor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Delete button - positioned at top right */}
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        const newData = [...tempData];
+                        newData.splice(idx, 1);
+                        updateTempField(null, null, newData);
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        color: '#e74c3c',
+                        bgcolor: 'rgba(0, 0, 0, 0.2)',
+                        '&:hover': {
+                          bgcolor: 'rgba(231, 76, 60, 0.2)'
+                        }
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pr: 5 }}>
                       <TextField
                         label="Job Title"
                         value={exp.title || ''}
@@ -84,16 +126,16 @@ const ExperienceSection = ({
                         InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
                         sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
-                      <Box sx={{ display: 'flex', gap: 2, flexDirection: isMobile ? 'column' : 'row' }}>
+                      <Box sx={{ display: 'flex', gap: 1.5, flexDirection: isMobile ? 'column' : 'row' }}>
                         <TextField
                           label="Start Date"
                           value={exp.start_date || ''}
                           onChange={(e) => updateTempField(idx, 'start_date', e.target.value)}
                           fullWidth
                           variant="standard"
-                          InputLabelProps={{ style: { color: 'colorPalette.secondary.mediumGreen' } }}
+                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'colorPalette.secondary.mediumGreen' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                         <TextField
                           label="End Date"
@@ -101,9 +143,9 @@ const ExperienceSection = ({
                           onChange={(e) => updateTempField(idx, 'end_date', e.target.value)}
                           fullWidth
                           variant="standard"
-                          InputLabelProps={{ style: { color: 'colorPalette.secondary.mediumGreen' } }}
+                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'colorPalette.secondary.mediumGreen' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                       </Box>
                       <TextField
@@ -116,30 +158,58 @@ const ExperienceSection = ({
                         InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
                         sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
-                      <TextField
-                        label="Bullets (one per line)"
-                        value={exp.bullets ? exp.bullets.join('\n') : ''}
-                        onChange={(e) => updateTempField(idx, 'bullets', e.target.value.split('\n').filter(b => b.trim()))}
-                        fullWidth
-                        multiline
-                        rows={8}
-                        variant="standard"
-                        InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-                        InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', lineHeight: 1.6 } }}
-                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
-                      />
+                      {/* Bullet Points - Individual Inputs */}
+                      <Box width={'120%'}>
+                        <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
+                          Responsibilities / Achievements (Bullet Points)
+                        </Typography>
+                        {(exp.bullets && exp.bullets.length > 0 ? exp.bullets : ['']).map((bullet, bulletIdx) => (
+                          <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'flex-start' }}>
+                            <TextField
+                              value={bullet}
+                              onChange={(e) => {
+                                const newBullets = [...(exp.bullets || [''])];
+                                newBullets[bulletIdx] = e.target.value;
+                                updateTempField(idx, 'bullets', newBullets);
+                              }}
+                              multiline
+                              rows={3}
+                              placeholder={`Bullet point ${bulletIdx + 1}`}
+                              variant="standard"
+                              InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' } }}
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
+                                '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
+                              }}
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const newBullets = [...(exp.bullets || [''])];
+                                newBullets.splice(bulletIdx, 1);
+                                updateTempField(idx, 'bullets', newBullets.length > 0 ? newBullets : ['']);
+                              }}
+                              sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ))}
+                        <Button
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            const newBullets = [...(exp.bullets || ['']), ''];
+                            updateTempField(idx, 'bullets', newBullets);
+                          }}
+                          size="small"
+                          sx={{ color: colorPalette.secondary.mediumGreen, textTransform: 'none', fontSize: '12px' }}
+                        >
+                          Add Bullet Point
+                        </Button>
+                      </Box>
                     </Box>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        const newData = [...tempData];
-                        newData.splice(idx, 1);
-                        updateTempField(null, null, newData);
-                      }}
-                      sx={{ color: '#e74c3c', alignSelf: 'flex-start' }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
                   </Box>
                 ))}
                 <Button
@@ -179,95 +249,117 @@ const ExperienceSection = ({
     );
   }
 
-  // With history - show vertical tabs + content
+  // With history - show horizontal tabs at top + content below
   const displayData = getDisplayContent();
 
   return (
     <Box>
-      {/* Info Labels */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 0.5 }}>
-        <Box sx={{ minWidth: '40px', maxWidth: '40px', textAlign: 'center' }}>
-          <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-            V*
-          </Typography>
-        </Box>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-            Click version number to view. Use "Make This Current" to restore.
-          </Typography>
-        </Box>
+      {/* Info Label */}
+      <Box >
+        <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
+          Click version number to view. Use "Make This Current" to restore.
+        </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-        {/* Vertical Version Tabs - Very Thin */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.5,
-            minWidth: '40px',
-            maxWidth: '40px',
-            bgcolor: colorPalette.primary.darkGreen,
-            p: 0.5,
-            borderRadius: '4px',
-          }}
-        >
-          {/* Previous versions (oldest to newest) */}
-          {history.map((version, idx) => (
-            <Chip
-              key={idx}
-              label={idx}
-              onClick={() => {
-                setSelectedVersionIndex(idx);
-                if (onViewingPreviousVersion) onViewingPreviousVersion(true);
-              }}
-              sx={{
-                bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.primary.black,
-                color: '#fff',
-                fontWeight: selectedVersionIndex === idx ? 700 : 500,
-                fontSize: '0.75rem',
-                height: '32px',
-                minWidth: '32px',
-                cursor: 'pointer',
-                '&:hover': {
-                  bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : 'colorPalette.secondary.mediumGreen',
-                },
-              }}
-            />
-          ))}
-
-          {/* Current version */}
+      {/* Horizontal Version Tabs */}
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 0.5,
+          mb: 1,
+          p: 0.5,
+          bgcolor: colorPalette.primary.darkGreen,
+          borderRadius: '4px',
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Previous versions (oldest to newest) */}
+        {history.map((_, idx) => (
           <Chip
-            label={history.length}
+            key={idx}
+            label={idx}
             onClick={() => {
-              setSelectedVersionIndex(history.length);
-              if (onViewingPreviousVersion) onViewingPreviousVersion(false);
+              setSelectedVersionIndex(idx);
+              if (onViewingPreviousVersion) onViewingPreviousVersion(true);
             }}
             sx={{
-              bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.primary.black,
+              bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.primary.black,
               color: '#fff',
-              fontWeight: isViewingCurrent ? 700 : 500,
+              fontWeight: selectedVersionIndex === idx ? 700 : 500,
               fontSize: '0.75rem',
-              height: '32px',
+              height: '28px',
               minWidth: '32px',
               cursor: 'pointer',
-              border: isViewingCurrent ? '2px solid ' + colorPalette.primary.darkGreen : 'none',
               '&:hover': {
-                bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : 'colorPalette.secondary.mediumGreen',
+                bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.secondary.mediumGreen,
               },
             }}
           />
-        </Box>
+        ))}
 
-        {/* Content Area */}
-        <Box sx={{ flex: 1 }}>
-          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
+        {/* Current version */}
+        <Chip
+          label={history.length}
+          onClick={() => {
+            setSelectedVersionIndex(history.length);
+            if (onViewingPreviousVersion) onViewingPreviousVersion(false);
+          }}
+          sx={{
+            bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.primary.black,
+            color: '#fff',
+            fontWeight: isViewingCurrent ? 700 : 500,
+            fontSize: '0.75rem',
+            height: '28px',
+            minWidth: '32px',
+            cursor: 'pointer',
+            border: isViewingCurrent ? '2px solid ' + colorPalette.primary.darkGreen : 'none',
+            '&:hover': {
+              bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.secondary.mediumGreen,
+            },
+          }}
+        />
+      </Box>
+
+      {/* Content Area - Full Width */}
+      <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
             {isEditing && isViewingCurrent ? (
               // EDITING MODE
               <>
                 {tempData.map((exp, idx) => (
-                  <Box key={idx} sx={{ mb: 4, display: 'flex', gap: 2 }}>
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                  <Box
+                    key={idx}
+                    sx={{
+                      mb: 3,
+                      p: 2.5,
+                      borderRadius: '8px',
+                      bgcolor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Delete button - positioned at top right */}
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        const newData = [...tempData];
+                        newData.splice(idx, 1);
+                        updateTempField(null, null, newData);
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        color: '#e74c3c',
+                        bgcolor: 'rgba(0, 0, 0, 0.2)',
+                        '&:hover': {
+                          bgcolor: 'rgba(231, 76, 60, 0.2)'
+                        }
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pr: 5 }}>
                       <TextField
                         label="Job Title"
                         value={exp.title || ''}
@@ -288,16 +380,16 @@ const ExperienceSection = ({
                         InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
                         sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
-                      <Box sx={{ display: 'flex', gap: 2, flexDirection: isMobile ? 'column' : 'row' }}>
+                      <Box sx={{ display: 'flex', gap: 1.5, flexDirection: isMobile ? 'column' : 'row' }}>
                         <TextField
                           label="Start Date"
                           value={exp.start_date || ''}
                           onChange={(e) => updateTempField(idx, 'start_date', e.target.value)}
                           fullWidth
                           variant="standard"
-                          InputLabelProps={{ style: { color: 'colorPalette.secondary.mediumGreen' } }}
+                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'colorPalette.secondary.mediumGreen' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                         <TextField
                           label="End Date"
@@ -305,9 +397,9 @@ const ExperienceSection = ({
                           onChange={(e) => updateTempField(idx, 'end_date', e.target.value)}
                           fullWidth
                           variant="standard"
-                          InputLabelProps={{ style: { color: 'colorPalette.secondary.mediumGreen' } }}
+                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'colorPalette.secondary.mediumGreen' }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                       </Box>
                       <TextField
@@ -320,30 +412,58 @@ const ExperienceSection = ({
                         InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
                         sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
-                      <TextField
-                        label="Bullets (one per line)"
-                        value={exp.bullets ? exp.bullets.join('\n') : ''}
-                        onChange={(e) => updateTempField(idx, 'bullets', e.target.value.split('\n').filter(b => b.trim()))}
-                        fullWidth
-                        multiline
-                        rows={8}
-                        variant="standard"
-                        InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-                        InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', lineHeight: 1.6 } }}
-                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
-                      />
+                      {/* Bullet Points - Individual Inputs */}
+                   <Box width={'120%'}>
+                        <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
+                          Responsibilities / Achievements (Bullet Points)
+                        </Typography>
+                        {(exp.bullets && exp.bullets.length > 0 ? exp.bullets : ['']).map((bullet, bulletIdx) => (
+                          <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'flex-start' }}>
+                            <TextField
+                              value={bullet}
+                              onChange={(e) => {
+                                const newBullets = [...(exp.bullets || [''])];
+                                newBullets[bulletIdx] = e.target.value;
+                                updateTempField(idx, 'bullets', newBullets);
+                              }}
+                              multiline
+                              rows={3}
+                              placeholder={`Bullet point ${bulletIdx + 1}`}
+                              variant="standard"
+                              InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' } }}
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
+                                '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
+                              }}
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const newBullets = [...(exp.bullets || [''])];
+                                newBullets.splice(bulletIdx, 1);
+                                updateTempField(idx, 'bullets', newBullets.length > 0 ? newBullets : ['']);
+                              }}
+                              sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ))}
+                        <Button
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            const newBullets = [...(exp.bullets || ['']), ''];
+                            updateTempField(idx, 'bullets', newBullets);
+                          }}
+                          size="small"
+                          sx={{ color: colorPalette.secondary.mediumGreen, textTransform: 'none', fontSize: '12px' }}
+                        >
+                          Add Bullet Point
+                        </Button>
+                      </Box>
                     </Box>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        const newData = [...tempData];
-                        newData.splice(idx, 1);
-                        updateTempField(null, null, newData);
-                      }}
-                      sx={{ color: '#e74c3c', alignSelf: 'flex-start' }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
                   </Box>
                 ))}
                 <Button
@@ -372,7 +492,7 @@ const ExperienceSection = ({
                     {exp.bullets && exp.bullets.length > 0 && (
                       <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
                         {exp.bullets.map((bullet, bidx) => (
-                          <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px' }}>{bullet}</li>
+                          <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px', textAlign:'justify' }}>{bullet}</li>
                         ))}
                       </ul>
                     )}
@@ -398,9 +518,7 @@ const ExperienceSection = ({
                 )}
               </>
             )}
-          </Paper>
-        </Box>
-      </Box>
+      </Paper>
     </Box>
   );
 };

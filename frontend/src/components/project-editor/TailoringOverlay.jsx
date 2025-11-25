@@ -5,6 +5,16 @@ import { colorPalette } from '../../styles/theme';
 const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
   if (!tailoring) return null;
 
+  // Detect if we're editing or tailoring based on messages
+  const isEditing = agentMessages.some(msg =>
+    msg.step === 'editing' ||
+    msg.tool === 'edit_resume_content' ||
+    msg.message?.includes('edit') ||
+    msg.data?.sections_modified
+  );
+
+  const title = isEditing ? 'Editing Resume' : 'Tailoring Resume';
+
   return (
     <Box
       sx={{
@@ -49,7 +59,7 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
           <Box display="flex" alignItems="center" gap={1.5} mb={2}>
             <CircularProgress size={28} sx={{ color: 'white' }} />
             <Typography variant="h5" fontWeight={700} color='white' fontFamily="Poppins, sans-serif">
-              Tailoring Resume
+              {title}
             </Typography>
           </Box>
           <LinearProgress
@@ -130,6 +140,28 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
                   {msg.data.required_skills_count !== undefined && (
                     <Typography variant="caption" display="block" sx={{ fontSize: '12px', color: '#666' }}>
                       Skills identified: <strong>{msg.data.required_skills_count}</strong>
+                    </Typography>
+                  )}
+                  {msg.data.sections_modified && msg.data.sections_modified.length > 0 && (
+                    <Box sx={{ mt: 0.5 }}>
+                      <Typography variant="caption" fontWeight={600} sx={{ fontSize: '12px', color: '#555' }}>
+                        Sections Modified:
+                      </Typography>
+                      {msg.data.sections_modified.map((section, sidx) => (
+                        <Typography
+                          key={sidx}
+                          variant="caption"
+                          display="block"
+                          sx={{ fontSize: '11px', color: '#666', ml: 1 }}
+                        >
+                          • {section}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                  {msg.data.changes_description && (
+                    <Typography variant="caption" display="block" sx={{ fontSize: '12px', color: '#666', mt: 0.5 }}>
+                      {msg.data.changes_description}
                     </Typography>
                   )}
                   {msg.data.changes_made && msg.data.changes_made.length > 0 && (

@@ -23,6 +23,16 @@ const ProfessionalSummarySection = ({
   const hasHistory = history && history.length > 0;
   const isViewingCurrent = selectedVersionIndex === history?.length;
 
+  // Update selected version when history changes (e.g., after tailoring)
+  useEffect(() => {
+    if (history && history.length > 0) {
+      // If currently viewing current version, update to new current version index
+      if (isViewingCurrent) {
+        setSelectedVersionIndex(history.length);
+      }
+    }
+  }, [history?.length]);
+
   // Notify parent when viewing state changes
   useEffect(() => {
     if (onViewingPreviousVersion) {
@@ -74,7 +84,7 @@ const ProfessionalSummarySection = ({
               }}
             />
           ) : (
-            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff' }}>
+            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', textAlign:'justify'}}>
               {data}
             </Typography>
           )}
@@ -83,37 +93,28 @@ const ProfessionalSummarySection = ({
     );
   }
 
-  // With history - show vertical tabs + content
+  // With history - show horizontal tabs at top + content below
   return (
     <Box>
-      {/* Info Labels */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 0.5 }}>
-        <Box sx={{ minWidth: '40px', maxWidth: '40px', textAlign: 'center' }}>
-          <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-            V*
-          </Typography>
-        </Box>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-            Click version number to view. Use "Make This Current" to restore.
-          </Typography>
-        </Box>
+      {/* Info Label */}
+      <Box >
+        <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
+          Click version number to view. Use "Make This Current" to restore.
+        </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-        {/* Vertical Version Tabs - Very Thin */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.5,
-            minWidth: '40px',
-            maxWidth: '40px',
-            bgcolor: colorPalette.primary.darkGreen,
-            p: 0.5,
-            borderRadius: '4px',
-          }}
-        >
+      {/* Horizontal Version Tabs */}
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 0.5,
+          mb: 1,
+          p: 0.5,
+          bgcolor: colorPalette.primary.darkGreen,
+          borderRadius: '4px',
+          flexWrap: 'wrap',
+        }}
+      >
         {/* Previous versions (oldest to newest) */}
         {history.map((version, idx) => (
           <Chip
@@ -128,11 +129,11 @@ const ProfessionalSummarySection = ({
               color: '#fff',
               fontWeight: selectedVersionIndex === idx ? 700 : 500,
               fontSize: '0.75rem',
-              height: '32px',
+              height: '28px',
               minWidth: '32px',
               cursor: 'pointer',
               '&:hover': {
-                bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : 'colorPalette.secondary.mediumGreen',
+                bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.secondary.mediumGreen,
               },
             }}
           />
@@ -150,65 +151,62 @@ const ProfessionalSummarySection = ({
             color: '#fff',
             fontWeight: isViewingCurrent ? 700 : 500,
             fontSize: '0.75rem',
-            height: '32px',
+            height: '28px',
             minWidth: '32px',
             cursor: 'pointer',
             border: isViewingCurrent ? '2px solid ' + colorPalette.primary.darkGreen : 'none',
             '&:hover': {
-              bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : 'colorPalette.secondary.mediumGreen',
+              bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.secondary.mediumGreen,
             },
           }}
         />
       </Box>
 
-      {/* Content Area */}
-      <Box sx={{ flex: 1 }}>
-        <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
-          {isEditing && isViewingCurrent ? (
-            <TextField
-              value={tempData}
-              onChange={(e) => onTempDataChange(e.target.value)}
-              multiline
-              rows={8}
-              fullWidth
-              variant="standard"
-              autoFocus
-              placeholder="Enter professional summary..."
-              InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 } }}
-              InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-              sx={{
-                '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
-                '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
-              }}
-            />
-          ) : (
-            <>
-              <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', mb: !isViewingCurrent ? 3 : 0 }}>
-                {getDisplayContent()}
-              </Typography>
+      {/* Content Area - Full Width */}
+      <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
+        {isEditing && isViewingCurrent ? (
+          <TextField
+            value={tempData}
+            onChange={(e) => onTempDataChange(e.target.value)}
+            multiline
+            rows={8}
+            fullWidth
+            variant="standard"
+            autoFocus
+            placeholder="Enter professional summary..."
+            InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 } }}
+            InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+            sx={{
+              '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
+              '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
+            }}
+          />
+        ) : (
+          <>
+            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', mb: !isViewingCurrent ? 3 : 0 , textAlign:'justify'}}>
+              {getDisplayContent()}
+            </Typography>
 
-              {/* Restore Version Button - Inside the content box */}
-              {!isViewingCurrent && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    onClick={handleRestoreVersion}
-                    sx={{
-                      bgcolor: colorPalette.primary.brightGreen,
-                      textTransform: 'none',
-                      '&:hover': { bgcolor: colorPalette.primary.darkGreen }
-                    }}
-                  >
-                    Make This Current
-                  </Button>
-                </Box>
-              )}
-            </>
-          )}
-        </Paper>
-      </Box>
-      </Box>
+            {/* Restore Version Button - Inside the content box */}
+            {!isViewingCurrent && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleRestoreVersion}
+                  sx={{
+                    bgcolor: colorPalette.primary.brightGreen,
+                    textTransform: 'none',
+                    '&:hover': { bgcolor: colorPalette.primary.darkGreen }
+                  }}
+                >
+                  Make This Current
+                </Button>
+              </Box>
+            )}
+          </>
+        )}
+      </Paper>
     </Box>
   );
 };

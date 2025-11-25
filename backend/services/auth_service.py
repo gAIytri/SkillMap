@@ -9,6 +9,7 @@ from models.user import User
 from schemas.user import UserCreate, UserLogin, Token, UserResponse
 from utils.security import hash_password, verify_password, create_access_token
 from config.settings import settings
+from services import email_service
 
 
 class AuthService:
@@ -25,17 +26,35 @@ class AuthService:
                 detail="Email already registered"
             )
 
+        # Generate verification tokens
+        verification_code = email_service.generate_verification_code()
+        verification_link_token = email_service.generate_verification_link_token()
+        verification_expiry = email_service.get_verification_expiry()
+
         # Create new user
         hashed_password = hash_password(user_data.password)
         new_user = User(
             email=user_data.email,
             password_hash=hashed_password,
-            full_name=user_data.full_name
+            full_name=user_data.full_name,
+            email_verified=False,  # Not verified yet
+            verification_token=verification_code,
+            verification_token_expires=verification_expiry,
+            verification_link_token=verification_link_token
         )
 
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+
+        # Send verification email
+        email_service.send_verification_email(
+            email=new_user.email,
+            full_name=new_user.full_name,
+            verification_code=verification_code,
+            verification_link_token=verification_link_token
+        )
+
         return new_user
 
     @staticmethod
@@ -81,13 +100,15 @@ class AuthService:
                     # Link Google account to existing user
                     user.google_id = google_id
                     user.profile_picture_url = picture
+                    user.email_verified = True  # Google users are pre-verified
                 else:
                     # Create new user
                     user = User(
                         email=email,
                         google_id=google_id,
                         full_name=full_name,
-                        profile_picture_url=picture
+                        profile_picture_url=picture,
+                        email_verified=True  # Google users are pre-verified
                     )
                     db.add(user)
 

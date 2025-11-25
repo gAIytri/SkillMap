@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     # CORS (comma-separated string)
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
+    # Frontend URL (for email magic links)
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # Email Service (Resend)
+    RESEND_API_KEY: Optional[str] = None
+    FROM_EMAIL: str = "SkillMap <onboarding@resend.dev>"
+
     @property
     def cors_origins_list(self) -> list:
         """Parse CORS origins from comma-separated string"""

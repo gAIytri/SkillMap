@@ -117,16 +117,19 @@ const DocumentViewer = ({
             py: isMobile ? 0.3 : 0.5,
             bgcolor: 'rgba(76, 175, 80, 0.04)',
             display: 'flex',
-            justifyContent: isMobile ? 'center' : 'space-between',
+            justifyContent: 'space-between',
             alignItems: 'center',
+            gap: 2,
           }}
         >
-          {/* Hide "PDF Preview" text on mobile to save space */}
+          {/* Left: PDF Preview Label */}
           {!isMobile && (
             <Typography variant="subtitle2" fontWeight={700} color="colorPalette.primary.darkGreen">
               PDF Preview
             </Typography>
           )}
+
+          {/* Right: Zoom Controls + Compile Button */}
           <Box display="flex" alignItems="center">
             <Button
               variant="outlined"

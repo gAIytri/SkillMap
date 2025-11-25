@@ -226,6 +226,79 @@ const resumeService = {
       throw error;
     }
   },
+
+  // Edit project resume (Streaming with progress updates)
+  editProjectResume: async (projectId, editInstructions, onMessage, abortSignal = null) => {
+    const token = localStorage.getItem('access_token');
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+    console.log('Editing resume:', { projectId, hasToken: !!token, baseURL });
+
+    if (!token) {
+      throw new Error('No authentication token found. Please login again.');
+    }
+
+    const response = await fetch(`${baseURL}/api/projects/${projectId}/edit-resume`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ job_description: editInstructions }),  // Reusing field name
+      signal: abortSignal,
+    });
+
+    console.log('Response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('access_token');
+        throw new Error('Session expired. Please login again.');
+      }
+
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to edit resume (${response.status})`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalResult = null;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (onMessage) {
+                onMessage(data);
+              }
+
+              if (data.type === 'final') {
+                finalResult = data;
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE message:', e);
+            }
+          }
+        }
+      }
+
+      return finalResult;
+    } catch (error) {
+      console.error('Streaming error:', error);
+      throw error;
+    }
+  },
 };
 
 export default resumeService;

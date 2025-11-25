@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, LargeBinary
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, LargeBinary, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from config.database import Base
@@ -30,6 +30,19 @@ class Project(Base):
 
     # History tracking for resume tailoring
     tailoring_history = Column(JSON, nullable=True)  # Array of previous versions with timestamps
+
+    # Message history for chat-style interface (stores all JD/edit messages)
+    message_history = Column(JSON, nullable=True)  # Array of {timestamp, text, type: 'job_description' | 'edit'}
+
+    # PDF Caching (for performance optimization)
+    cached_pdf = Column(LargeBinary, nullable=True)  # Cached PDF bytes
+    cached_pdf_hash = Column(String(64), nullable=True, index=True)  # SHA256 hash of resume_json
+    cached_pdf_generated_at = Column(DateTime(timezone=True), nullable=True)  # When PDF was cached
+
+    # PDF Generation Status (for non-blocking UI)
+    pdf_generating = Column(Boolean, default=False, nullable=False)  # Is PDF currently being generated
+    pdf_generation_progress = Column(String(100), nullable=True)  # Progress message
+    pdf_generation_started_at = Column(DateTime(timezone=True), nullable=True)  # When generation started
 
     # Legacy fields (keep for backward compatibility, but make nullable)
     tailored_latex_content = Column(Text, nullable=True)  # Deprecated

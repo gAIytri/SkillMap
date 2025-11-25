@@ -22,12 +22,17 @@ export const useTailorResume = ({
   setRechargeDialogBlocking,
   setShowRechargeDialog,
   setJobDescription,
+  setDocumentTab,
+  loadProject, // Add this to refresh project data
 }) => {
   const navigate = useNavigate();
   const abortControllerRef = useRef(null);
 
-  const handleTailorResume = async () => {
-    if (!jobDescription || jobDescription.trim().length < 10) {
+  const handleTailorResume = async (overrideJobDescription) => {
+    // Use override if provided, otherwise use the state jobDescription
+    const jdToUse = overrideJobDescription !== undefined ? overrideJobDescription : jobDescription;
+
+    if (!jdToUse || jdToUse.trim().length < 10) {
       toast.error('Please paste a job description first (at least 10 characters).');
       return;
     }
@@ -49,6 +54,9 @@ export const useTailorResume = ({
     setError('');
     setAgentMessages([]); // Clear previous messages
 
+    // Auto-switch to Resume tab
+    setDocumentTab(0);
+
     // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
 
@@ -56,10 +64,35 @@ export const useTailorResume = ({
       // Call agent-based tailoring with streaming updates
       const finalResult = await resumeService.tailorProjectResumeWithAgent(
         projectId,
-        jobDescription,
+        jdToUse,
         (message) => {
           // This callback is called for each SSE message
           console.log('Agent message:', message);
+
+          // Handle granular completion events
+          if (message.type === 'resume_complete') {
+            console.log('✓ Resume tailoring completed!');
+            console.log('Tailored JSON received:', message.tailored_json ? 'YES' : 'NO');
+            console.log('Changes made:', message.changes_made);
+
+            // Update resume data immediately (visible in extracted data panel)
+            setExtractedData(message.tailored_json);
+
+            // DON'T hide spinner yet - wait for cover letter and email
+          } else if (message.type === 'cover_letter_complete') {
+            console.log('✓ Cover letter generated!');
+            setCoverLetter(message.cover_letter);
+
+            // DON'T hide spinner yet - wait for email
+          } else if (message.type === 'email_complete') {
+            console.log('✓ Email generated!');
+            setEmail({
+              subject: message.email_subject,
+              body: message.email_body,
+            });
+
+            // DON'T hide spinner yet - will be hidden in finally block
+          }
 
           // Force immediate render for each message using flushSync
           flushSync(() => {
@@ -78,37 +111,10 @@ export const useTailorResume = ({
 
       console.log('Final result:', finalResult);
 
-      // Handle final result
-      if (finalResult && finalResult.success && finalResult.tailored_json) {
-        // Update extracted data with tailored JSON
-        setExtractedData(finalResult.tailored_json);
-
-        // Reload PDF preview to show tailored version
-        await loadPdfPreview();
-
-        // Fetch cover letter and email if generated
-        try {
-          const [coverLetterData, emailData] = await Promise.all([
-            projectService.getCoverLetter(projectId).catch(() => null),
-            projectService.getEmail(projectId).catch(() => null),
-          ]);
-
-          if (coverLetterData && coverLetterData.success) {
-            setCoverLetter(coverLetterData.cover_letter);
-            console.log('✓ Cover letter loaded');
-          }
-
-          if (emailData && emailData.success) {
-            setEmail({
-              subject: emailData.email_subject,
-              body: emailData.email_body,
-            });
-            console.log('✓ Email loaded');
-          }
-        } catch (err) {
-          console.warn('Failed to load cover letter/email:', err);
-          // Don't fail the whole operation if these fail
-        }
+      // Handle final result - now we've already handled resume/cover letter/email in streaming
+      if (finalResult && finalResult.success) {
+        // All 3 documents are complete - now load PDF preview
+        loadPdfPreview();
 
         // Refresh user data to update credits in navbar
         let updatedUser = user;
@@ -119,34 +125,16 @@ export const useTailorResume = ({
           }
         }
 
+        // Refresh project data to get updated message_history
+        if (loadProject) {
+          await loadProject();
+          console.log('✓ Project data refreshed (message_history updated)');
+        }
+
         // Check if low credits warning should be shown (non-blocking)
         if (updatedUser && updatedUser.credits < 10.0) {
           setRechargeDialogBlocking(false);
           setShowRechargeDialog(true);
-        }
-
-        // Show success message with changes made
-        const changes = finalResult.changes_made || [];
-        if (changes.length > 0) {
-          toast.success(
-            (_t) => (
-              <div>
-                <strong>Resume tailored successfully!</strong>
-                <div style={{ marginTop: '8px', fontSize: '12px' }}>
-                  <strong>Changes Made:</strong>
-                  <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                    {changes.slice(0, 3).map((change, idx) => (
-                      <li key={idx}>{change}</li>
-                    ))}
-                    {changes.length > 3 && <li>...and {changes.length - 3} more</li>}
-                  </ul>
-                </div>
-              </div>
-            ),
-            { duration: 6000 }
-          );
-        } else {
-          toast.success('Resume tailored! Cover letter and email generated.');
         }
       } else {
         // Check if it's an invalid intent error

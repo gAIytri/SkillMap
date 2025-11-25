@@ -11,16 +11,19 @@ const GlobalStyles = () => (
       html: {
         width: '100%',
         height: '100%',
+        overflow: 'hidden',
         WebkitOverflowScrolling: 'touch',
       },
       body: {
         width: '100%',
         height: '100%',
+        overflow: 'hidden',
         fontFamily: '"Poppins", "Roboto", "Helvetica", "Arial", sans-serif',
       },
       '#root': {
         width: '100%',
         height: '100%',
+        overflow: 'hidden',
       },
       'input, textarea': {
         fontFamily: '"Poppins", "Roboto", "Helvetica", "Arial", sans-serif',

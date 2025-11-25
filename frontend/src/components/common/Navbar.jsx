@@ -25,7 +25,7 @@ const Navbar = () => {
   const handleLogout = () => {
     logout();
     handleClose();
-    navigate('/login');
+    navigate('/');
   };
 
   return (
@@ -145,41 +145,8 @@ const Navbar = () => {
             </Menu>
           </Box>
         ) : (
-          <Box display="flex" gap={isMobile ? 0.5 : 2}>
-            <Button
-              variant="outlined"
-              onClick={() => navigate('/login')}
-              size={isMobile ? 'small' : 'medium'}
-              sx={{
-                borderColor: '#ffffff',
-                color: '#ffffff',
-                fontSize: isMobile ? '0.75rem' : '0.875rem',
-                px: isMobile ? 1.5 : 2,
-                '&:hover': {
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  borderColor: '#ffffff',
-                },
-              }}
-            >
-              Login
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => navigate('/register')}
-              size={isMobile ? 'small' : 'medium'}
-              sx={{
-                bgcolor: '#ffffff',
-                color: '#072D1F',
-                fontSize: isMobile ? '0.75rem' : '0.875rem',
-                px: isMobile ? 1.5 : 2,
-                '&:hover': {
-                  bgcolor: 'rgba(255, 255, 255, 0.9)',
-                },
-              }}
-            >
-              Sign Up
-            </Button>
-          </Box>
+         
+          <></>
         )}
       </Toolbar>
     </AppBar>

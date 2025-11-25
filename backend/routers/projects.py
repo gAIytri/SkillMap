@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import asyncio
@@ -15,14 +15,22 @@ from models.base_resume import BaseResume
 from services.docx_recreation_service import recreate_docx_from_json  # Legacy - keeping for backup
 from services.docx_generation_service import generate_resume_from_json, get_default_section_order
 from services.resume_tailoring_service import tailor_resume
-from services.resume_agent_service import tailor_resume_with_agent
+from services.resume_agent_service import tailor_resume_with_agent, edit_resume_with_instructions
 from services.docx_to_pdf_service import convert_docx_to_pdf
+from services.pdf_cache_service import (
+    calculate_resume_hash,
+    is_cache_valid,
+    generate_pdf_background,
+    get_cached_pdf
+)
+from services.websocket_manager import manager
 from schemas.resume import ResumeTailorRequest
 from fastapi.responses import Response
 import tempfile
 import os
 from fastapi import BackgroundTasks
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +174,13 @@ async def download_project_pdf(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Generate PDF preview for a project (from DOCX)"""
+    """
+    Download PDF preview for a project
+
+    NOW WITH SMART CACHING:
+    - Returns cached PDF if resume_json hasn't changed (instant!)
+    - Generates new PDF if data changed or cache missing
+    """
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.user_id == current_user.id
@@ -185,38 +199,51 @@ async def download_project_pdf(
         )
 
     try:
-        # Step 1: Generate DOCX programmatically with custom section order
-        logger.info(f"Generating DOCX for project {project_id} PDF preview...")
+        # Try to serve from cache first
+        cached_pdf = get_cached_pdf(project)
+
+        if cached_pdf:
+            # Cache hit! Return immediately (0.1s)
+            logger.info(f"✓ Serving cached PDF for project {project_id}")
+            return Response(
+                content=cached_pdf,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'inline; filename="{project.project_name.replace(" ", "_")}_preview.pdf"',
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                    "X-PDF-Cached": "true"  # Debug header
+                }
+            )
+
+        # Cache miss - generate new PDF (5s)
+        logger.info(f"Cache miss for project {project_id} - generating new PDF")
 
         # Get section order (priority: resume_json > user preference > default)
         section_order = None
         if project.resume_json and 'section_order' in project.resume_json:
             section_order = project.resume_json['section_order']
-            logger.info(f"Using project-specific section order: {section_order}")
         elif current_user.section_order:
             section_order = current_user.section_order
-            logger.info(f"Using user preference section order")
         else:
             section_order = get_default_section_order()
-            logger.info(f"Using default section order")
 
-        # Generate resume from JSON using original DOCX as style reference
+        # Generate resume from JSON
         recreated_docx_bytes = generate_resume_from_json(
             resume_json=project.resume_json,
             base_resume_docx=project.original_docx,
             section_order=section_order
         )
 
-        # Step 2: Convert DOCX to PDF (or return DOCX if conversion fails)
-        logger.info(f"Converting DOCX to PDF for project {project_id}...")
+        # Convert DOCX to PDF
         file_bytes, media_type = convert_docx_to_pdf(recreated_docx_bytes)
 
-        # Determine file extension based on media type
+        # Determine file extension
         is_pdf = media_type == "application/pdf"
         file_ext = "pdf" if is_pdf else "docx"
 
-        # Return file with inline disposition for browser preview
-        # IMPORTANT: No-cache headers to prevent stale PDF after tailoring
+        # Return with no-cache headers
         return Response(
             content=file_bytes,
             media_type=media_type,
@@ -224,7 +251,8 @@ async def download_project_pdf(
                 "Content-Disposition": f'inline; filename="{project.project_name.replace(" ", "_")}_preview.{file_ext}"',
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
-                "Expires": "0"
+                "Expires": "0",
+                "X-PDF-Cached": "false"  # Debug header
             }
         )
 
@@ -481,8 +509,33 @@ async def tailor_project_resume_with_agent(
                         if len(project_to_update.tailoring_history) > 10:
                             project_to_update.tailoring_history = project_to_update.tailoring_history[:10]
 
+                        # Mark tailoring_history as modified for SQLAlchemy
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(project_to_update, "tailoring_history")
+
+                        # Save to message_history for chat interface
+                        message_entry = {
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "text": request.job_description,
+                            "type": "job_description"  # Will be detected as job_description or edit by intent
+                        }
+
+                        # Initialize message_history if it doesn't exist
+                        if project_to_update.message_history is None:
+                            project_to_update.message_history = []
+
+                        # Add to message_history (keep last 50 messages)
+                        project_to_update.message_history.insert(0, message_entry)
+                        if len(project_to_update.message_history) > 50:
+                            project_to_update.message_history = project_to_update.message_history[:50]
+
+                        # Mark message_history as modified for SQLAlchemy
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(project_to_update, "message_history")
+
                         # Update with new tailored resume
                         project_to_update.resume_json = final_result["tailored_json"]
+                        flag_modified(project_to_update, "resume_json")
 
                         # Save the job description that was used for this tailoring
                         project_to_update.last_tailoring_jd = request.job_description
@@ -570,6 +623,185 @@ async def tailor_project_resume_with_agent(
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+
+
+@router.post("/{project_id}/edit-resume")
+async def edit_project_resume(
+    project_id: int,
+    request: ResumeTailorRequest,  # Reusing same request schema
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Edit project resume based on user instructions (no cover letter/email generation)
+
+    This endpoint is used when the user wants to make specific edits to their resume
+    without generating cover letter or email. It's triggered when the intent validator
+    identifies "resume_modification" intent.
+
+    Process Flow:
+    - User provides edit instructions (e.g., "Add Python to skills section")
+    - Agent validates intent
+    - If valid: Agent applies edits to specific resume sections
+    - Returns edited JSON and saves to database
+    - Skips cover letter and email generation
+
+    Returns:
+        StreamingResponse with Server-Sent Events (SSE) format
+        Each event contains JSON with status updates
+    """
+    # Check user has sufficient credits (editing costs less than tailoring)
+    if current_user.credits < settings.MINIMUM_CREDITS_FOR_TAILOR:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Insufficient credits. You have {current_user.credits} credits. Minimum {settings.MINIMUM_CREDITS_FOR_TAILOR} credits required."
+        )
+
+    # Validate project exists
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.resume_json:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume JSON not found for this project"
+        )
+
+    async def event_generator():
+        """Generate Server-Sent Events for streaming"""
+        try:
+            # Stream from the editing agent
+            final_result = None
+            async for update in edit_resume_with_instructions(
+                resume_json=project.resume_json,
+                edit_instructions=request.job_description,  # Reusing field name
+                project_id=project_id
+            ):
+                # Send update as SSE
+                event_data = json.dumps(update)
+                yield f"data: {event_data}\n\n"
+
+                # Store final result
+                if update.get("type") == "final":
+                    final_result = update
+
+            # Update database if editing succeeded
+            if final_result and final_result.get("success") and final_result.get("edited_json"):
+                logger.info(f"Saving edited resume to database for project {project_id}")
+
+                # Create a new database session for saving
+                from config.database import SessionLocal
+                from models import CreditTransaction, TransactionType
+                db_new = SessionLocal()
+                try:
+                    # Fetch the project fresh from the database
+                    project_to_update = db_new.query(Project).filter(
+                        Project.id == project_id,
+                        Project.user_id == current_user.id
+                    ).first()
+
+                    if project_to_update:
+                        # Save current version to history before updating
+                        from datetime import datetime
+
+                        history_entry = {
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "resume_json": project_to_update.resume_json,
+                            "edit_instructions": request.job_description,
+                            "changes_made": final_result.get("sections_modified", []),
+                            "changes_description": final_result.get("changes_description", "")
+                        }
+
+                        # Initialize history if it doesn't exist
+                        if project_to_update.tailoring_history is None:
+                            project_to_update.tailoring_history = []
+
+                        # Add to history (keep last 10 versions)
+                        project_to_update.tailoring_history.insert(0, history_entry)
+                        if len(project_to_update.tailoring_history) > 10:
+                            project_to_update.tailoring_history = project_to_update.tailoring_history[:10]
+
+                        # Update with edited resume
+                        project_to_update.resume_json = final_result["edited_json"]
+
+                        # Don't update cover letter or email (editing only)
+
+                        # Deduct credits based on actual token usage
+                        token_usage = final_result.get("token_usage", {})
+                        total_tokens = token_usage.get("total_tokens", 0)
+                        prompt_tokens = token_usage.get("prompt_tokens", 0)
+                        completion_tokens = token_usage.get("completion_tokens", 0)
+
+                        # Calculate credits based on token usage
+                        raw_credits = total_tokens / settings.TOKENS_PER_CREDIT
+                        credits_to_deduct = round(raw_credits / settings.CREDIT_ROUNDING) * settings.CREDIT_ROUNDING
+
+                        logger.info(f"Tokens used: {total_tokens}, Credits to deduct: {credits_to_deduct}")
+
+                        # Fetch user with row-level lock
+                        user_to_update = db_new.query(User).filter(User.id == current_user.id).with_for_update().first()
+                        balance_after = 0.0
+
+                        if not user_to_update:
+                            logger.error(f"User {current_user.id} not found for credit deduction!")
+                        else:
+                            # Deduct credits
+                            user_to_update.credits -= credits_to_deduct
+                            balance_after = user_to_update.credits
+
+                            # Create credit transaction record
+                            transaction = CreditTransaction(
+                                user_id=current_user.id,
+                                project_id=project_id,
+                                amount=-credits_to_deduct,
+                                balance_after=balance_after,
+                                transaction_type=TransactionType.TAILOR,  # Using same type
+                                tokens_used=total_tokens,
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                description=f"Resume edited for project {project_id}"
+                            )
+                            db_new.add(transaction)
+
+                            logger.info(f"✓ Credits deducted: {credits_to_deduct}")
+
+                        db_new.commit()
+                        if user_to_update:
+                            db_new.refresh(user_to_update)
+                        logger.info(f"✓ Successfully saved edited resume for project {project_id}")
+
+                        # Send database update confirmation
+                        yield f"data: {json.dumps({'type': 'db_update', 'message': 'Resume saved to database', 'credits_deducted': credits_to_deduct, 'credits_remaining': balance_after})}\n\n"
+                except Exception as db_error:
+                    logger.error(f"Database save failed: {db_error}")
+                    db_new.rollback()
+                finally:
+                    db_new.close()
+
+        except Exception as e:
+            logger.error(f"Editing streaming failed for project {project_id}: {e}")
+            error_event = json.dumps({
+                "type": "error",
+                "message": f"Editing failed: {str(e)}"
+            })
+            yield f"data: {error_event}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
         }
     )
 
@@ -716,3 +948,128 @@ async def get_email_body(
         "email_body": body,
         "generated_at": project.email_generated_at.isoformat() if project.email_generated_at else None
     }
+
+
+# ============================================================================
+# PDF CACHING AND GENERATION ENDPOINTS
+# ============================================================================
+
+@router.post("/{project_id}/compile", status_code=status.HTTP_200_OK)
+async def compile_resume(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Compile resume to PDF with smart caching and WebSocket progress updates
+
+    - First compile: ~5 seconds (non-blocking, real-time progress via WebSocket)
+    - Subsequent compiles with no changes: Instant (cache hit)
+    - Compiles after edits: ~2-5 seconds (non-blocking)
+
+    WebSocket sends real-time updates:
+    - "Building DOCX..."
+    - "Converting to PDF..."
+    - "Finalizing..."
+    - "Complete"
+    """
+    # Get project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Calculate hash of current resume JSON
+    current_hash = calculate_resume_hash(project.resume_json)
+
+    # Check if cached PDF is still valid
+    if is_cache_valid(project, current_hash):
+        logger.info(f"✓ Cache hit for project {project_id} - serving cached PDF instantly")
+        return {
+            "message": "PDF compiled successfully (cached)",
+            "status": "ready",
+            "cached": True,
+            "generated_at": project.cached_pdf_generated_at.isoformat() if project.cached_pdf_generated_at else None
+        }
+
+    # Cache miss - start background generation
+    logger.info(f"Cache miss for project {project_id} - starting background generation")
+
+    # Mark as generating
+    project.pdf_generating = True
+    project.pdf_generation_progress = "Starting..."
+    project.pdf_generation_started_at = datetime.utcnow()
+    db.commit()
+
+    # Capture user_id before background task
+    user_id = current_user.id
+
+    # Start background task with WebSocket updates
+    async def run_generation():
+        from config.database import SessionLocal
+        db_session = SessionLocal()
+        try:
+            await generate_pdf_background(project_id, user_id, db_session)
+        finally:
+            db_session.close()
+
+    background_tasks.add_task(run_generation)
+
+    return {
+        "message": "PDF compilation started",
+        "status": "generating",
+        "cached": False,
+        "progress": "Starting...",
+        "started_at": project.pdf_generation_started_at.isoformat()
+    }
+
+
+@router.get("/{project_id}/pdf-status", status_code=status.HTTP_200_OK)
+async def get_pdf_generation_status(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Check PDF generation status (for polling)
+
+    Frontend polls this every 500ms during generation
+
+    Returns:
+        - status: "generating", "ready", or "not_started"
+        - progress: Current progress message
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.pdf_generating:
+        return {
+            "status": "generating",
+            "progress": project.pdf_generation_progress,
+            "started_at": project.pdf_generation_started_at.isoformat() if project.pdf_generation_started_at else None
+        }
+
+    # Check if we have cached PDF
+    if project.cached_pdf:
+        return {
+            "status": "ready",
+            "generated_at": project.cached_pdf_generated_at.isoformat() if project.cached_pdf_generated_at else None
+        }
+
+    return {"status": "not_started"}
+
+
+# ============================================================================
+# WEBSOCKET ENDPOINT FOR REAL-TIME UPDATES
+# ============================================================================
+# NOTE: WebSocket endpoint moved to main.py due to routing conflicts
+# See main.py @app.websocket("/api/projects/ws")

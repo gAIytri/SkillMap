@@ -5,7 +5,90 @@ import EmailIcon from '@mui/icons-material/Email';
 import SendIcon from '@mui/icons-material/Send';
 import DownloadIcon from '@mui/icons-material/Download';
 import CloseIcon from '@mui/icons-material/Close';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { colorPalette } from '../../styles/theme';
+import {
+  DndContext,
+  closestCenter,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Sortable Section Button Component
+const SortableSectionButton = ({ id, label, isActive, onClick }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={style}
+      sx={{ position: 'relative' }}
+    >
+      <Button
+        fullWidth
+        onClick={onClick}
+        sx={{
+          justifyContent: 'flex-start',
+          color: isActive ? '#fff' : colorPalette.primary.darkGreen,
+          bgcolor: isActive ? colorPalette.primary.darkGreen : 'transparent',
+          textTransform: 'none',
+          fontFamily: 'Poppins, sans-serif',
+          fontSize: '0.65rem',
+          px: 1,
+          py: 0.75,
+          mb: 0.5,
+          border: '1px solid',
+          borderColor: isActive ? colorPalette.primary.darkGreen : '#e1e8ed',
+          '&:hover': {
+            bgcolor: isActive ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+          },
+        }}
+      >
+        <Box
+          {...attributes}
+          {...listeners}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            mr: 0.5,
+          }}
+        >
+          <DragIndicatorIcon sx={{ fontSize: 14, opacity: 0.5 }} />
+        </Box>
+        <Typography
+          sx={{
+            fontSize: '0.65rem',
+            fontWeight: isActive ? 600 : 500,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color:isActive?"white":'black'
+          }}
+        >
+          {label}
+        </Typography>
+      </Button>
+    </Box>
+  );
+};
 
 const ActionSidebar = ({
   isMobile,
@@ -22,6 +105,13 @@ const ActionSidebar = ({
   onNavigateToDashboard,
   mobileDrawerOpen,
   onMobileDrawerClose,
+  // Section navigation props
+  sectionOrder,
+  sectionNames,
+  selectedSection,
+  onSelectedSectionChange,
+  sensors,
+  onDragEnd,
 }) => {
   // Desktop Sidebar
   if (!isMobile) {
@@ -59,37 +149,23 @@ const ActionSidebar = ({
             },
           }}
         >
-          Dashboard
+          {project?.project_name}
         </Button>
 
-        {/* Project Name */}
-        <Typography
-          variant="caption"
-          sx={{
-            px: 1,
-            py: 1,
-            color: '#666',
-            fontWeight: 600,
-            display: 'block',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={project?.project_name}
-        >
-          {project?.project_name}
-        </Typography>
+    
+         
 
         {/* Document Tabs - Vertical */}
-        <Box sx={{ mt: 2, mb: 2 }}>
+        <Box sx={{ mb: 1 }}>
           <Typography
             variant="caption"
             sx={{
               px: 1,
-              pb: 1,
+              pb: 0.5,
               color: '#666',
               fontWeight: 600,
               display: 'block',
+              fontSize: '0.65rem',
             }}
           >
             DOCUMENTS
@@ -158,16 +234,75 @@ const ActionSidebar = ({
           </Button>
         </Box>
 
+        {/* Section Navigation - Vertical & Draggable */}
+        {extractedData && sectionOrder && sectionOrder.length > 0 && (
+          <Box sx={{ mb: 1, flex: 1, overflow: 'auto' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                px: 1,
+                pb: 0.5,
+                color: '#666',
+                fontWeight: 600,
+                display: 'block',
+                fontSize: '0.65rem',
+              }}
+            >
+              SECTIONS
+            </Typography>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onDragEnd}
+            >
+              <SortableContext
+                items={sectionOrder}
+                strategy={verticalListSortingStrategy}
+              >
+                {sectionOrder
+                  .filter((sectionKey) => {
+                    // Only show sections that have data
+                    const data = extractedData[sectionKey];
+
+                    // For personal_info (object), check if it exists and has name
+                    if (sectionKey === 'personal_info') {
+                      return data && data.name;
+                    }
+
+                    // For professional_summary (string), check if not empty
+                    if (sectionKey === 'professional_summary') {
+                      return data && data.trim().length > 0;
+                    }
+
+                    // For arrays (experience, projects, education, skills, certifications)
+                    // Check if array exists and has at least one item
+                    return Array.isArray(data) && data.length > 0;
+                  })
+                  .map((sectionKey) => (
+                    <SortableSectionButton
+                      key={sectionKey}
+                      id={sectionKey}
+                      label={sectionNames[sectionKey]}
+                      isActive={selectedSection === sectionKey}
+                      onClick={() => onSelectedSectionChange(sectionKey)}
+                    />
+                  ))}
+              </SortableContext>
+            </DndContext>
+          </Box>
+        )}
+
         {/* Action Buttons */}
-        <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography
             variant="caption"
             sx={{
               px: 1,
-              pb: 1,
+              pb: 0.5,
               color: '#666',
               fontWeight: 600,
               display: 'block',
+              fontSize: '0.65rem',
             }}
           >
             ACTIONS
@@ -180,7 +315,7 @@ const ActionSidebar = ({
             fullWidth
             size="small"
             variant="outlined"
-            startIcon={uploading ? <CircularProgress size={14} /> : <DescriptionIcon />}
+            startIcon={uploading ? <CircularProgress size={14} /> : <></>}
             sx={{
               color: colorPalette.primary.darkGreen,
               borderColor: colorPalette.primary.darkGreen,
@@ -208,7 +343,7 @@ const ActionSidebar = ({
             fullWidth
             size="small"
             variant="outlined"
-            startIcon={<DownloadIcon />}
+          
             sx={{
               color: colorPalette.primary.darkGreen,
               borderColor: colorPalette.primary.darkGreen,
@@ -252,7 +387,7 @@ const ActionSidebar = ({
               },
             }}
           >
-            Tailor
+            Tailor or Edit
           </Button>
         </Box>
       </Box>
@@ -287,13 +422,13 @@ const ActionSidebar = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: 3,
+            mb: 2,
             pb: 2,
             borderBottom: '2px solid #e1e8ed',
           }}
         >
           <Typography variant="h6" fontWeight={700} color={colorPalette.primary.darkGreen}>
-            Actions
+            Menu
           </Typography>
           <IconButton
             size="small"
@@ -303,6 +438,57 @@ const ActionSidebar = ({
             <CloseIcon />
           </IconButton>
         </Box>
+
+        {/* Section Navigation - Mobile */}
+        {extractedData && sectionOrder && sectionOrder.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                mb: 1,
+                color: '#666',
+                fontWeight: 600,
+                display: 'block',
+                fontSize: '0.75rem',
+              }}
+            >
+              SECTIONS
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {sectionOrder
+                .filter((sectionKey) => {
+                  const data = extractedData[sectionKey];
+                  if (sectionKey === 'personal_info') return data && data.name;
+                  if (sectionKey === 'professional_summary') return data && data.trim().length > 0;
+                  return Array.isArray(data) && data.length > 0;
+                })
+                .map((sectionKey) => (
+                  <Button
+                    key={sectionKey}
+                    fullWidth
+                    onClick={() => {
+                      onSelectedSectionChange(sectionKey);
+                      onMobileDrawerClose();
+                    }}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      color: selectedSection === sectionKey ? '#fff' : colorPalette.primary.darkGreen,
+                      bgcolor: selectedSection === sectionKey ? colorPalette.primary.darkGreen : 'transparent',
+                      textTransform: 'none',
+                      fontSize: '0.8rem',
+                      py: 1,
+                      border: '1px solid #e1e8ed',
+                      '&:hover': {
+                        bgcolor: selectedSection === sectionKey ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                      },
+                    }}
+                  >
+                    {sectionNames[sectionKey]}
+                  </Button>
+                ))}
+            </Box>
+          </Box>
+        )}
 
         {/* Action Buttons */}
         <Box display="flex" flexDirection="column" gap={2}>

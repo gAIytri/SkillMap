@@ -23,6 +23,12 @@ class User(Base):
     stripe_customer_id = Column(String(255), nullable=True, index=True)  # Stripe customer ID
     stripe_payment_method_id = Column(String(255), nullable=True)  # Saved payment method
 
+    # Email verification
+    email_verified = Column(Boolean, nullable=False, default=False)  # Email verification status
+    verification_token = Column(String(6), nullable=True)  # 6-digit verification code
+    verification_token_expires = Column(DateTime(timezone=True), nullable=True)  # Code expiry
+    verification_link_token = Column(String(64), nullable=True, unique=True, index=True)  # Magic link token
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)

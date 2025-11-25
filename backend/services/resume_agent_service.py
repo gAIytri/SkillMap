@@ -22,6 +22,7 @@ from services.agent_tools import (
     tailor_resume_content,
     generate_cover_letter,
     generate_recruiter_email,
+    edit_resume_content,
     set_runtime_context
 )
 
@@ -263,7 +264,74 @@ You have access to the user's resume JSON and job description through the runtim
                 await asyncio.sleep(0)  # Force flush
                 return
 
-            # Step 2: Summarize job description
+            # Check intent type and route accordingly
+            intent_type = intent_result.get("intent_type", "job_description")
+
+            if intent_type == "resume_modification":
+                # Route to editing workflow (no job summary, no cover letter/email)
+                logger.info("Intent is resume_modification - routing to editing workflow")
+
+                # Apply edits directly (skip validation since we already validated)
+                yield {
+                    "type": "status",
+                    "message": "Applying edits to your resume...",
+                    "step": "editing"
+                }
+                await asyncio.sleep(0)
+
+                edit_result = edit_resume_content.invoke(job_description)
+
+                # Track tokens
+                if "token_usage" in edit_result:
+                    usage = edit_result["token_usage"]
+                    self.prompt_tokens_used += usage.get("prompt_tokens", 0)
+                    self.completion_tokens_used += usage.get("completion_tokens", 0)
+                    self.total_tokens_used += usage.get("total_tokens", 0)
+
+                yield {
+                    "type": "tool_result",
+                    "tool": "edit_resume_content",
+                    "message": edit_result.get("message", ""),
+                    "data": {
+                        "sections_modified": edit_result.get("sections_modified", []),
+                        "changes_description": edit_result.get("changes_description", "")
+                    }
+                }
+                await asyncio.sleep(0)
+
+                if not edit_result.get("success", False):
+                    yield {
+                        "type": "final",
+                        "success": False,
+                        "message": "Failed to edit resume",
+                        "edited_json": None,
+                        "token_usage": {
+                            "prompt_tokens": self.prompt_tokens_used,
+                            "completion_tokens": self.completion_tokens_used,
+                            "total_tokens": self.total_tokens_used
+                        }
+                    }
+                    await asyncio.sleep(0)
+                    return
+
+                # Return success (no cover letter or email for editing)
+                yield {
+                    "type": "final",
+                    "success": True,
+                    "message": "Resume edited successfully",
+                    "tailored_json": edit_result.get("edited_json", {}),  # Using same field name for compatibility
+                    "sections_modified": edit_result.get("sections_modified", []),
+                    "changes_description": edit_result.get("changes_description", ""),
+                    "token_usage": {
+                        "prompt_tokens": self.prompt_tokens_used,
+                        "completion_tokens": self.completion_tokens_used,
+                        "total_tokens": self.total_tokens_used
+                    }
+                }
+                await asyncio.sleep(0)
+                return  # Exit after editing is complete
+
+            # Step 2: Summarize job description (only for job_description intent)
             yield {
                 "type": "status",
                 "message": "Analyzing job requirements...",
@@ -347,6 +415,15 @@ You have access to the user's resume JSON and job description through the runtim
                 await asyncio.sleep(0)  # Force flush
                 return
 
+            # Send resume_complete event - allows frontend to show resume immediately
+            yield {
+                "type": "resume_complete",
+                "message": "Resume tailoring completed!",
+                "tailored_json": tailor_result.get("tailored_json", {}),
+                "changes_made": tailor_result.get("changes_made", [])
+            }
+            await asyncio.sleep(0)  # Force flush
+
             # Step 4: Generate cover letter
             yield {
                 "type": "status",
@@ -384,6 +461,15 @@ You have access to the user's resume JSON and job description through the runtim
             }
             await asyncio.sleep(0)  # Force flush
 
+            # Send cover_letter_complete event
+            yield {
+                "type": "cover_letter_complete",
+                "message": "Cover letter generated!",
+                "cover_letter": cover_letter_result.get("cover_letter", ""),
+                "success": cover_letter_result.get("success", False)
+            }
+            await asyncio.sleep(0)  # Force flush
+
             # Step 5: Generate recruiter email
             yield {
                 "type": "status",
@@ -415,6 +501,16 @@ You have access to the user's resume JSON and job description through the runtim
                     "subject": email_result.get("subject", ""),
                     "success": email_result.get("success", False)
                 }
+            }
+            await asyncio.sleep(0)  # Force flush
+
+            # Send email_complete event
+            yield {
+                "type": "email_complete",
+                "message": "Recruiter email generated!",
+                "email_subject": email_result.get("subject", ""),
+                "email_body": email_result.get("body", ""),
+                "success": email_result.get("success", False)
             }
             await asyncio.sleep(0)  # Force flush
 
@@ -482,3 +578,151 @@ async def tailor_resume_with_agent(
         project_id
     ):
         yield message
+
+
+async def edit_resume_with_instructions(
+    resume_json: Dict[str, Any],
+    edit_instructions: str,
+    project_id: int
+) -> AsyncIterator[Dict[str, Any]]:
+    """
+    Edit resume based on user instructions (no cover letter or email generation)
+
+    This function is called when the intent validator identifies a "resume_modification" intent.
+    It skips cover letter and email generation and directly applies edits.
+
+    Args:
+        resume_json: The resume JSON to edit
+        edit_instructions: User's instructions for what to edit
+        project_id: The project ID being edited
+
+    Yields:
+        Status updates and final result
+    """
+    try:
+        logger.info(f"Starting resume editing for project {project_id}")
+
+        # Track token usage
+        total_tokens_used = 0
+        prompt_tokens_used = 0
+        completion_tokens_used = 0
+
+        # Set runtime context
+        set_runtime_context(resume_json, edit_instructions)
+
+        # Step 1: Validate intent (should be resume_modification)
+        yield {
+            "type": "status",
+            "message": "Validating your edit instructions...",
+            "step": "validation"
+        }
+        await asyncio.sleep(0)
+
+        intent_result = validate_intent.invoke(edit_instructions)
+
+        # Track tokens
+        if "token_usage" in intent_result:
+            usage = intent_result["token_usage"]
+            prompt_tokens_used += usage.get("prompt_tokens", 0)
+            completion_tokens_used += usage.get("completion_tokens", 0)
+            total_tokens_used += usage.get("total_tokens", 0)
+
+        yield {
+            "type": "tool_result",
+            "tool": "validate_intent",
+            "message": intent_result.get("message", ""),
+            "data": intent_result
+        }
+        await asyncio.sleep(0)
+
+        # Check if validation failed
+        if not intent_result.get("valid", False):
+            yield {
+                "type": "final",
+                "success": False,
+                "message": intent_result.get("message", "Invalid input"),
+                "edited_json": None,
+                "token_usage": {
+                    "prompt_tokens": prompt_tokens_used,
+                    "completion_tokens": completion_tokens_used,
+                    "total_tokens": total_tokens_used
+                }
+            }
+            await asyncio.sleep(0)
+            return
+
+        # Step 2: Apply edits to resume
+        yield {
+            "type": "status",
+            "message": "Applying edits to your resume...",
+            "step": "editing"
+        }
+        await asyncio.sleep(0)
+
+        edit_result = edit_resume_content.invoke(edit_instructions)
+
+        # Track tokens
+        if "token_usage" in edit_result:
+            usage = edit_result["token_usage"]
+            prompt_tokens_used += usage.get("prompt_tokens", 0)
+            completion_tokens_used += usage.get("completion_tokens", 0)
+            total_tokens_used += usage.get("total_tokens", 0)
+
+        yield {
+            "type": "tool_result",
+            "tool": "edit_resume_content",
+            "message": edit_result.get("message", ""),
+            "data": {
+                "sections_modified": edit_result.get("sections_modified", []),
+                "changes_description": edit_result.get("changes_description", "")
+            }
+        }
+        await asyncio.sleep(0)
+
+        if not edit_result.get("success", False):
+            yield {
+                "type": "final",
+                "success": False,
+                "message": "Failed to edit resume",
+                "edited_json": None,
+                "token_usage": {
+                    "prompt_tokens": prompt_tokens_used,
+                    "completion_tokens": completion_tokens_used,
+                    "total_tokens": total_tokens_used
+                }
+            }
+            await asyncio.sleep(0)
+            return
+
+        # Step 3: Return success (no cover letter or email)
+        yield {
+            "type": "final",
+            "success": True,
+            "message": "Resume edited successfully",
+            "edited_json": edit_result.get("edited_json", {}),
+            "sections_modified": edit_result.get("sections_modified", []),
+            "changes_description": edit_result.get("changes_description", ""),
+            "token_usage": {
+                "prompt_tokens": prompt_tokens_used,
+                "completion_tokens": completion_tokens_used,
+                "total_tokens": total_tokens_used
+            }
+        }
+        await asyncio.sleep(0)
+
+        logger.info(f"Resume editing completed for project {project_id}")
+
+    except Exception as e:
+        logger.error(f"Resume editing failed for project {project_id}: {e}")
+        yield {
+            "type": "final",
+            "success": False,
+            "message": f"Editing failed: {str(e)}",
+            "edited_json": None,
+            "token_usage": {
+                "prompt_tokens": prompt_tokens_used,
+                "completion_tokens": completion_tokens_used,
+                "total_tokens": total_tokens_used
+            }
+        }
+        await asyncio.sleep(0)

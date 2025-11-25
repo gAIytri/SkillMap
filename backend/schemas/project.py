@@ -24,6 +24,7 @@ class ProjectResponse(BaseModel):
 
     # History tracking
     tailoring_history: Optional[List[Dict[str, Any]]] = None
+    message_history: Optional[List[Dict[str, Any]]] = None
 
     created_at: datetime
     updated_at: datetime

@@ -74,7 +74,7 @@ const SkillsSection = ({
               data.map((skillCat, idx) => (
                 <Box key={idx} sx={{ mb: 1.5, fontSize: isMobile ? '14px' : '13px' }}>
                   <Typography variant="caption" fontWeight={600} sx={{ fontSize: isMobile ? '14px' : '13px', color: '#fff' }}>{skillCat.category}:</Typography>
-                  <Typography variant="caption" sx={{ ml: 1, fontSize: isMobile ? '13px' : '12px', color: '#fff' }}>{skillCat.skills.join(', ')}</Typography>
+                  <Typography variant="caption" sx={{ ml: 1, fontSize: isMobile ? '13px' : '12px', color: '#fff'  }}>{skillCat.skills.join(', ')}</Typography>
                 </Box>
               ))
             )}
