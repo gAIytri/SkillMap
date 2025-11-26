@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, Button, Chip } from '@mui/material';
 import { colorPalette } from '../../styles/theme';
 
@@ -8,64 +8,61 @@ const ProfessionalSummarySection = ({
   isEditing,
   tempData,
   onTempDataChange,
-  history,
-  onViewingPreviousVersion,
-  onRestoreVersion
+  versionHistory,      // NEW: { "0": content, "1": content, ... }
+  currentVersion,      // NEW: version number (e.g., 0, 1, 2)
+  onRestoreVersion,    // NEW: (versionNumber) => void
+  onViewingVersionChange  // NEW: callback to notify parent of version change
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Version selection: history.length = current version, 0 to history.length-1 = previous versions
-  const [selectedVersionIndex, setSelectedVersionIndex] = useState(history?.length || 0);
+  // Track which version is being viewed (now it's always a number, not 'current')
+  const [viewingVersion, setViewingVersion] = useState(currentVersion);
 
   if (!data) return null;
 
-  const hasHistory = history && history.length > 0;
-  const isViewingCurrent = selectedVersionIndex === history?.length;
+  // Check if we have version history
+  const hasHistory = versionHistory && Object.keys(versionHistory).length > 0;
 
-  // Update selected version when history changes (e.g., after tailoring)
-  useEffect(() => {
-    if (history && history.length > 0) {
-      // If currently viewing current version, update to new current version index
-      if (isViewingCurrent) {
-        setSelectedVersionIndex(history.length);
-      }
-    }
-  }, [history?.length]);
+  // Get all version numbers sorted (0, 1, 2, ...)
+  const versionNumbers = hasHistory
+    ? Object.keys(versionHistory).map(Number).sort((a, b) => a - b)
+    : [];
 
-  // Notify parent when viewing state changes
-  useEffect(() => {
-    if (onViewingPreviousVersion) {
-      onViewingPreviousVersion(!isViewingCurrent);
-    }
-  }, [isViewingCurrent, onViewingPreviousVersion]);
-
-  // Get content based on selected version
+  // Get content for display based on selected version
   const getDisplayContent = () => {
-    if (isViewingCurrent) {
+    if (viewingVersion === currentVersion) {
+      // Viewing the current version - show data from resume_json
       return data;
-    } else {
-      return history[selectedVersionIndex]?.resume_json?.professional_summary || 'No summary available';
+    }
+    // Viewing an older version - show from version_history
+    return versionHistory[viewingVersion] || 'No content available';
+  };
+
+  const handleVersionClick = (versionNum) => {
+    setViewingVersion(versionNum);
+    if (onViewingVersionChange) {
+      onViewingVersionChange(versionNum);
     }
   };
 
   const handleRestoreVersion = () => {
-    if (!isViewingCurrent && onRestoreVersion) {
-      const versionData = history[selectedVersionIndex]?.resume_json?.professional_summary;
-      if (versionData) {
-        onRestoreVersion('professional_summary', versionData);
-        // Switch back to current version view
-        setSelectedVersionIndex(history.length);
-        if (onViewingPreviousVersion) onViewingPreviousVersion(false);
-      }
+    if (viewingVersion !== currentVersion && onRestoreVersion) {
+      onRestoreVersion(viewingVersion);
+      // After restoration, the viewingVersion is now the current one
+      // No need to change viewingVersion - it stays on the same tab
     }
   };
 
-  // If no history, show simple view
-  if (!hasHistory) {
+  // Show version tabs if we have multiple versions (currentVersion > 0)
+  // OR if version history has at least one version stored
+  const showVersionTabs = currentVersion > 0 || (hasHistory && versionNumbers.length > 0);
+
+  // If no version tabs needed, show simple view
+  if (!showVersionTabs) {
     return (
       <Box>
-        <Paper elevation={0} sx={{ p: isMobile ? 2 : 3,mb:2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
+        <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
           {isEditing ? (
             <TextField
               value={tempData}
@@ -76,15 +73,18 @@ const ProfessionalSummarySection = ({
               variant="standard"
               autoFocus
               placeholder="Enter professional summary..."
-              InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 } }}
-              InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+              slotProps={{
+                input: {
+                  style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 }
+                }
+              }}
               sx={{
                 '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
                 '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
               }}
             />
           ) : (
-            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', textAlign:'justify'}}>
+            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', textAlign: 'justify' }}>
               {data}
             </Typography>
           )}
@@ -97,9 +97,9 @@ const ProfessionalSummarySection = ({
   return (
     <Box>
       {/* Info Label */}
-      <Box >
+      <Box>
         <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-          Click version number to view. Use "Make This Current" to restore.
+          Click version number to view. Green border = current active version. Use "Make This Current" to restore.
         </Typography>
       </Box>
 
@@ -115,56 +115,39 @@ const ProfessionalSummarySection = ({
           flexWrap: 'wrap',
         }}
       >
-        {/* Previous versions (oldest to newest) */}
-        {history.map((version, idx) => (
-          <Chip
-            key={idx}
-            label={idx}
-            onClick={() => {
-              setSelectedVersionIndex(idx);
-              if (onViewingPreviousVersion) onViewingPreviousVersion(true);
-            }}
-            sx={{
-              bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.primary.black,
-              color: '#fff',
-              fontWeight: selectedVersionIndex === idx ? 700 : 500,
-              fontSize: '0.75rem',
-              height: '28px',
-              minWidth: '32px',
-              cursor: 'pointer',
-              '&:hover': {
-                bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.secondary.mediumGreen,
-              },
-            }}
-          />
-        ))}
+        {/* All version chips - only show versions from version_history */}
+        {versionNumbers.map((versionNum) => {
+          const isSelected = viewingVersion === versionNum;
+          const isCurrent = currentVersion === versionNum;
 
-        {/* Current version */}
-        <Chip
-          label={history.length}
-          onClick={() => {
-            setSelectedVersionIndex(history.length);
-            if (onViewingPreviousVersion) onViewingPreviousVersion(false);
-          }}
-          sx={{
-            bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.primary.black,
-            color: '#fff',
-            fontWeight: isViewingCurrent ? 700 : 500,
-            fontSize: '0.75rem',
-            height: '28px',
-            minWidth: '32px',
-            cursor: 'pointer',
-            border: isViewingCurrent ? '2px solid ' + colorPalette.primary.darkGreen : 'none',
-            '&:hover': {
-              bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.secondary.mediumGreen,
-            },
-          }}
-        />
+          return (
+            <Chip
+              key={`v${versionNum}`}
+              label={`V${versionNum}`}
+              onClick={() => handleVersionClick(versionNum)}
+              sx={{
+                bgcolor: isSelected ? '#fff' : colorPalette.primary.black,
+                color: isSelected ? '#000' : '#fff',
+                fontWeight: isSelected ? 700 : 500,
+                fontSize: '0.75rem',
+                height: '28px',
+                minWidth: '40px',
+                cursor: 'pointer',
+                // Green border if this version is current
+                border: isCurrent ? `2px solid ${colorPalette.primary.brightGreen}` : 'none',
+                '&:hover': {
+                  bgcolor: isSelected ? '#fff' : colorPalette.secondary.mediumGreen,
+                  color: isSelected ? '#000' : '#fff',
+                },
+              }}
+            />
+          );
+        })}
       </Box>
 
       {/* Content Area - Full Width */}
       <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
-        {isEditing && isViewingCurrent ? (
+        {isEditing && viewingVersion === currentVersion ? (
           <TextField
             value={tempData}
             onChange={(e) => onTempDataChange(e.target.value)}
@@ -174,8 +157,11 @@ const ProfessionalSummarySection = ({
             variant="standard"
             autoFocus
             placeholder="Enter professional summary..."
-            InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 } }}
-            InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+            slotProps={{
+              input: {
+                style: { color: '#fff', fontSize: isMobile ? '15px' : '14px', lineHeight: 1.6 }
+              }
+            }}
             sx={{
               '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
               '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
@@ -183,12 +169,12 @@ const ProfessionalSummarySection = ({
           />
         ) : (
           <>
-            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', mb: !isViewingCurrent ? 3 : 0 , textAlign:'justify'}}>
+            <Typography variant="body2" sx={{ fontSize: isMobile ? '14px' : '13px', lineHeight: 1.7, color: '#fff', mb: viewingVersion !== currentVersion ? 3 : 0, textAlign: 'justify' }}>
               {getDisplayContent()}
             </Typography>
 
-            {/* Restore Version Button - Inside the content box */}
-            {!isViewingCurrent && (
+            {/* Restore Version Button - Show ONLY when viewing a version that is NOT current */}
+            {viewingVersion !== currentVersion && (
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                 <Button
                   variant="contained"
@@ -196,8 +182,10 @@ const ProfessionalSummarySection = ({
                   onClick={handleRestoreVersion}
                   sx={{
                     bgcolor: colorPalette.primary.brightGreen,
+                    color: '#000',
                     textTransform: 'none',
-                    '&:hover': { bgcolor: colorPalette.primary.darkGreen }
+                    fontWeight: 600,
+                    '&:hover': { bgcolor: colorPalette.secondary.mediumGreen }
                   }}
                 >
                   Make This Current

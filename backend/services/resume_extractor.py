@@ -57,6 +57,7 @@ class EducationEntry(BaseModel):
     location: Optional[str] = None
     graduation_date: str
     gpa: Optional[str] = None
+    gpa_out_of: Optional[str] = None  # e.g., "4" for "3.5/4" format
 
 
 class SkillCategory(BaseModel):
@@ -151,9 +152,10 @@ class ResumeExtractor:
         )
 
     def _extract_text_from_docx(self, docx_bytes: bytes) -> str:
-        """Extract text from DOCX using multiple methods"""
+        """Extract text from DOCX using multiple methods, including hyperlinks"""
         try:
             text_parts = []
+            hyperlinks = []
 
             # Method 1: python-docx (preserves structure)
             doc = Document(BytesIO(docx_bytes))
@@ -168,11 +170,30 @@ class ResumeExtractor:
                         if text:
                             text_parts.append(text)
 
-            # Extract paragraphs
+            # Extract paragraphs and hyperlinks
             for para in doc.paragraphs:
                 text = para.text.strip()
                 if text:
                     text_parts.append(text)
+
+                # Extract hyperlinks from this paragraph
+                for run in para.runs:
+                    if hasattr(run, '_element'):
+                        # Look for hyperlink elements in the run
+                        for elem in run._element.iterchildren():
+                            if elem.tag.endswith('hyperlink'):
+                                # Get the relationship ID
+                                r_id = elem.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                                if r_id:
+                                    try:
+                                        url = doc.part.rels[r_id].target_ref
+                                        link_text = ''.join(node.text for node in elem.iter() if hasattr(node, 'text') and node.text)
+                                        if url and link_text:
+                                            hyperlinks.append(f"{link_text.strip()}: {url}")
+                                        elif url:
+                                            hyperlinks.append(f"Link: {url}")
+                                    except:
+                                        pass
 
             # Extract from tables
             for table in doc.tables:
@@ -183,6 +204,10 @@ class ResumeExtractor:
                             text_parts.append(cell_text)
 
             extracted = '\n'.join(text_parts)
+
+            # Add hyperlinks section if any found
+            if hyperlinks:
+                extracted += "\n\n--- Hyperlinks ---\n" + "\n".join(hyperlinks)
 
             # Method 2: If python-docx failed, try docx2txt (sometimes catches more)
             if len(extracted.strip()) < self.MIN_EXTRACTION_THRESHOLD:
@@ -196,15 +221,42 @@ class ResumeExtractor:
             return ""
 
     def _extract_text_from_pdf(self, pdf_bytes: bytes) -> str:
-        """Extract text from PDF using PyMuPDF"""
+        """Extract text from PDF using PyMuPDF, including hyperlinks"""
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             text_parts = []
 
             for page in doc:
+                # Extract visible text
                 text = page.get_text()
                 if text:
                     text_parts.append(text)
+
+                # Extract hyperlinks from the page
+                links = page.get_links()
+                if links:
+                    link_texts = []
+                    for link in links:
+                        # Check if link has a URI (external link)
+                        if 'uri' in link and link['uri']:
+                            uri = link['uri']
+                            # Try to get the link text by extracting text from the link rectangle
+                            rect = link.get('from', None)
+                            if rect:
+                                try:
+                                    link_text = page.get_text("text", clip=rect).strip()
+                                    if link_text:
+                                        link_texts.append(f"{link_text}: {uri}")
+                                    else:
+                                        link_texts.append(f"Link: {uri}")
+                                except:
+                                    link_texts.append(f"Link: {uri}")
+                            else:
+                                link_texts.append(f"Link: {uri}")
+
+                    # Add links section to extracted text
+                    if link_texts:
+                        text_parts.append("\n--- Hyperlinks ---\n" + "\n".join(link_texts))
 
             doc.close()
             return '\n'.join(text_parts)
@@ -359,7 +411,9 @@ INSTRUCTIONS:
 - For personal_info:
   * Extract current_role/job title if mentioned in the header (e.g., "Software Engineer", "Data Analyst")
   * DO NOT include email/phone in header_links (they have dedicated fields)
-  * For header_links: Only extract social/professional links (LinkedIn, GitHub, Portfolio, etc.)
+  * For header_links: Extract social/professional links (LinkedIn, GitHub, Portfolio, etc.)
+  * If you see a "--- Hyperlinks ---" section, use it to extract both link text AND URL
+  * Format: text field should be the link display text, url field should be the actual URL
   * Keep link text clean and simple (e.g., "LinkedIn" not "LinkedinLinkedinLinkedin")
   * Avoid repeating text multiple times in link names
 

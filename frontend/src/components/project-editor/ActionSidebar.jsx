@@ -5,7 +5,6 @@ import EmailIcon from '@mui/icons-material/Email';
 import SendIcon from '@mui/icons-material/Send';
 import DownloadIcon from '@mui/icons-material/Download';
 import CloseIcon from '@mui/icons-material/Close';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { colorPalette } from '../../styles/theme';
 import {
   DndContext,
@@ -44,6 +43,8 @@ const SortableSectionButton = ({ id, label, isActive, onClick }) => {
       <Button
         fullWidth
         onClick={onClick}
+        {...attributes}
+        {...listeners}
         sx={{
           justifyContent: 'flex-start',
           color: isActive ? '#fff' : colorPalette.primary.darkGreen,
@@ -56,23 +57,12 @@ const SortableSectionButton = ({ id, label, isActive, onClick }) => {
           mb: 0.5,
           border: '1px solid',
           borderColor: isActive ? colorPalette.primary.darkGreen : '#e1e8ed',
+          cursor: isDragging ? 'grabbing' : 'grab',
           '&:hover': {
             bgcolor: isActive ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
           },
         }}
       >
-        <Box
-          {...attributes}
-          {...listeners}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            cursor: isDragging ? 'grabbing' : 'grab',
-            mr: 0.5,
-          }}
-        >
-          <DragIndicatorIcon sx={{ fontSize: 14, opacity: 0.5 }} />
-        </Box>
         <Typography
           sx={{
             fontSize: '0.65rem',
@@ -118,7 +108,7 @@ const ActionSidebar = ({
     return (
       <Box
         sx={{
-          width: '10%',
+          width: '15%',
           minWidth: '140px',
           maxWidth: '180px',
           bgcolor: '#f8f9fa',
@@ -156,7 +146,7 @@ const ActionSidebar = ({
          
 
         {/* Document Tabs - Vertical */}
-        <Box sx={{ mb: 1 }}>
+        <Box sx={{   borderBottom: '2px solid #e1e8ed' }}>
           <Typography
             variant="caption"
             sx={{
@@ -165,7 +155,7 @@ const ActionSidebar = ({
               color: '#666',
               fontWeight: 600,
               display: 'block',
-              fontSize: '0.65rem',
+              fontSize: '0.85rem',
             }}
           >
             DOCUMENTS
@@ -236,16 +226,16 @@ const ActionSidebar = ({
 
         {/* Section Navigation - Vertical & Draggable */}
         {extractedData && sectionOrder && sectionOrder.length > 0 && (
-          <Box sx={{ mb: 1, flex: 1, overflow: 'auto' }}>
+          <Box sx={{  pb: 1, flex: 1, overflow: 'auto', borderBottom: '2px solid #e1e8ed' }}>
             <Typography
               variant="caption"
               sx={{
                 px: 1,
-                pb: 0.5,
+                pb:0.5,
                 color: '#666',
                 fontWeight: 600,
                 display: 'block',
-                fontSize: '0.65rem',
+                fontSize: '0.85rem',
               }}
             >
               SECTIONS
@@ -293,20 +283,32 @@ const ActionSidebar = ({
         )}
 
         {/* Action Buttons */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Typography
-            variant="caption"
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1,  }}>
+          {/* Tailor Resume Button */}
+          <Button
+            onClick={onTailorClick}
+            disabled={tailoring || !extractedData}
+            fullWidth
+            size="small"
+            variant="contained"
             sx={{
-              px: 1,
-              pb: 0.5,
-              color: '#666',
-              fontWeight: 600,
-              display: 'block',
-              fontSize: '0.65rem',
+              bgcolor: colorPalette.primary.darkGreen,
+              color: '#ffffff',
+              textTransform: 'none',
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: '0.9rem',
+              py: 3,
+              '&:hover': {
+                bgcolor: '#1a8050',
+              },
+              '&:disabled': {
+                bgcolor: '#cccccc',
+                color: '#666666',
+              },
             }}
           >
-            ACTIONS
-          </Typography>
+            Tailor or Edit
+          </Button>
 
           {/* Replace Resume Button */}
           <Button
@@ -343,7 +345,7 @@ const ActionSidebar = ({
             fullWidth
             size="small"
             variant="outlined"
-          
+
             sx={{
               color: colorPalette.primary.darkGreen,
               borderColor: colorPalette.primary.darkGreen,
@@ -362,32 +364,6 @@ const ActionSidebar = ({
             }}
           >
             {downloading ? 'Downloading...' : 'Download'}
-          </Button>
-
-          {/* Tailor Resume Button */}
-          <Button
-            onClick={onTailorClick}
-            disabled={tailoring || !extractedData}
-            fullWidth
-            size="small"
-            variant="contained"
-            sx={{
-              bgcolor: colorPalette.primary.darkGreen,
-              color: '#ffffff',
-              textTransform: 'none',
-              fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.7rem',
-              py: 1,
-              '&:hover': {
-                bgcolor: '#1a8050',
-              },
-              '&:disabled': {
-                bgcolor: '#cccccc',
-                color: '#666666',
-              },
-            }}
-          >
-            Tailor or Edit
           </Button>
         </Box>
       </Box>

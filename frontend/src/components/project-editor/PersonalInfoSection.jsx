@@ -13,7 +13,19 @@ const PersonalInfoSection = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // Debug logging
+  console.log('🔍 PersonalInfoSection render:', { isEditing, data, tempData });
+
   if (!data) return null;
+
+  // Use tempData when editing, otherwise use data
+  const displayData = isEditing ? tempData : data;
+
+  // If editing but tempData is not ready, don't render yet
+  if (isEditing && !tempData) {
+    console.warn('⚠️ Editing mode but tempData is not ready!');
+    return null;
+  }
 
   return (
     <Box>
@@ -22,7 +34,7 @@ const PersonalInfoSection = ({
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 <TextField
                   label="Name"
-                  value={tempData?.name || ''}
+                  value={displayData?.name || ''}
                   onChange={(e) => updateTempField(null, 'name', e.target.value)}
                   fullWidth
                   variant="standard"
@@ -32,7 +44,7 @@ const PersonalInfoSection = ({
                 />
                 <TextField
                   label="Email"
-                  value={tempData?.email || ''}
+                  value={displayData?.email || ''}
                   onChange={(e) => updateTempField(null, 'email', e.target.value)}
                   fullWidth
                   variant="standard"
@@ -42,7 +54,7 @@ const PersonalInfoSection = ({
                 />
                 <TextField
                   label="Phone"
-                  value={tempData?.phone || ''}
+                  value={displayData?.phone || ''}
                   onChange={(e) => updateTempField(null, 'phone', e.target.value)}
                   fullWidth
                   variant="standard"
@@ -52,7 +64,7 @@ const PersonalInfoSection = ({
                 />
                 <TextField
                   label="Location"
-                  value={tempData?.location || ''}
+                  value={displayData?.location || ''}
                   onChange={(e) => updateTempField(null, 'location', e.target.value)}
                   fullWidth
                   variant="standard"
@@ -64,14 +76,14 @@ const PersonalInfoSection = ({
                   <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
                     Links
                   </Typography>
-                  {(tempData?.header_links || []).map((link, idx) => (
+                  {(displayData?.header_links || []).map((link, idx) => (
                     <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                         <TextField
                           placeholder="Link text"
                           value={link.text || ''}
                           onChange={(e) => {
-                            const newLinks = [...(tempData?.header_links || [])];
+                            const newLinks = [...(displayData?.header_links || [])];
                             newLinks[idx] = { ...newLinks[idx], text: e.target.value };
                             updateTempField(null, 'header_links', newLinks);
                           }}
@@ -84,7 +96,7 @@ const PersonalInfoSection = ({
                           placeholder="URL"
                           value={link.url || ''}
                           onChange={(e) => {
-                            const newLinks = [...(tempData?.header_links || [])];
+                            const newLinks = [...(displayData?.header_links || [])];
                             newLinks[idx] = { ...newLinks[idx], url: e.target.value };
                             updateTempField(null, 'header_links', newLinks);
                           }}
@@ -97,7 +109,7 @@ const PersonalInfoSection = ({
                       <IconButton
                         size="small"
                         onClick={() => {
-                          const newLinks = [...(tempData?.header_links || [])];
+                          const newLinks = [...(displayData?.header_links || [])];
                           newLinks.splice(idx, 1);
                           updateTempField(null, 'header_links', newLinks);
                         }}
@@ -110,7 +122,7 @@ const PersonalInfoSection = ({
                   <Button
                     startIcon={<AddIcon />}
                     onClick={() => {
-                      const newLinks = [...(tempData?.header_links || []), { text: '', url: '' }];
+                      const newLinks = [...(displayData?.header_links || []), { text: '', url: '' }];
                       updateTempField(null, 'header_links', newLinks);
                     }}
                     sx={{ color: '#fff', textTransform: 'none', mt: 1 }}

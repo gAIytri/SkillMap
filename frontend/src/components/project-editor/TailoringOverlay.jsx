@@ -15,6 +15,34 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
 
   const title = isEditing ? 'Editing Resume' : 'Tailoring Resume';
 
+  // Filter out unwanted messages
+  const filteredMessages = agentMessages.filter(msg => {
+    // Messages to HIDE (return false):
+    // 1. "Starting process" status message
+    if (msg.step === 'initialization') return false;
+
+    // 2. "Validating input" status message
+    if (msg.step === 'guardrail' || msg.step === 'validation') return false;
+
+    // 3. Validation result tool message
+    if (msg.tool === 'validate_intent') return false;
+
+    // 4. Job analysis result tool message
+    if (msg.tool === 'summarize_job_description') return false;
+
+    // 5. Tailoring result tool message
+    if (msg.tool === 'tailor_resume_content') return false;
+
+    // 6. Cover letter result tool message
+    if (msg.tool === 'generate_cover_letter') return false;
+
+    // 7. Email result tool message
+    if (msg.tool === 'generate_recruiter_email') return false;
+
+    // Show all other messages (status messages for main steps and complete notifications)
+    return true;
+  });
+
   return (
     <Box
       sx={{
@@ -76,7 +104,7 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
 
         {/* Messages Container */}
         <Box sx={{ p: 3, flex: 1, overflow: 'auto', minHeight: '250px', maxHeight: '500px' }}>
-          {agentMessages.length === 0 && (
+          {filteredMessages.length === 0 && (
             <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4}>
               <CircularProgress size={40} sx={{ color: colorPalette.primary.darkGreen }} />
               <Typography variant="body2" color="text.secondary" mt={2}>
@@ -85,7 +113,7 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
             </Box>
           )}
 
-          {agentMessages.map((msg, idx) => (
+          {filteredMessages.map((msg, idx) => (
             <Box
               key={idx}
               sx={{

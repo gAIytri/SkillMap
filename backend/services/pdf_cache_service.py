@@ -3,7 +3,7 @@ PDF Cache Service - Smart Caching and Background Generation
 
 Handles:
 - Hash-based cache validation
-- Background PDF generation with WebSocket progress updates
+- Background PDF generation
 - Progress tracking
 - Cache invalidation
 """
@@ -19,7 +19,6 @@ from sqlalchemy.orm import Session
 from models.project import Project
 from services.docx_generation_service import generate_resume_from_json
 from services.docx_to_pdf_service import convert_docx_to_pdf
-from services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +86,12 @@ async def generate_pdf_background(project_id: int, user_id: int, db: Session):
             project.pdf_generating = False
             project.pdf_generation_progress = "Complete (cached)"
             db.commit()
-
-            # Send complete notification via WebSocket
-            await manager.send_pdf_complete(user_id, project_id)
             return
 
         # Step 1: Generate DOCX
         progress_msg = "Building DOCX..."
         project.pdf_generation_progress = progress_msg
         db.commit()
-        await manager.send_pdf_progress(user_id, project_id, progress_msg)
 
         logger.info(f"Generating DOCX for project {project_id}")
         docx_bytes = generate_resume_from_json(
@@ -109,14 +104,14 @@ async def generate_pdf_background(project_id: int, user_id: int, db: Session):
         progress_msg = "Converting to PDF..."
         project.pdf_generation_progress = progress_msg
         db.commit()
-        await manager.send_pdf_progress(user_id, project_id, progress_msg)
 
         logger.info(f"Converting to PDF for project {project_id}")
         pdf_bytes, media_type = convert_docx_to_pdf(docx_bytes)
 
         # Step 3: Cache result
         progress_msg = "Finalizing..."
-        await manager.send_pdf_progress(user_id, project_id, progress_msg)
+        project.pdf_generation_progress = progress_msg
+        db.commit()
 
         logger.info(f"Caching PDF for project {project_id}")
         project.cached_pdf = pdf_bytes
@@ -127,9 +122,6 @@ async def generate_pdf_background(project_id: int, user_id: int, db: Session):
         db.commit()
 
         logger.info(f"✓ PDF generated and cached successfully for project {project_id}")
-
-        # Send completion notification via WebSocket
-        await manager.send_pdf_complete(user_id, project_id)
 
     except Exception as e:
         logger.error(f"❌ PDF generation failed for project {project_id}: {e}", exc_info=True)
@@ -142,9 +134,6 @@ async def generate_pdf_background(project_id: int, user_id: int, db: Session):
                 error_msg = f"Error: {str(e)[:80]}"
                 project.pdf_generation_progress = error_msg
                 db.commit()
-
-                # Send error notification via WebSocket
-                await manager.send_pdf_error(user_id, project_id, str(e))
         except Exception as cleanup_error:
             logger.error(f"Failed to update error status: {cleanup_error}")
 

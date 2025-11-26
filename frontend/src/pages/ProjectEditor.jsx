@@ -100,6 +100,14 @@ const ProjectEditor = () => {
   const [editingSection, setEditingSection] = useState(null); // Which section is being edited (e.g., 'professional_summary', 'experience', etc.)
   const [tempSectionData, setTempSectionData] = useState(null); // Temporary data for the entire section while editing
 
+  // Track which version is being viewed for each section
+  const [viewingVersions, setViewingVersions] = useState({
+    professional_summary: null, // null means viewing current
+    experience: null,
+    projects: null,
+    skills: null,
+  });
+
   const [selectedSection, setSelectedSection] = useState('personal_info'); // Currently selected section tab (default: personal_info)
   const [viewingPreviousVersion, setViewingPreviousVersion] = useState(false); // Track if user is viewing a previous version
   const [expandedSections, setExpandedSections] = useState({
@@ -250,6 +258,18 @@ const ProjectEditor = () => {
     };
   }, [projectId]);
 
+  // Initialize viewing versions with current versions when project loads
+  useEffect(() => {
+    if (project?.current_versions) {
+      setViewingVersions({
+        professional_summary: project.current_versions.professional_summary || 0,
+        experience: project.current_versions.experience || 0,
+        projects: project.current_versions.projects || 0,
+        skills: project.current_versions.skills || 0,
+      });
+    }
+  }, [project?.current_versions]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -352,11 +372,18 @@ const ProjectEditor = () => {
 
   // Section-level editing handlers
   const handleStartEditingSection = (sectionKey) => {
+    console.log('🎯 Starting to edit section:', sectionKey);
+    console.log('📊 Current extractedData:', extractedData);
+
     setEditingSection(sectionKey);
 
     // Copy the entire section data for editing
     if (sectionKey === 'personal_info') {
-      setTempSectionData(JSON.parse(JSON.stringify(extractedData.personal_info))); // Deep copy
+      const personalInfo = extractedData?.personal_info || {};
+      console.log('👤 Personal info data:', personalInfo);
+      const deepCopy = JSON.parse(JSON.stringify(personalInfo));
+      console.log('📋 Deep copy result:', deepCopy);
+      setTempSectionData(deepCopy); // Deep copy
     } else if (sectionKey === 'professional_summary') {
       setTempSectionData(extractedData.professional_summary);
     } else if (sectionKey === 'experience') {
@@ -374,6 +401,57 @@ const ProjectEditor = () => {
 
   const handleSaveSection = () => {
     if (!editingSection) return;
+
+    // Validation for projects: Require at least one non-empty bullet point
+    if (editingSection === 'projects' && Array.isArray(tempSectionData)) {
+      for (const project of tempSectionData) {
+        // Check if project has at least one non-empty bullet point
+        const bullets = project.bullets || (project.description ? project.description.split(/[.\n]/).filter(b => b.trim()) : []);
+        const hasValidBullet = bullets.some(b => b && b.trim().length > 0);
+
+        if (!hasValidBullet) {
+          toast.error(`Project "${project.name || 'Untitled'}" must have at least one bullet point`);
+          return; // Don't save
+        }
+      }
+    }
+
+    // Validation for experience: Require title, company, location, start_date, and at least one bullet point
+    if (editingSection === 'experience' && Array.isArray(tempSectionData)) {
+      for (const exp of tempSectionData) {
+        // Check required fields
+        if (!exp.title || !exp.title.trim()) {
+          toast.error('Job Title is required for all experience entries');
+          return; // Don't save
+        }
+        if (!exp.company || !exp.company.trim()) {
+          toast.error(`Company is required for "${exp.title}"`);
+          return; // Don't save
+        }
+        if (!exp.location || !exp.location.trim()) {
+          toast.error(`Location is required for "${exp.title}" at ${exp.company}`);
+          return; // Don't save
+        }
+        if (!exp.start_date || !exp.start_date.trim()) {
+          toast.error(`Start Date is required for "${exp.title}" at ${exp.company}`);
+          return; // Don't save
+        }
+
+        // Check if experience has at least one non-empty bullet point
+        const bullets = exp.bullets || [];
+        const hasValidBullet = bullets.some(b => b && b.trim().length > 0);
+
+        if (!hasValidBullet) {
+          toast.error(`"${exp.title}" at ${exp.company} must have at least one bullet point`);
+          return; // Don't save
+        }
+
+        // Auto-fill end_date with "Present" if empty
+        if (!exp.end_date || !exp.end_date.trim()) {
+          exp.end_date = 'Present';
+        }
+      }
+    }
 
     const updatedData = { ...extractedData };
     let dataToSave = tempSectionData;
@@ -421,39 +499,73 @@ const ProjectEditor = () => {
   };
 
   // Restore a previous version
-  const handleRestoreVersion = (sectionKey, versionData) => {
-    const updatedData = { ...extractedData };
-    updatedData[sectionKey] = versionData;
+  const handleRestoreVersion = async (sectionName, versionNumber) => {
+    try {
+      // Call the new backend API endpoint
+      const response = await api.post(
+        `/api/projects/${projectId}/restore-version`,
+        null,
+        {
+          params: {
+            section_name: sectionName,
+            version_number: versionNumber
+          }
+        }
+      );
 
-    setExtractedData(updatedData);
-    setPendingChanges(true);
+      // Update local state with the restored project data
+      const updatedProject = response.data;
+      setProject(updatedProject);
+      setExtractedData(updatedProject.resume_json);
+
+      // Mark as having pending changes (user needs to click Compile)
+      setPendingChanges(true);
+      toast.success('Version restored. Click "Compile" to see changes in PDF.');
+    } catch (error) {
+      console.error('Failed to restore version:', error);
+      toast.error('Failed to restore version');
+    }
   };
 
   // Helper to update temp section data
   const updateTempField = (index, field, value) => {
-    // If index is null and value is an array, replace entire array (for add/delete operations)
-    if (index === null && Array.isArray(value)) {
-      setTempSectionData(value);
-      return;
-    }
+    console.log('🔄 updateTempField called:', { index, field, value });
 
-    // If index is null and field is provided, update object field (for PersonalInfo)
-    if (index === null && field && typeof tempSectionData === 'object' && !Array.isArray(tempSectionData)) {
-      setTempSectionData({ ...tempSectionData, [field]: value });
-      return;
-    }
+    // Use functional update to avoid stale closure issues
+    setTempSectionData(prevData => {
+      console.log('📦 Previous data in updater:', prevData);
 
-    if (Array.isArray(tempSectionData)) {
-      const updated = [...tempSectionData];
-      if (field) {
-        updated[index] = { ...updated[index], [field]: value };
-      } else {
-        updated[index] = value;
+      // If index is null and field is provided, update object field (for PersonalInfo)
+      // This must come BEFORE the array check, because the value might be an array being set as a field
+      if (index === null && field && typeof prevData === 'object' && !Array.isArray(prevData)) {
+        const result = { ...prevData, [field]: value };
+        console.log('✅ Updating object field. Result:', result);
+        return result;
       }
-      setTempSectionData(updated);
-    } else {
-      setTempSectionData(value);
-    }
+
+      // If index is null and value is an array, replace entire array (for add/delete operations)
+      // This is for sections that ARE arrays (like experience, projects)
+      if (index === null && Array.isArray(value)) {
+        console.log('✅ Replacing entire array');
+        return value;
+      }
+
+      // Handle array updates (for experience, projects, etc.)
+      if (Array.isArray(prevData)) {
+        const updated = [...prevData];
+        if (field) {
+          updated[index] = { ...updated[index], [field]: value };
+        } else {
+          updated[index] = value;
+        }
+        console.log('✅ Updating array. Result:', updated);
+        return updated;
+      }
+
+      // Fallback: replace entire value
+      console.log('✅ Fallback: replacing entire value');
+      return value;
+    });
   };
 
 
@@ -647,24 +759,37 @@ const ProjectEditor = () => {
           {sectionNames[sectionKey]}
         </Typography>
 
-        {/* Only show edit icon when section is expanded */}
-        {isExpanded && canEdit && (
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleStartEditingSection(sectionKey);
-            }}
-            sx={{
-              p: isMobile ? 0.5 : 0.25,
-              ml: 'auto',
-              opacity: 0.7,
-              '&:hover': { opacity: 1, bgcolor: 'rgba(76, 175, 80, 0.1)' }
-            }}
-          >
-            <EditIcon sx={{ fontSize: isMobile ? 18 : 16, color: colorPalette.primary.brightGreen }} />
-          </IconButton>
-        )}
+        {/* Only show edit icon when section is expanded and on current version */}
+        {isExpanded && canEdit && (() => {
+          // Check if this section has version history and if user is viewing non-current version
+          const sectionsWithHistory = ['professional_summary', 'experience', 'projects', 'skills'];
+          if (sectionsWithHistory.includes(sectionKey)) {
+            const currentVersion = project?.current_versions?.[sectionKey] || 0;
+            const viewingVersion = viewingVersions[sectionKey];
+            // Hide edit icon if viewing a version different from current
+            if (viewingVersion !== null && viewingVersion !== currentVersion) {
+              return null;
+            }
+          }
+          // Show edit icon for all other cases
+          return (
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStartEditingSection(sectionKey);
+              }}
+              sx={{
+                p: isMobile ? 0.5 : 0.25,
+                ml: 'auto',
+                opacity: 0.7,
+                '&:hover': { opacity: 1, bgcolor: 'rgba(76, 175, 80, 0.1)' }
+              }}
+            >
+              <EditIcon sx={{ fontSize: isMobile ? 18 : 16, color: colorPalette.primary.brightGreen }} />
+            </IconButton>
+          );
+        })()}
       </Box>
     );
   };
@@ -696,9 +821,12 @@ const ProjectEditor = () => {
             isEditing={editingSection === 'professional_summary'}
             tempData={tempSectionData}
             onTempDataChange={setTempSectionData}
-            history={history}
-            onViewingPreviousVersion={setViewingPreviousVersion}
-            onRestoreVersion={handleRestoreVersion}
+            versionHistory={project?.version_history?.professional_summary || {}}
+            currentVersion={project?.current_versions?.professional_summary || 0}
+            onRestoreVersion={(versionNumber) => handleRestoreVersion('professional_summary', versionNumber)}
+            onViewingVersionChange={(versionNumber) => {
+              setViewingVersions(prev => ({ ...prev, professional_summary: versionNumber }));
+            }}
           />
         );
 
@@ -710,9 +838,12 @@ const ProjectEditor = () => {
             isEditing={editingSection === 'experience'}
             tempData={tempSectionData}
             updateTempField={updateTempField}
-            history={history}
-            onViewingPreviousVersion={setViewingPreviousVersion}
-            onRestoreVersion={handleRestoreVersion}
+            versionHistory={project?.version_history?.experience || {}}
+            currentVersion={project?.current_versions?.experience || 0}
+            onRestoreVersion={(versionNumber) => handleRestoreVersion('experience', versionNumber)}
+            onViewingVersionChange={(versionNumber) => {
+              setViewingVersions(prev => ({ ...prev, experience: versionNumber }));
+            }}
           />
         );
 
@@ -724,9 +855,12 @@ const ProjectEditor = () => {
             isEditing={editingSection === 'projects'}
             tempData={tempSectionData}
             updateTempField={updateTempField}
-            history={history}
-            onViewingPreviousVersion={setViewingPreviousVersion}
-            onRestoreVersion={handleRestoreVersion}
+            versionHistory={project?.version_history?.projects || {}}
+            currentVersion={project?.current_versions?.projects || 0}
+            onRestoreVersion={(versionNumber) => handleRestoreVersion('projects', versionNumber)}
+            onViewingVersionChange={(versionNumber) => {
+              setViewingVersions(prev => ({ ...prev, projects: versionNumber }));
+            }}
           />
         );
 
@@ -755,6 +889,12 @@ const ProjectEditor = () => {
             isEditing={editingSection === 'skills'}
             tempData={tempSectionData}
             updateTempField={updateTempField}
+            versionHistory={project?.version_history?.skills || {}}
+            currentVersion={project?.current_versions?.skills || 0}
+            onRestoreVersion={(versionNumber) => handleRestoreVersion('skills', versionNumber)}
+            onViewingVersionChange={(versionNumber) => {
+              setViewingVersions(prev => ({ ...prev, skills: versionNumber }));
+            }}
           />
         );
 

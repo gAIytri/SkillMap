@@ -28,8 +28,12 @@ class Project(Base):
     cover_letter_generated_at = Column(DateTime(timezone=True), nullable=True)  # When cover letter was generated
     email_generated_at = Column(DateTime(timezone=True), nullable=True)  # When email was generated
 
-    # History tracking for resume tailoring
+    # History tracking for resume tailoring (OLD SYSTEM - kept for migration)
     tailoring_history = Column(JSON, nullable=True)  # Array of previous versions with timestamps
+
+    # NEW VERSION SYSTEM - Permanent version storage
+    version_history = Column(JSON, nullable=True)  # {section_name: {"0": data, "1": data, ...}}
+    current_versions = Column(JSON, nullable=True)  # {section_name: version_number}
 
     # Message history for chat-style interface (stores all JD/edit messages)
     message_history = Column(JSON, nullable=True)  # Array of {timestamp, text, type: 'job_description' | 'edit'}

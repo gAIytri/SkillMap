@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -10,58 +10,53 @@ const ProjectsSection = ({
   isEditing,
   tempData,
   updateTempField,
-  history,
-  onViewingPreviousVersion,
-  onRestoreVersion
+  versionHistory,      // NEW: { "0": data, "1": data, ... }
+  currentVersion,      // NEW: version number (e.g., 0, 1, 2)
+  onRestoreVersion,    // NEW: (versionNumber) => void
+  onViewingVersionChange  // NEW: callback to notify parent of version change
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Version selection: history.length = current version, 0 to history.length-1 = previous versions
-  const [selectedVersionIndex, setSelectedVersionIndex] = useState(history?.length || 0);
+  // Track which version is being viewed (always a number)
+  const [viewingVersion, setViewingVersion] = useState(currentVersion);
 
   if (!data || data.length === 0) return null;
 
-  const hasHistory = history && history.length > 0;
-  const isViewingCurrent = selectedVersionIndex === history?.length;
+  // Check if we have version history
+  const hasHistory = versionHistory && Object.keys(versionHistory).length > 0;
 
-  // Update selected version when history changes (e.g., after tailoring)
-  useEffect(() => {
-    if (history && history.length > 0) {
-      // If currently viewing current version, update to new current version index
-      if (isViewingCurrent) {
-        setSelectedVersionIndex(history.length);
-      }
-    }
-  }, [history?.length]);
-
-  // Notify parent when viewing state changes
-  useEffect(() => {
-    if (onViewingPreviousVersion) {
-      onViewingPreviousVersion(!isViewingCurrent);
-    }
-  }, [isViewingCurrent, onViewingPreviousVersion]);
+  // Get all version numbers sorted (0, 1, 2, ...)
+  const versionNumbers = hasHistory
+    ? Object.keys(versionHistory).map(Number).sort((a, b) => a - b)
+    : [];
 
   // Get content based on selected version
   const getDisplayContent = () => {
-    if (isViewingCurrent) {
+    if (viewingVersion === currentVersion) {
+      // Viewing the current version - show data from resume_json
       return data;
-    } else {
-      return history[selectedVersionIndex]?.resume_json?.projects || [];
+    }
+    // Viewing an older version - show from version_history
+    return versionHistory[viewingVersion] || [];
+  };
+
+  const handleVersionClick = (versionNum) => {
+    setViewingVersion(versionNum);
+    if (onViewingVersionChange) {
+      onViewingVersionChange(versionNum);
     }
   };
 
   const handleRestoreVersion = () => {
-    if (!isViewingCurrent && onRestoreVersion) {
-      const versionData = history[selectedVersionIndex]?.resume_json?.projects;
-      if (versionData) {
-        onRestoreVersion('projects', versionData);
-        // Switch back to current version view
-        setSelectedVersionIndex(history.length);
-        if (onViewingPreviousVersion) onViewingPreviousVersion(false);
-      }
+    if (viewingVersion !== currentVersion && onRestoreVersion) {
+      onRestoreVersion(viewingVersion);
+      // Stay on the same tab after restoration
     }
   };
+
+  // Show version tabs if we have multiple versions
+  const showVersionTabs = currentVersion > 0 || (hasHistory && versionNumbers.length > 0);
 
   // Render project content (used by both with/without history)
   const renderProjectContent = (projectsData, canEdit) => {
@@ -141,46 +136,54 @@ const ProjectsSection = ({
                   <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
                     Description (Bullet Points)
                   </Typography>
-                  {(proj.bullets || proj.description ? (
-                    proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim())
-                  ) : ['']).map((bullet, bulletIdx) => (
-                    <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'center' }}>
-                      <TextField
-                        value={bullet}
-                        onChange={(e) => {
-                          const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || [''])];
-                          newBullets[bulletIdx] = e.target.value;
-                          const updatedData = [...tempData];
-                          updatedData[idx] = { ...proj, bullets: newBullets };
-                          updateTempField(null, null, updatedData);
-                        }}
-                        multiline
-                        rows={3}
-                        placeholder={`Bullet point ${bulletIdx + 1}`}
-                        variant="standard"
-                        InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' } }}
-                        sx={{
-                          flex: 1,
-                          minWidth: 0,
-                          '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
-                          '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
-                        }}
-                      />
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || [''])];
-                          newBullets.splice(bulletIdx, 1);
-                          const updatedData = [...tempData];
-                          updatedData[idx] = { ...proj, bullets: newBullets.length > 0 ? newBullets : [''] };
-                          updateTempField(null, null, updatedData);
-                        }}
-                        sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  ))}
+                  {(() => {
+                    const bullets = proj.bullets || proj.description ? (
+                      proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim())
+                    ) : [''];
+                    const bulletsCount = bullets.length;
+
+                    return bullets.map((bullet, bulletIdx) => (
+                      <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'center' }}>
+                        <TextField
+                          value={bullet}
+                          onChange={(e) => {
+                            const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || [''])];
+                            newBullets[bulletIdx] = e.target.value;
+                            const updatedData = [...tempData];
+                            updatedData[idx] = { ...proj, bullets: newBullets };
+                            updateTempField(null, null, updatedData);
+                          }}
+                          multiline
+                          rows={3}
+                          placeholder={`Bullet point ${bulletIdx + 1}`}
+                          variant="standard"
+                          InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '90%' } }}
+                          sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
+                            '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
+                          }}
+                        />
+                        {/* Only show delete button if there's more than one bullet point */}
+                        {bulletsCount > 1 && (
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || [''])];
+                              newBullets.splice(bulletIdx, 1);
+                              const updatedData = [...tempData];
+                              updatedData[idx] = { ...proj, bullets: newBullets.length > 0 ? newBullets : [''] };
+                              updateTempField(null, null, updatedData);
+                            }}
+                            sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                      </Box>
+                    ));
+                  })()}
                   <Button
                     startIcon={<AddIcon />}
                     onClick={() => {
@@ -268,8 +271,8 @@ const ProjectsSection = ({
     }
   };
 
-  // If no history, show simple view
-  if (!hasHistory) {
+  // If no version tabs needed, show simple view
+  if (!showVersionTabs) {
     return (
       <Box>
           <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
@@ -303,58 +306,41 @@ const ProjectsSection = ({
           flexWrap: 'wrap',
         }}
       >
-        {/* Previous versions (oldest to newest) */}
-        {history.map((_, idx) => (
-          <Chip
-            key={idx}
-            label={idx}
-            onClick={() => {
-              setSelectedVersionIndex(idx);
-              if (onViewingPreviousVersion) onViewingPreviousVersion(true);
-            }}
-            sx={{
-              bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.primary.black,
-              color: '#fff',
-              fontWeight: selectedVersionIndex === idx ? 700 : 500,
-              fontSize: '0.75rem',
-              height: '28px',
-              minWidth: '32px',
-              cursor: 'pointer',
-              '&:hover': {
-                bgcolor: selectedVersionIndex === idx ? colorPalette.primary.darkGreen : colorPalette.secondary.mediumGreen,
-              },
-            }}
-          />
-        ))}
+        {/* All version chips - only show versions from version_history */}
+        {versionNumbers.map((versionNum) => {
+          const isSelected = viewingVersion === versionNum;
+          const isCurrent = currentVersion === versionNum;
 
-        {/* Current version */}
-        <Chip
-          label={history.length}
-          onClick={() => {
-            setSelectedVersionIndex(history.length);
-            if (onViewingPreviousVersion) onViewingPreviousVersion(false);
-          }}
-          sx={{
-            bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.primary.black,
-            color: '#fff',
-            fontWeight: isViewingCurrent ? 700 : 500,
-            fontSize: '0.75rem',
-            height: '28px',
-            minWidth: '32px',
-            cursor: 'pointer',
-            border: isViewingCurrent ? '2px solid ' + colorPalette.primary.darkGreen : 'none',
-            '&:hover': {
-              bgcolor: isViewingCurrent ? colorPalette.primary.brightGreen : colorPalette.secondary.mediumGreen,
-            },
-          }}
-        />
+          return (
+            <Chip
+              key={`v${versionNum}`}
+              label={`V${versionNum}`}
+              onClick={() => handleVersionClick(versionNum)}
+              sx={{
+                bgcolor: isSelected ? '#fff' : colorPalette.primary.black,
+                color: isSelected ? '#000' : '#fff',
+                fontWeight: isSelected ? 700 : 500,
+                fontSize: '0.75rem',
+                height: '28px',
+                minWidth: '40px',
+                cursor: 'pointer',
+                // Green border if this version is current
+                border: isCurrent ? `2px solid ${colorPalette.primary.brightGreen}` : 'none',
+                '&:hover': {
+                  bgcolor: isSelected ? '#fff' : colorPalette.secondary.mediumGreen,
+                  color: isSelected ? '#000' : '#fff',
+                },
+              }}
+            />
+          );
+        })}
       </Box>
 
       {/* Content Area - Full Width */}
       <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
-        {renderProjectContent(displayData, isViewingCurrent)}
-        {/* Restore Version Button */}
-        {!isEditing && !isViewingCurrent && (
+        {renderProjectContent(displayData, viewingVersion === currentVersion)}
+        {/* Restore Version Button - Show ONLY when viewing a version that is NOT current */}
+        {!isEditing && viewingVersion !== currentVersion && (
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             <Button
               variant="contained"
@@ -362,8 +348,10 @@ const ProjectsSection = ({
               onClick={handleRestoreVersion}
               sx={{
                 bgcolor: colorPalette.primary.brightGreen,
+                color: '#000',
                 textTransform: 'none',
-                '&:hover': { bgcolor: colorPalette.primary.darkGreen }
+                fontWeight: 600,
+                '&:hover': { bgcolor: colorPalette.secondary.mediumGreen }
               }}
             >
               Make This Current

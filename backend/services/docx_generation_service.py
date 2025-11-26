@@ -65,22 +65,61 @@ STYLES = {
 
 def sanitize_text(text: str) -> str:
     """
-    Remove invalid XML characters from text
+    Remove invalid XML characters and normalize special Unicode characters
 
     Args:
         text: Input text that may contain invalid characters
 
     Returns:
-        Sanitized text safe for XML/DOCX
+        Sanitized text safe for XML/DOCX with normalized characters
     """
     if not text:
         return ""
 
-    # Remove null bytes and control characters (except newline, carriage return, tab)
     import re
+    import html
+
+    # Decode HTML entities first (like &amp;, &lt;, &gt;, etc.)
+    text = html.unescape(text)
+
+    # Normalize common Unicode characters to their ASCII equivalents
+    replacements = {
+        # Quotes (smart quotes to regular quotes)
+        '\u2018': "'",  # Left single quote
+        '\u2019': "'",  # Right single quote
+        '\u201C': '"',  # Left double quote
+        '\u201D': '"',  # Right double quote
+        '\u2033': '"',  # Double prime
+        '\u2032': "'",  # Prime
+
+        # Dashes (en-dash, em-dash to hyphen)
+        '\u2013': '-',  # En dash
+        '\u2014': '-',  # Em dash
+        '\u2212': '-',  # Minus sign
+
+        # Spaces
+        '\u00A0': ' ',  # Non-breaking space
+        '\u2009': ' ',  # Thin space
+        '\u200B': '',   # Zero-width space
+
+        # Ellipsis
+        '\u2026': '...',  # Horizontal ellipsis
+
+        # Ampersand variants (fullwidth and small variants)
+        '\uFF06': '&',  # Fullwidth ampersand ＆
+        '\uFE60': '&',  # Small ampersand ﹠
+    }
+
+    # Apply replacements
+    for old_char, new_char in replacements.items():
+        text = text.replace(old_char, new_char)
+
+    # Remove null bytes and control characters (except newline, carriage return, tab)
     # Keep only valid XML characters
     # Valid: \x09 (tab), \x0A (LF), \x0D (CR), \x20-\uD7FF, \uE000-\uFFFD
-    return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]', '', text)
+    text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]', '', text)
+
+    return text
 
 
 def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColor = None):
@@ -344,7 +383,7 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]], sectio
     Format:
     EDUCATION (Heading 1, underlined)
     Institution, Location (Normal, 10pt, bold)
-    Degree – GPA: X.X    Date (Normal, 10pt, italic, right-aligned)
+    Degree – GPA: X.X/Y (optional /Y)    Date (Normal, 10pt, italic, right-aligned)
 
     Pagination: Entire section stays together (education is typically short)
     """
@@ -390,7 +429,11 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]], sectio
         # Degree line (italic) - NO date on this line
         degree_parts = [edu.get('degree', '')]
         if edu.get('gpa'):
-            degree_parts.append(f"– GPA: {edu['gpa']}")
+            gpa_text = edu['gpa']
+            # Add "out of" if provided (e.g., "3.5/4")
+            if edu.get('gpa_out_of'):
+                gpa_text = f"{gpa_text}/{edu['gpa_out_of']}"
+            degree_parts.append(f"– GPA: {gpa_text}")
 
         degree_para = doc.add_paragraph(style='Normal')
         degree_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -415,7 +458,8 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
 
     Format:
     EXPERIENCE (Heading 1, underlined)
-    Company – Title, Location    Start – End (Heading 2, date right-aligned)
+    Company Name                         Start – End (bold, date right-aligned)
+    Role, Location (normal weight, 10pt, closer spacing)
     • Bullet 1 (List Paragraph, 10pt)
     • Bullet 2
 
@@ -429,81 +473,76 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
     add_section_header(doc, section_name, keep_with_next=False)
 
     for idx, exp in enumerate(experience):
-        # Job header (Heading 2)
+        # Job header (Company name + dates)
         company = exp.get('company', '')
         title = exp.get('title', '')
         location = exp.get('location', '')
         start_date = exp.get('start_date', '')
         end_date = exp.get('end_date', '')
 
-        # Create plain paragraph WITHOUT Heading2 style to avoid built-in spacing
-        # All formatting (bold, size, font) is applied manually below
-        job_para = doc.add_paragraph()
+        # Line 1: Company Name (bold) + Dates (right-aligned, bold)
+        company_para = doc.add_paragraph()
 
         # Explicitly set indents to 0 to align with section header
-        job_para.paragraph_format.left_indent = Pt(1)
-        job_para.paragraph_format.first_line_indent = Inches(0)
-        # First item: NO gap after section underline. Subsequent items: add minimal spacing
-        job_para.paragraph_format.space_before = Pt(2) if idx == 0 else Pt(6)
-        job_para.paragraph_format.space_after = Pt(0)  # NO gap after job header
-        job_para.paragraph_format.line_spacing = 1.0  # Single line spacing
-        job_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
-        # Pagination: Keep job header with its bullets (don't split entry)
-        job_para.paragraph_format.keep_with_next = True
-        job_para.paragraph_format.keep_together = True
+        company_para.paragraph_format.left_indent = Pt(1)
+        company_para.paragraph_format.first_line_indent = Inches(0)
+        # First item: minimal gap after section underline. Subsequent items: add spacing
+        company_para.paragraph_format.space_before = Pt(2) if idx == 0 else Pt(6)
+        company_para.paragraph_format.space_after = Pt(0)  # NO gap after company line
+        company_para.paragraph_format.line_spacing = Pt(11)  # Tight exact spacing for 11pt font
+        company_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        # Pagination: Keep company with role line
+        company_para.paragraph_format.keep_with_next = True
+        company_para.paragraph_format.keep_together = True
 
-        # Dynamic layout: Keep subtext on line 1 if short, wrap to line 2 if long
         if company:
-            # Build subtext
-            job_subtext_parts = []
-            if title:
-                job_subtext_parts.append(title)
-            if location:
-                job_subtext_parts.append(location)
-
-            subtext = ', '.join(job_subtext_parts) if job_subtext_parts else ''
-
-            # Estimate text width to decide layout
-            # Rough estimation: 11pt bold ~0.09 in/char, 10pt normal ~0.07 in/char
-            # Tab stop at 7.5", need ~1" for date, so max ~6.5" for text
-            company_width = len(company) * 0.09
-            subtext_width = len(subtext) * 0.07 if subtext else 0
-            separator_width = 0.2  # " – " separator
-            total_width = company_width + separator_width + subtext_width
-
-            # If text would exceed 5.5 inches, wrap subtext to line 2
-            wrap_subtext = (total_width > 7.5) and subtext
-
-            # Add company name (always on line 1)
-            company_run = job_para.add_run(company)
+            # Add company name (bold, 11pt)
+            company_run = company_para.add_run(company)
             company_run.font.bold = True
             company_run.font.size = Pt(11)
             company_run.font.name = 'Calibri'
 
-            # If subtext is short, add it on line 1
-            if subtext and not wrap_subtext:
-                subtext_run = job_para.add_run(f" – {subtext}")
-                subtext_run.font.bold = False
-                subtext_run.font.size = Pt(10)  # One size smaller
-                subtext_run.font.name = 'Calibri'
-
-            # Add dates on right side (ALWAYS on line 1)
+            # Add dates on right side (bold, 11pt)
             if start_date and end_date:
-                tab_stops = job_para.paragraph_format.tab_stops
+                tab_stops = company_para.paragraph_format.tab_stops
                 tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
 
-                date_run = job_para.add_run(f"\t{start_date} – {end_date}")
+                date_run = company_para.add_run(f"\t{start_date} – {end_date}")
                 date_run.font.bold = True
                 date_run.font.size = Pt(11)
                 date_run.font.name = 'Calibri'
 
-            # If subtext is long, add it on line 2
-            if subtext and wrap_subtext:
-                job_para.add_run('\n')
-                subtext_run = job_para.add_run(subtext)
-                subtext_run.font.bold = False
-                subtext_run.font.size = Pt(10)
-                subtext_run.font.name = 'Calibri'
+        # Line 2: Role, Location (light weight, 10pt, very close to company line)
+        role_para = doc.add_paragraph()
+
+        # Explicitly set indents to 0 to align with section header
+        role_para.paragraph_format.left_indent = Pt(1)
+        role_para.paragraph_format.first_line_indent = Inches(0)
+        # EXTREMELY tight spacing - minimal gap between company and role line
+        role_para.paragraph_format.space_before = Pt(0)  # Zero spacing to keep very close to company above
+        role_para.paragraph_format.space_after = Pt(2)  # Small gap after role line before bullets
+        role_para.paragraph_format.line_spacing = Pt(10)  # Exact line height for 10pt font
+        role_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        # Pagination: Keep role with bullets
+        role_para.paragraph_format.keep_with_next = True
+        role_para.paragraph_format.keep_together = True
+
+        # Build role and location text
+        role_parts = []
+        if title:
+            role_parts.append(title)
+        if location:
+            role_parts.append(location)
+
+        if role_parts:
+            role_text = ', '.join(role_parts)
+            role_run = role_para.add_run(role_text)
+            role_run.font.bold = False  # Normal weight (not bold)
+            role_run.font.size = Pt(10)
+            role_run.font.name = 'Calibri'
+
+            # Make font lighter by reducing color intensity (gray instead of black)
+            role_run.font.color.rgb = RGBColor(96, 96, 96)  # Dark gray for lighter appearance
 
         # Bullets (List Paragraph, 10pt)
         bullets = exp.get('bullets', [])
@@ -511,7 +550,14 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
             # Keep all bullets together with the job header
             # Set keep_with_next=True on all bullets except the last one
             is_last_bullet = (i == len(bullets) - 1)
+            is_first_bullet = (i == 0)
+
             bullet_para = add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
+
+            # Add extra space before FIRST bullet only (after role line)
+            if is_first_bullet:
+                bullet_para.paragraph_format.space_before = Pt(3)
+
             if not is_last_bullet:
                 bullet_para.paragraph_format.keep_with_next = True
 

@@ -275,45 +275,72 @@ const UploadResume = () => {
             </>
           )}
 
-          {/* During Upload State - Show Progress, Status, and Template */}
+          {/* During Upload State - Side by side layout */}
           {uploading && (
-            <Box>
-              {/* Uploading text and progress bar at top */}
-              <Typography
-                variant={isMobile ? 'body2' : 'body1'}
-                fontWeight={600}
-                color={colorPalette.primary.darkGreen}
-                mb={isMobile ? 1.5 : 2}
-              >
-                Uploading...
-              </Typography>
-
-              <LinearProgress
-                sx={{
-                  bgcolor: colorPalette.secondary.lightGreen,
-                  '& .MuiLinearProgress-bar': {
-                    bgcolor: colorPalette.primary.brightGreen,
-                  },
-                  mb: isMobile ? 3 : 4,
-                  height: isMobile ? 4 : 6,
-                }}
-              />
-
-              {/* Template Preview - Centered, full width */}
+            <Box
+              display="flex"
+              flexDirection={isMobile ? 'column' : 'row'}
+              gap={isMobile ? 3 : 4}
+              alignItems={isMobile ? 'center' : 'flex-start'}
+            >
+              {/* LEFT SIDE - Progress and ATS Message */}
               <Box
+                flex={1}
+                display="flex"
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                width={isMobile ? '100%' : 'auto'}
+              >
+                {/* Uploading text and progress bar */}
+                <Typography
+                  variant={isMobile ? 'body2' : 'h6'}
+                  fontWeight={600}
+                  color={colorPalette.primary.darkGreen}
+                  mb={isMobile ? 1.5 : 2}
+                  textAlign="center"
+                >
+                  Uploading...
+                </Typography>
+
+                <LinearProgress
+                  sx={{
+                    bgcolor: colorPalette.secondary.lightGreen,
+                    '& .MuiLinearProgress-bar': {
+                      bgcolor: colorPalette.primary.brightGreen,
+                    },
+                    mb: isMobile ? 2 : 4,
+                    height: isMobile ? 4 : 6,
+                    width: '100%',
+                    maxWidth: '300px',
+                  }}
+                />
+
+                {/* ATS-friendly message */}
+                <Typography
+                  variant={isMobile ? 'body2' : 'body1'}
+                  color="text.secondary"
+                  textAlign="center"
+                  fontStyle="italic"
+                >
+                  Clean, professional, ATS-friendly format
+                </Typography>
+              </Box>
+
+              {/* RIGHT SIDE - Template Preview (constrained height) */}
+              <Box
+                flex={1}
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
-                justifyContent="center"
-                maxWidth={isMobile ? '100%' : '600px'}
-                mx="auto"
-                px={isMobile ? 0 : 2}
+                width={isMobile ? '100%' : 'auto'}
+                maxWidth={isMobile ? '100%' : '400px'}
               >
                 <Typography
                   variant={isMobile ? 'caption' : 'body2'}
                   fontWeight={600}
                   color={colorPalette.primary.darkGreen}
-                  mb={isMobile ? 1.5 : 2}
+                  mb={isMobile ? 1 : 1.5}
                   textAlign="center"
                 >
                   Your resume will look like this:
@@ -327,6 +354,10 @@ const UploadResume = () => {
                     border: isMobile ? '1.5px solid' : '2px solid',
                     borderColor: colorPalette.primary.brightGreen,
                     borderRadius: isMobile ? 1.5 : 2,
+                    maxHeight: isMobile ? '400px' : '500px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
                   <img
@@ -334,7 +365,8 @@ const UploadResume = () => {
                     alt="Resume Template Preview"
                     style={{
                       width: '100%',
-                      height: 'auto',
+                      height: '100%',
+                      objectFit: 'contain',
                       display: 'block',
                     }}
                     onError={(e) => {
@@ -348,7 +380,7 @@ const UploadResume = () => {
                     sx={{
                       display: 'none',
                       width: '100%',
-                      aspectRatio: '8.5 / 11',
+                      height: '100%',
                       bgcolor: '#f5f5f5',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -360,18 +392,6 @@ const UploadResume = () => {
                     </Typography>
                   </Box>
                 </Paper>
-
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  mt={isMobile ? 1 : 2}
-                  textAlign="center"
-                  fontStyle="italic"
-                  sx={{ fontSize: isMobile ? '0.7rem' : '0.75rem' }}
-                >
-                  Clean, professional, ATS-friendly format
-                </Typography>
               </Box>
             </Box>
           )}

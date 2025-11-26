@@ -47,6 +47,7 @@ def convert_docx_to_pdf(docx_bytes: bytes) -> tuple[bytes, str]:
             for cmd in libreoffice_commands:
                 try:
                     # Run LibreOffice conversion
+                    # Note: LibreOffice should embed fonts by default in PDF conversion
                     subprocess.run(
                         [
                             cmd,

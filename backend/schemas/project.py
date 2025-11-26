@@ -22,9 +22,13 @@ class ProjectResponse(BaseModel):
     doc_metadata: Optional[Dict[str, Any]] = None
     original_filename: Optional[str] = None
 
-    # History tracking
+    # History tracking (OLD SYSTEM)
     tailoring_history: Optional[List[Dict[str, Any]]] = None
     message_history: Optional[List[Dict[str, Any]]] = None
+
+    # NEW VERSION SYSTEM
+    version_history: Optional[Dict[str, Any]] = None
+    current_versions: Optional[Dict[str, Any]] = None
 
     created_at: datetime
     updated_at: datetime

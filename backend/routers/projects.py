@@ -1,9 +1,13 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from sqlalchemy.orm import Session
 import asyncio
 import json
+import tempfile
+import os
+import logging
+from datetime import datetime
 
 from config.database import get_db
 from config.settings import settings
@@ -12,9 +16,7 @@ from middleware.auth_middleware import get_current_user
 from models.user import User
 from models.project import Project
 from models.base_resume import BaseResume
-from services.docx_recreation_service import recreate_docx_from_json  # Legacy - keeping for backup
 from services.docx_generation_service import generate_resume_from_json, get_default_section_order
-from services.resume_tailoring_service import tailor_resume
 from services.resume_agent_service import tailor_resume_with_agent, edit_resume_with_instructions
 from services.docx_to_pdf_service import convert_docx_to_pdf
 from services.pdf_cache_service import (
@@ -23,14 +25,7 @@ from services.pdf_cache_service import (
     generate_pdf_background,
     get_cached_pdf
 )
-from services.websocket_manager import manager
 from schemas.resume import ResumeTailorRequest
-from fastapi.responses import Response
-import tempfile
-import os
-from fastapi import BackgroundTasks
-import logging
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -342,66 +337,6 @@ async def download_project_docx(
         )
 
 
-@router.post("/{project_id}/tailor")
-async def tailor_project_resume(
-    project_id: int,
-    request: ResumeTailorRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Tailor project resume for a specific job description (Legacy - non-streaming)
-
-    Process:
-    1. Fetch project resume JSON
-    2. Send to OpenAI with job description for tailoring
-    3. Update project's resume_json (NOT base_resume)
-    4. Return tailored JSON
-    """
-    project = db.query(Project).filter(
-        Project.id == project_id,
-        Project.user_id == current_user.id
-    ).first()
-
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-
-    if not project.resume_json:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume JSON not found for this project"
-        )
-
-    try:
-        logger.info(f"Tailoring resume for project {project_id}...")
-
-        # Tailor resume using OpenAI
-        tailored_json = tailor_resume(project.resume_json, request.job_description)
-
-        # Update PROJECT's resume_json (not base_resume)
-        project.resume_json = tailored_json
-        db.commit()
-        db.refresh(project)
-
-        logger.info(f"Project {project_id} resume tailored successfully")
-
-        return {
-            "success": True,
-            "tailored_json": tailored_json,
-            "message": "Resume tailored successfully"
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to tailor project {project_id} resume: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to tailor resume: {str(e)}"
-        )
-
-
 @router.post("/{project_id}/tailor-with-agent")
 async def tailor_project_resume_with_agent(
     project_id: int,
@@ -490,27 +425,72 @@ async def tailor_project_resume_with_agent(
                     ).first()
 
                     if project_to_update:
-                        # Save current version to history before updating
+                        # NEW VERSION SYSTEM: Save versions with permanent version numbers
                         from datetime import datetime
+                        from sqlalchemy.orm.attributes import flag_modified
 
+                        # Initialize version_history and current_versions if they don't exist
+                        if project_to_update.version_history is None:
+                            project_to_update.version_history = {
+                                "professional_summary": {},
+                                "experience": {},
+                                "projects": {},
+                                "skills": {}
+                            }
+
+                        if project_to_update.current_versions is None:
+                            project_to_update.current_versions = {
+                                "professional_summary": 0,
+                                "experience": 0,
+                                "projects": 0,
+                                "skills": 0
+                            }
+
+                        # Get current resume data
+                        current_resume_json = project_to_update.resume_json
+                        new_resume_json = final_result["tailored_json"]
+
+                        # For each section, save current version and create new version
+                        sections_to_track = ["professional_summary", "experience", "projects", "skills"]
+
+                        for section in sections_to_track:
+                            if section in current_resume_json and section in new_resume_json:
+                                # Get the current version number for this section
+                                current_version_num = project_to_update.current_versions.get(section, 0)
+
+                                # Only save if version doesn't already exist in history
+                                # (prevents overwriting during first tailoring after migration)
+                                if str(current_version_num) not in project_to_update.version_history[section]:
+                                    project_to_update.version_history[section][str(current_version_num)] = current_resume_json[section]
+
+                                # Increment version number for new tailored data
+                                new_version_num = current_version_num + 1
+
+                                # Save the NEW tailored data to version_history
+                                project_to_update.version_history[section][str(new_version_num)] = new_resume_json[section]
+
+                                # Update current_versions to point to new version
+                                project_to_update.current_versions[section] = new_version_num
+
+                        # Mark as modified for SQLAlchemy
+                        flag_modified(project_to_update, "version_history")
+                        flag_modified(project_to_update, "current_versions")
+
+                        # OLD SYSTEM: Also save to tailoring_history for backward compatibility
                         history_entry = {
                             "timestamp": datetime.utcnow().isoformat(),
-                            "resume_json": project_to_update.resume_json,
+                            "resume_json": current_resume_json,
                             "job_description": request.job_description,
                             "changes_made": final_result.get("changes_made", [])
                         }
 
-                        # Initialize history if it doesn't exist
                         if project_to_update.tailoring_history is None:
                             project_to_update.tailoring_history = []
 
-                        # Add to history (keep last 10 versions)
                         project_to_update.tailoring_history.insert(0, history_entry)
                         if len(project_to_update.tailoring_history) > 10:
                             project_to_update.tailoring_history = project_to_update.tailoring_history[:10]
 
-                        # Mark tailoring_history as modified for SQLAlchemy
-                        from sqlalchemy.orm.attributes import flag_modified
                         flag_modified(project_to_update, "tailoring_history")
 
                         # Save to message_history for chat interface
@@ -863,6 +843,99 @@ async def update_section_order(
     db.refresh(project)
 
     logger.info(f"Updated section order for project {project_id}: {order_update.section_order}")
+
+    return project
+
+
+@router.post("/{project_id}/restore-version", response_model=ProjectResponse)
+async def restore_version(
+    project_id: int,
+    section_name: str,
+    version_number: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Restore a previous version for a specific section
+
+    This endpoint:
+    1. Retrieves the specified version from version_history
+    2. Updates resume_json with that version's data
+    3. Updates current_versions to point to the restored version
+
+    Args:
+        project_id: The project ID
+        section_name: The section to restore (professional_summary, experience, projects, skills)
+        version_number: The version number to restore
+
+    Returns:
+        Updated project with restored version
+    """
+    # Validate section_name
+    valid_sections = ["professional_summary", "experience", "projects", "skills"]
+    if section_name not in valid_sections:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid section name. Must be one of: {valid_sections}"
+        )
+
+    # Get project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.version_history or not project.current_versions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project has no version history"
+        )
+
+    # Check if version exists
+    if section_name not in project.version_history:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No version history for section: {section_name}"
+        )
+
+    version_str = str(version_number)
+    if version_str not in project.version_history[section_name]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {version_number} not found for section {section_name}"
+        )
+
+    # Get the version data
+    version_data = project.version_history[section_name][version_str]
+
+    # Update resume_json with the restored version
+    if not project.resume_json:
+        project.resume_json = {}
+
+    project.resume_json[section_name] = version_data
+
+    # Update current_versions to point to the restored version
+    project.current_versions[section_name] = version_number
+
+    # Mark as modified for SQLAlchemy
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(project, 'resume_json')
+    flag_modified(project, 'current_versions')
+
+    # Mark as updated
+    from sqlalchemy import func
+    project.updated_at = func.now()
+
+    db.commit()
+    db.refresh(project)
+
+    logger.info(f"Restored version {version_number} for section {section_name} in project {project_id}")
 
     return project
 

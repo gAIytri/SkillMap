@@ -11,6 +11,7 @@ from langsmith import traceable
 from config.settings import settings
 import logging
 import json
+import re
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,58 @@ _llm_gpt4o = ChatOpenAI(
     api_key=settings.OPENAI_API_KEY,
     temperature=0.2
 )
+
+
+def sanitize_hyphens(text: str) -> str:
+    """
+    Remove hyphens from text to make it less obviously AI-generated.
+
+    Replaces:
+    - Single hyphens (-)
+    - Em dashes (—)
+    - En dashes (–)
+
+    with a single space, while preserving newlines and formatting.
+
+    Args:
+        text: Input text that may contain hyphens
+
+    Returns:
+        Text with hyphens replaced by spaces, formatting preserved
+    """
+    if not text:
+        return text
+
+    # Replace all types of hyphens and dashes with a space
+    text = text.replace('—', ' ')  # Em dash
+    text = text.replace('–', ' ')  # En dash
+    text = text.replace('-', ' ')  # Regular hyphen
+
+    # Clean up multiple consecutive spaces (but NOT newlines or tabs)
+    # Use [ ]+ to match only space characters, not \s which includes \n, \t, etc.
+    text = re.sub(r'[ ]+', ' ', text)
+
+    return text
+
+
+def sanitize_json_hyphens(data: Any) -> Any:
+    """
+    Recursively remove hyphens from all string values in a JSON structure.
+
+    Args:
+        data: JSON data (dict, list, or primitive)
+
+    Returns:
+        Same structure with hyphens removed from all strings
+    """
+    if isinstance(data, dict):
+        return {key: sanitize_json_hyphens(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_json_hyphens(item) for item in data]
+    elif isinstance(data, str):
+        return sanitize_hyphens(data)
+    else:
+        return data
 
 
 @tool
@@ -284,6 +337,7 @@ CORE PRINCIPLES:
 3. Use highly technical language appropriate for the role
 4. Maintain the EXACT same JSON structure for recreation
 5. Every change must be impactful and relevant to the job requirements
+6. CRITICAL: DO NOT use hyphens (-), em dashes (—), or en dashes (–) in any text content. Use spaces or commas instead.
 
 YOUR TASK:
 Use the provided JOB SUMMARY to tailor the resume effectively."""
@@ -452,6 +506,9 @@ Make the changes SUBSTANTIAL and IMPACTFUL."""
 
         logger.info("Resume tailored successfully")
 
+        # Sanitize hyphens from the tailored JSON
+        tailored_json = sanitize_json_hyphens(tailored_json)
+
         return {
             "success": True,
             "tailored_json": tailored_json,
@@ -565,6 +622,7 @@ REQUIREMENTS:
 5. Use standard business letter format
 6. Demonstrate knowledge of role requirements
 7. Create a clear narrative connecting candidate's experience to the role
+8. CRITICAL: DO NOT use hyphens (-), em dashes (—), or en dashes (–) anywhere in the text. Use spaces or commas instead.
 
 STRUCTURE:
 - Opening paragraph: Express interest, mention specific role
@@ -672,6 +730,9 @@ Generate the complete cover letter now:"""
         ]
 
         logger.info("Cover letter generated successfully")
+
+        # Sanitize hyphens from the cover letter text
+        cover_letter_text = sanitize_hyphens(cover_letter_text)
 
         return {
             "success": True,
@@ -963,6 +1024,7 @@ REQUIREMENTS:
 7. Mention 1-2 specific technical skills relevant to the role
 8. Include clear call to action
 9. Make it feel personalized and thoughtful, not generic
+10. CRITICAL: DO NOT use hyphens (-), em dashes (—), or en dashes (–) anywhere in the text. Use spaces or commas instead.
 
 STRUCTURE:
 Subject: [Create compelling, specific subject line mentioning role and key qualification]
@@ -1042,6 +1104,10 @@ Generate the email with subject line and body now:"""
                 body = parts[1].strip()
 
         logger.info("Recruiter email generated successfully")
+
+        # Sanitize hyphens from the email subject and body
+        subject = sanitize_hyphens(subject)
+        body = sanitize_hyphens(body)
 
         return {
             "success": True,

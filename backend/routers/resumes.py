@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import asyncio
 import json
+import logging
+import tempfile
+import os
 
 from config.database import get_db
 from config.settings import settings
@@ -11,13 +14,8 @@ from schemas.resume import ResumeResponse, ResumeUpdate, ResumeConvertResponse, 
 from middleware.auth_middleware import get_current_user
 from models.user import User
 from models.base_resume import BaseResume
-from services.resume_extractor import extract_resume  # LLM extraction
-from services.docx_recreation_service import recreate_docx_from_json  # Legacy - keeping for backup
+from services.resume_extractor import extract_resume
 from services.docx_generation_service import generate_resume_from_json, get_default_section_order
-from services.resume_tailoring_service import tailor_resume  # Resume tailoring
-import logging
-import tempfile
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -405,60 +403,3 @@ async def get_recreated_docx(
         )
 
 
-@router.post("/base/tailor")
-async def tailor_base_resume(
-    request: ResumeTailorRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Tailor base resume for a specific job description
-    NOTE: This endpoint is deprecated. Use project-specific tailoring instead.
-
-    Process:
-    1. Fetch base resume JSON
-    2. Send to OpenAI with job description for tailoring
-    3. Update resume_json in database
-    4. Return tailored JSON
-    """
-    resume = db.query(BaseResume).filter(
-        BaseResume.user_id == current_user.id
-    ).first()
-
-    if not resume:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Base resume not found"
-        )
-
-    if not resume.resume_json:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume JSON not found. Please upload a resume again."
-        )
-
-    try:
-        logger.info("Tailoring resume for job description...")
-
-        # Tailor resume using OpenAI
-        tailored_json = tailor_resume(resume.resume_json, request.job_description)
-
-        # Update database with tailored JSON
-        resume.resume_json = tailored_json
-        db.commit()
-        db.refresh(resume)
-
-        logger.info("Resume tailored successfully")
-
-        return {
-            "success": True,
-            "tailored_json": tailored_json,
-            "message": "Resume tailored successfully"
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to tailor resume: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to tailor resume: {str(e)}"
-        )

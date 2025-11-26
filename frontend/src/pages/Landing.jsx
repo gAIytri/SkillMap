@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Container, Typography, Button, Grid, Card, CardContent, useTheme, useMediaQuery, Chip } from '@mui/material';
+import { Box, Container, Typography, Button, Grid, Card, CardContent, useTheme, useMediaQuery, Chip, IconButton } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { colorPalette } from '../styles/theme';
@@ -8,6 +8,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DownloadIcon from '@mui/icons-material/Download';
 import FolderIcon from '@mui/icons-material/Folder';
 import StarIcon from '@mui/icons-material/Star';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import LoginForm from '../components/auth/LoginForm';
 import SignupForm from '../components/auth/SignupForm';
 
@@ -362,13 +363,6 @@ const Landing = () => {
                     </Typography>
                   </>
                 )}
-                <Typography
-                  variant="body2"
-                  sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                >
-                  Back to Top
-                </Typography>
               </Box>
             </Grid>
 
@@ -397,12 +391,13 @@ const Landing = () => {
               alignItems: 'center',
               flexDirection: isMobile ? 'column' : 'row',
               gap: 2,
+              position: 'relative',
             }}
           >
             <Typography variant="body2" sx={{ color: '#888' }}>
               © {new Date().getFullYear()} SkillMap. All rights reserved.
             </Typography>
-            <Box sx={{ display: 'flex', gap: 3 }}>
+            <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
               <Typography
                 variant="body2"
                 sx={{ color: '#888', cursor: 'pointer', '&:hover': { color: '#fff' } }}
@@ -415,6 +410,27 @@ const Landing = () => {
               >
                 Terms of Service
               </Typography>
+              {/* Back to Top Icon Button */}
+              <IconButton
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                sx={{
+                  bgcolor: '#1a1a1a',
+                  color: '#fff',
+                  border: '2px solid #444',
+                  width: '40px',
+                  height: '40px',
+                  '&:hover': {
+                    bgcolor: '#2a2a2a',
+                    borderColor: colorPalette.primary.brightGreen,
+                    color: colorPalette.primary.brightGreen,
+                    transform: 'translateY(-2px)',
+                  },
+                  transition: 'all 0.3s ease',
+                  ml: 2,
+                }}
+              >
+                <KeyboardArrowUpIcon sx={{ fontSize: 28 }} />
+              </IconButton>
             </Box>
           </Box>
         </Container>

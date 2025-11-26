@@ -1,5 +1,33 @@
 # SkillMap Backend Documentation
 
+## Recent Changes (2025-01-25)
+
+### Major Backend Cleanup
+Removed all deprecated and unused code to improve maintainability:
+
+**Deleted Service Files:**
+- `services/websocket_manager.py` - WebSocket was never fully working, removed entirely
+- `services/docx_recreation_service.py` - Replaced by `docx_generation_service.py`
+- `services/resume_tailoring_service.py` - Replaced by `resume_agent_service.py` (LangChain agent)
+- `services/template_generation_service.py` - Unused file
+
+**Removed API Endpoints:**
+- `POST /api/projects/{project_id}/tailor` - Replaced by `/tailor-with-agent`
+- `POST /api/resumes/base/tailor` - Deprecated, use project-based tailoring
+
+**Cleaned Up Imports:**
+- Removed all WebSocket-related imports from routers
+- Removed deprecated service imports from `routers/projects.py` and `routers/resumes.py`
+- Removed WebSocket calls from `services/pdf_cache_service.py`
+
+**Frontend Cleanup:**
+- Deleted `frontend/src/hooks/useWebSocket.js` - Not imported anywhere
+
+**Preserved (Still Active):**
+- `message_history` field - Used for chat history in tailoring drawer
+- `pdf_generating`, `pdf_generation_progress`, `pdf_generation_started_at` - Used for PDF compilation progress
+- `/api/resumes/base/recreated-docx` endpoint - Still used in frontend
+
 ## Recent Changes (2025-01-19)
 
 ### AI Tailoring Improvements
