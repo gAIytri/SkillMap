@@ -15,12 +15,19 @@ class ProjectResponse(BaseModel):
     user_id: int
     project_name: str
     job_description: Optional[str] = None
+    last_tailoring_jd: Optional[str] = None
     base_resume_id: Optional[int] = None
 
     # New fields for DOCX + JSON workflow
     resume_json: Optional[Dict[str, Any]] = None
     doc_metadata: Optional[Dict[str, Any]] = None
     original_filename: Optional[str] = None
+
+    # Generated documents
+    cover_letter_text: Optional[str] = None
+    cover_letter_generated_at: Optional[datetime] = None
+    email_body_text: Optional[str] = None
+    email_generated_at: Optional[datetime] = None
 
     # History tracking (OLD SYSTEM)
     tailoring_history: Optional[List[Dict[str, Any]]] = None

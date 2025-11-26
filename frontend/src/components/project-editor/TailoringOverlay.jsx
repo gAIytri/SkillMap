@@ -27,17 +27,14 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
     // 3. Validation result tool message
     if (msg.tool === 'validate_intent') return false;
 
-    // 4. Job analysis result tool message
-    if (msg.tool === 'summarize_job_description') return false;
-
-    // 5. Tailoring result tool message
+    // 4. Tailoring result tool message
     if (msg.tool === 'tailor_resume_content') return false;
 
-    // 6. Cover letter result tool message
+    // 5. Cover letter/email messages (they happen in background after overlay closes)
+    if (msg.step === 'cover_letter' || msg.step === 'email') return false;
     if (msg.tool === 'generate_cover_letter') return false;
-
-    // 7. Email result tool message
     if (msg.tool === 'generate_recruiter_email') return false;
+    if (msg.type === 'cover_letter_complete' || msg.type === 'email_complete') return false;
 
     // Show all other messages (status messages for main steps and complete notifications)
     return true;

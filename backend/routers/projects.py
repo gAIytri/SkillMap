@@ -394,6 +394,8 @@ async def tailor_project_resume_with_agent(
         try:
             # Stream from the agent
             final_result = None
+            tailored_json_for_pdf = None  # Store tailored JSON for immediate PDF generation
+
             async for update in tailor_resume_with_agent(
                 resume_json=project.resume_json,
                 job_description=request.job_description,
@@ -403,6 +405,46 @@ async def tailor_project_resume_with_agent(
                 event_data = json.dumps(update)
                 yield f"data: {event_data}\n\n"
 
+                # OPTIMIZATION: Generate PDF immediately when resume is ready
+                if update.get("type") == "resume_complete" and update.get("tailored_json"):
+                    tailored_json_for_pdf = update.get("tailored_json")
+
+                    try:
+                        logger.info(f"Generating PDF immediately from tailored JSON for project {project_id}")
+
+                        # Step 1: Generate DOCX from tailored JSON
+                        from services.docx_generation_service import generate_resume_from_json
+                        docx_bytes = generate_resume_from_json(
+                            resume_json=tailored_json_for_pdf,
+                            base_resume_docx=project.original_docx,
+                            section_order=tailored_json_for_pdf.get('section_order')
+                        )
+
+                        # Step 2: Convert DOCX to PDF
+                        pdf_bytes, _ = convert_docx_to_pdf(docx_bytes)
+
+                        # Step 3: Encode PDF as base64 for transmission
+                        import base64
+                        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+                        logger.info(f"✓ PDF generated successfully for project {project_id}")
+
+                        # Send pdf_ready event with PDF data
+                        pdf_ready_event = json.dumps({
+                            "type": "pdf_ready",
+                            "message": "PDF generated successfully!",
+                            "pdf_data": pdf_base64
+                        })
+                        yield f"data: {pdf_ready_event}\n\n"
+
+                    except Exception as pdf_error:
+                        logger.error(f"PDF generation failed: {pdf_error}")
+                        error_event = json.dumps({
+                            "type": "pdf_error",
+                            "message": f"PDF generation failed: {str(pdf_error)}"
+                        })
+                        yield f"data: {error_event}\n\n"
+
                 # Store final result
                 if update.get("type") == "final":
                     final_result = update
@@ -410,6 +452,9 @@ async def tailor_project_resume_with_agent(
             # Update database if tailoring succeeded
             if final_result and final_result.get("success") and final_result.get("tailored_json"):
                 logger.info(f"Saving tailored resume to database for project {project_id}")
+                logger.info(f"Final result keys: {list(final_result.keys())}")
+                logger.info(f"Has cover_letter: {bool(final_result.get('cover_letter'))}")
+                logger.info(f"Has email_body: {bool(final_result.get('email_body'))}")
 
                 # Create a new database session for saving
                 # (The original session might be detached after streaming)
@@ -522,16 +567,22 @@ async def tailor_project_resume_with_agent(
                         logger.info(f"✓ Saved last tailoring JD for project {project_id}")
 
                         # Save cover letter if generated
-                        if final_result.get("cover_letter_success"):
-                            project_to_update.cover_letter_text = final_result.get("cover_letter", "")
+                        cover_letter_text = final_result.get("cover_letter", "")
+                        if cover_letter_text:
+                            project_to_update.cover_letter_text = cover_letter_text
                             project_to_update.cover_letter_generated_at = datetime.utcnow()
-                            logger.info(f"✓ Cover letter saved for project {project_id}")
+                            logger.info(f"✓ Cover letter saved for project {project_id} (length: {len(cover_letter_text)} chars)")
+                        else:
+                            logger.warning(f"⚠ Cover letter is empty for project {project_id}, not saving")
 
                         # Save email if generated
-                        if final_result.get("email_success"):
-                            project_to_update.email_body_text = final_result.get("email_body", "")
+                        email_body_text = final_result.get("email_body", "")
+                        if email_body_text:
+                            project_to_update.email_body_text = email_body_text
                             project_to_update.email_generated_at = datetime.utcnow()
-                            logger.info(f"✓ Email saved for project {project_id}")
+                            logger.info(f"✓ Email saved for project {project_id} (length: {len(email_body_text)} chars)")
+                        else:
+                            logger.warning(f"⚠ Email body is empty for project {project_id}, not saving")
 
                         # Deduct credits based on actual token usage
                         token_usage = final_result.get("token_usage", {})

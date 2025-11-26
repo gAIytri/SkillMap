@@ -18,7 +18,6 @@ import asyncio
 from config.settings import settings
 from services.agent_tools import (
     validate_intent,
-    summarize_job_description,
     tailor_resume_content,
     generate_cover_letter,
     generate_recruiter_email,
@@ -107,16 +106,14 @@ class ResumeTailoringAgent:
             model="gpt-4o",
             api_key=settings.OPENAI_API_KEY,
             temperature=0.3,
-            streaming=True,
             seed=42,  # For consistency (explicit parameter to avoid warning)
             callbacks=[self.token_callback],  # Add token tracking callback
             verbose=True  # Enable verbose logging for LangSmith
         )
 
-        # Agent tools
+        # Agent tools (summarize_job_description removed for optimization)
         self.tools = [
             validate_intent,
-            summarize_job_description,
             tailor_resume_content,
             generate_cover_letter,
             generate_recruiter_email
@@ -331,46 +328,7 @@ You have access to the user's resume JSON and job description through the runtim
                 await asyncio.sleep(0)
                 return  # Exit after editing is complete
 
-            # Step 2: Summarize job description (only for job_description intent)
-            yield {
-                "type": "status",
-                "message": "Analyzing job requirements...",
-                "step": "summarization"
-            }
-            await asyncio.sleep(0)  # Force flush
-
-            summary_result = summarize_job_description.invoke(job_description)
-
-            # Track tokens from summarize_job_description
-            if "token_usage" in summary_result:
-                usage = summary_result["token_usage"]
-                self.prompt_tokens_used += usage.get("prompt_tokens", 0)
-                self.completion_tokens_used += usage.get("completion_tokens", 0)
-                self.total_tokens_used += usage.get("total_tokens", 0)
-                logger.info(f"Cumulative tokens after summarize_job_description: {self.total_tokens_used}")
-
-            yield {
-                "type": "tool_result",
-                "tool": "summarize_job_description",
-                "message": summary_result.get("message", ""),
-                "data": {
-                    "role_focus": summary_result.get("summary", {}).get("role_focus", ""),
-                    "required_skills_count": len(summary_result.get("summary", {}).get("required_skills", []))
-                }
-            }
-            await asyncio.sleep(0)  # Force flush
-
-            if not summary_result.get("success", False):
-                yield {
-                    "type": "final",
-                    "success": False,
-                    "message": "Failed to analyze job description",
-                    "tailored_json": None
-                }
-                await asyncio.sleep(0)  # Force flush
-                return
-
-            # Step 3: Tailor resume
+            # Step 2: Tailor resume (now with direct JD analysis)
             yield {
                 "type": "status",
                 "message": "Tailoring your resume to match the job requirements...",
@@ -378,9 +336,8 @@ You have access to the user's resume JSON and job description through the runtim
             }
             await asyncio.sleep(0)  # Force flush
 
-            # Call tailor tool (context already set above)
-            # Pass the entire summary_result as the tool expects it
-            tailor_result = tailor_resume_content.invoke({"job_summary": summary_result})
+            # Call tailor tool with full job description (no pre-summarization needed)
+            tailor_result = tailor_resume_content.invoke(job_description)
 
             # Track tokens from tailor_resume_content
             if "token_usage" in tailor_result:
@@ -415,16 +372,20 @@ You have access to the user's resume JSON and job description through the runtim
                 await asyncio.sleep(0)  # Force flush
                 return
 
-            # Send resume_complete event - allows frontend to show resume immediately
+            # Send resume_complete event with tailored JSON
+            # Backend will now generate PDF immediately from this JSON
             yield {
                 "type": "resume_complete",
-                "message": "Resume tailoring completed!",
+                "message": "Resume tailoring completed! Generating PDF...",
                 "tailored_json": tailor_result.get("tailored_json", {}),
                 "changes_made": tailor_result.get("changes_made", [])
             }
             await asyncio.sleep(0)  # Force flush
 
-            # Step 4: Generate cover letter
+            # Note: PDF generation will happen in the endpoint (projects.py)
+            # after receiving this event, before continuing with cover letter/email
+
+            # Step 3: Generate cover letter
             yield {
                 "type": "status",
                 "message": "Generating professional cover letter...",
@@ -435,10 +396,9 @@ You have access to the user's resume JSON and job description through the runtim
             # Convert tailored JSON to string for the tool
             tailored_json_str = json.dumps(tailor_result.get("tailored_json", {}))
 
-            # Pass job summary (already computed) instead of re-processing full JD
+            # Pass full job description directly (no pre-summarization)
             cover_letter_result = generate_cover_letter.invoke({
                 "resume_json": tailored_json_str,
-                "job_summary": summary_result,  # Reuse existing summary for efficiency
                 "job_description": job_description
             })
 
@@ -470,7 +430,7 @@ You have access to the user's resume JSON and job description through the runtim
             }
             await asyncio.sleep(0)  # Force flush
 
-            # Step 5: Generate recruiter email
+            # Step 4: Generate recruiter email
             yield {
                 "type": "status",
                 "message": "Generating recruiter email...",
@@ -478,10 +438,9 @@ You have access to the user's resume JSON and job description through the runtim
             }
             await asyncio.sleep(0)  # Force flush
 
-            # Pass job summary (already computed) instead of re-processing full JD
+            # Pass full job description directly (no pre-summarization)
             email_result = generate_recruiter_email.invoke({
                 "resume_json": tailored_json_str,
-                "job_summary": summary_result,  # Reuse existing summary for efficiency
                 "job_description": job_description
             })
 

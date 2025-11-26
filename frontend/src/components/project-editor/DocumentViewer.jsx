@@ -28,6 +28,7 @@ const DocumentViewer = ({
   coverLetter,
   email,
   project,
+  tailoring, // NEW: To show loading spinner during tailoring
 }) => {
   return (
     <Box
@@ -271,7 +272,25 @@ const DocumentViewer = ({
         {/* Cover Letter Tab */}
         {documentTab === 1 && (
           <Box sx={{ width: '100%', height: '100%', p: 1, overflow: 'auto' }}>
-            {coverLetter ? (
+            {tailoring ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                }}
+              >
+                <CircularProgress sx={{ color: colorPalette.primary.darkGreen, mb: 2 }} />
+                <Typography variant="body1" color="text.secondary" textAlign="center">
+                  Generating cover letter...
+                </Typography>
+                <Typography variant="body2" color="text.secondary" textAlign="center" mt={1}>
+                  This will take a few seconds
+                </Typography>
+              </Box>
+            ) : coverLetter ? (
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h6" fontWeight={600} color="colorPalette.primary.darkGreen">
@@ -337,7 +356,25 @@ const DocumentViewer = ({
         {/* Email Tab */}
         {documentTab === 2 && (
           <Box sx={{ width: '100%', height: '100%', p: 1, overflow: 'auto' }}>
-            {email ? (
+            {tailoring ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                }}
+              >
+                <CircularProgress sx={{ color: colorPalette.primary.darkGreen, mb: 2 }} />
+                <Typography variant="body1" color="text.secondary" textAlign="center">
+                  Generating recruiter email...
+                </Typography>
+                <Typography variant="body2" color="text.secondary" textAlign="center" mt={1}>
+                  This will take a few seconds
+                </Typography>
+              </Box>
+            ) : email ? (
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h6" fontWeight={600} color="colorPalette.primary.darkGreen">

@@ -167,7 +167,7 @@ const ProjectEditor = () => {
   };
 
   // Load project data function (defined early for use in hooks)
-  const loadProject = async () => {
+  const loadProject = async (skipPdfLoad = false) => {
     try {
       const projectData = await projectService.getProject(projectId);
       setProject(projectData);
@@ -194,10 +194,27 @@ const ProjectEditor = () => {
         }
       }
 
+      // Load cover letter if exists
+      if (projectData.cover_letter_text) {
+        setCoverLetter(projectData.cover_letter_text);
+        console.log('✓ Cover letter loaded from project');
+      }
+
+      // Load email if exists
+      if (projectData.email_body_text) {
+        setEmail({
+          subject: `Application for ${projectData.job_description?.split('\n')[0] || 'Position'}`,
+          body: projectData.email_body_text
+        });
+        console.log('✓ Email loaded from project');
+      }
+
       setLoading(false);
 
-      // Load PDF preview
-      await loadPdfPreview();
+      // Load PDF preview (skip if requested, e.g., after tailoring when PDF is already loaded)
+      if (!skipPdfLoad) {
+        await loadPdfPreview();
+      }
     } catch (err) {
       const errorMsg = 'Failed to load project. Please try again.';
       setError(errorMsg);
@@ -218,7 +235,7 @@ const ProjectEditor = () => {
     setError,
     setAgentMessages,
     setExtractedData,
-    loadPdfPreview: () => loadPdfPreview(),
+    setPdfUrl, // NEW: Set PDF directly from tailoring (no need to loadPdfPreview)
     setCoverLetter,
     setEmail,
     setRechargeDialogBlocking,
@@ -1075,6 +1092,7 @@ const ProjectEditor = () => {
           coverLetter={coverLetter}
           email={email}
           project={project}
+          tailoring={tailoring}
         />
 
         {/* Extracted Data Panel - Desktop Sidebar & Mobile Drawer */}

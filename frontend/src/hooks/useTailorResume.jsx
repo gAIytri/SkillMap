@@ -3,7 +3,6 @@ import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import resumeService from '../services/resumeService';
-import projectService from '../services/projectService';
 
 export const useTailorResume = ({
   projectId,
@@ -16,7 +15,7 @@ export const useTailorResume = ({
   setError,
   setAgentMessages,
   setExtractedData,
-  loadPdfPreview,
+  setPdfUrl, // NEW: For setting PDF directly from tailoring
   setCoverLetter,
   setEmail,
   setRechargeDialogBlocking,
@@ -75,10 +74,41 @@ export const useTailorResume = ({
             console.log('Tailored JSON received:', message.tailored_json ? 'YES' : 'NO');
             console.log('Changes made:', message.changes_made);
 
-            // Update resume data immediately (visible in extracted data panel)
+            // Update resume data immediately
             setExtractedData(message.tailored_json);
 
-            // DON'T hide spinner yet - wait for cover letter and email
+            // DON'T close overlay yet - wait for PDF to be ready
+          } else if (message.type === 'pdf_ready') {
+            console.log('✓ PDF generated and ready!');
+
+            // Decode base64 PDF and create blob URL
+            try {
+              const pdfData = message.pdf_data;
+              const binaryString = window.atob(pdfData);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: 'application/pdf' });
+              const url = URL.createObjectURL(blob);
+
+              // Set PDF URL directly - this displays the PDF immediately
+              setPdfUrl(url);
+
+              console.log('✓ PDF blob created and set');
+
+              // NOW we can close the overlay - user can see the resume!
+              setTailoring(false);
+              setDocumentTab(0); // Switch to Resume tab
+
+            } catch (error) {
+              console.error('Failed to process PDF data:', error);
+              // On error, still close overlay but show error
+              setTailoring(false);
+              toast.error('PDF generation failed. Please refresh to try again.');
+            }
+
+            // DON'T wait for cover letter and email - they'll update in background
           } else if (message.type === 'cover_letter_complete') {
             console.log('✓ Cover letter generated!');
             setCoverLetter(message.cover_letter);
@@ -111,12 +141,10 @@ export const useTailorResume = ({
 
       console.log('Final result:', finalResult);
 
-      // Handle final result - now we've already handled resume/cover letter/email in streaming
+      // Handle final result - overlay already closed when PDF was ready
+      // Now just do background updates
       if (finalResult && finalResult.success) {
-        // All 3 documents are complete - now load PDF preview
-        loadPdfPreview();
-
-        // Refresh user data to update credits in navbar
+        // Refresh user data to update credits in navbar (background)
         let updatedUser = user;
         if (refreshUser) {
           const freshUser = await refreshUser();
@@ -125,11 +153,18 @@ export const useTailorResume = ({
           }
         }
 
-        // Refresh project data to get updated message_history
+        // Refresh project data to get version_history and saved documents
+        // Skip PDF reload since we already have it from the tailoring response
         if (loadProject) {
-          await loadProject();
-          console.log('✓ Project data refreshed (message_history updated)');
+          try {
+            await loadProject(true); // skipPdfLoad = true
+            console.log('✓ Project data refreshed (version_history, cover_letter, email updated)');
+          } catch (error) {
+            console.error('Failed to refresh project data:', error);
+          }
         }
+
+        console.log('✓ Tailoring complete - Resume, cover letter, and email ready');
 
         // Check if low credits warning should be shown (non-blocking)
         if (updatedUser && updatedUser.credits < 10.0) {
