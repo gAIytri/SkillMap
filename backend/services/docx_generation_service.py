@@ -237,16 +237,16 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
     # Paragraph 2: Contact info (10pt) - with smart link placement
     contact_parts = []
 
-    # Add current_role FIRST if present
-    if personal_info.get('current_role'):
-        contact_parts.append(personal_info['current_role'])
+    # Add current_role FIRST if present (check for non-empty string)
+    if personal_info.get('current_role') and personal_info['current_role'].strip():
+        contact_parts.append(personal_info['current_role'].strip())
 
-    if personal_info.get('location'):
-        contact_parts.append(personal_info['location'])
-    if personal_info.get('email'):
-        contact_parts.append(personal_info['email'])
-    if personal_info.get('phone'):
-        contact_parts.append(personal_info['phone'])
+    if personal_info.get('location') and personal_info['location'].strip():
+        contact_parts.append(personal_info['location'].strip())
+    if personal_info.get('email') and personal_info['email'].strip():
+        contact_parts.append(personal_info['email'].strip())
+    if personal_info.get('phone') and personal_info['phone'].strip():
+        contact_parts.append(personal_info['phone'].strip())
 
     header_links = personal_info.get('header_links', [])
 
@@ -291,12 +291,12 @@ def add_header_section(doc: Document, personal_info: Dict[str, Any]):
 
                 # Create hyperlink if URL exists, otherwise plain text
                 if url:
-                    add_hyperlink(contact_links_para, text, url, size=10, color=RGBColor(0, 0, 255))
+                    add_hyperlink(contact_links_para, text, url, size=10, color=RGBColor(0, 0, 0))  # Black color
                 else:
                     link_run = contact_links_para.add_run(text)
                     link_run.font.size = Pt(10)
                     link_run.font.name = 'Calibri'
-                    link_run.font.color.rgb = RGBColor(0, 0, 255)
+                    link_run.font.color.rgb = RGBColor(0, 0, 0)  # Black color
 
 
 def add_section_header(doc: Document, title: str, keep_with_next: bool = False):
@@ -458,8 +458,8 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
 
     Format:
     EXPERIENCE (Heading 1, underlined)
-    Company Name                         Start – End (bold, date right-aligned)
-    Role, Location (normal weight, 10pt, closer spacing)
+    Company Name                         Start – End (bold, 11pt, date right-aligned)
+    Role, Location (normal weight, 10pt, black, closer spacing)
     • Bullet 1 (List Paragraph, 10pt)
     • Bullet 2
 
@@ -540,9 +540,7 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
             role_run.font.bold = False  # Normal weight (not bold)
             role_run.font.size = Pt(10)
             role_run.font.name = 'Calibri'
-
-            # Make font lighter by reducing color intensity (gray instead of black)
-            role_run.font.color.rgb = RGBColor(96, 96, 96)  # Dark gray for lighter appearance
+            role_run.font.color.rgb = RGBColor(0, 0, 0)  # Normal black color (not gray)
 
         # Bullets (List Paragraph, 10pt)
         bullets = exp.get('bullets', [])
@@ -656,53 +654,23 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
                 tech_run.font.size = Pt(10)
                 tech_run.font.name = 'Calibri'
 
-        # Description - split by period into separate bullets
+        # Get bullets from either bullets array or description string (backward compatibility)
+        bullets = project.get('bullets', [])
         description = project.get('description', '')
 
-        def split_into_sentences(text: str) -> List[str]:
-            """
-            Split text into sentences, handling abbreviations like e.g., i.e., etc.
-            """
-            import re
-            # Replace common abbreviations with placeholders
-            text = text.replace('e.g.', 'EG_PLACEHOLDER')
-            text = text.replace('i.e.', 'IE_PLACEHOLDER')
-            text = text.replace('etc.', 'ETC_PLACEHOLDER')
-
-            # Split by period followed by space or end of string
-            sentences = re.split(r'\.\s+', text)
-
-            # Restore abbreviations and clean up
-            result = []
-            for sentence in sentences:
-                sentence = sentence.replace('EG_PLACEHOLDER', 'e.g.')
-                sentence = sentence.replace('IE_PLACEHOLDER', 'i.e.')
-                sentence = sentence.replace('ETC_PLACEHOLDER', 'etc.')
-                sentence = sentence.strip()
-
-                if sentence:
-                    # Add period back if it doesn't end with one
-                    if not sentence.endswith('.'):
-                        sentence += '.'
-                    result.append(sentence)
-
-            return result
-
-        # Collect all bullet sentences first
-        all_sentences = []
-        if isinstance(description, str):
-            # Split by sentence and create separate bullets
-            all_sentences = split_into_sentences(description)
-        elif isinstance(description, list):
-            # Already a list of bullets
-            for desc in description:
-                sentences = split_into_sentences(desc)
-                all_sentences.extend(sentences)
+        # Collect all bullet points
+        all_bullets = []
+        if bullets and isinstance(bullets, list) and len(bullets) > 0:
+            # Use bullets array directly (new format)
+            all_bullets = [str(b).strip() for b in bullets if str(b).strip()]
+        elif description and isinstance(description, str):
+            # Fall back to description string (old format) - split by newlines
+            all_bullets = [line.strip() for line in description.split('\n') if line.strip()]
 
         # Add bullets with keep_with_next to keep project entry together
-        for i, sentence in enumerate(all_sentences):
-            is_last_bullet = (i == len(all_sentences) - 1)
-            bullet_para = add_bullet_paragraph(doc, sentence, font_size=10, keep_together=True)
+        for i, bullet in enumerate(all_bullets):
+            is_last_bullet = (i == len(all_bullets) - 1)
+            bullet_para = add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
             if not is_last_bullet:
                 bullet_para.paragraph_format.keep_with_next = True
 
@@ -770,6 +738,138 @@ def add_certifications_section(doc: Document, certifications: List[str], section
 
     for cert in certifications:
         add_bullet_paragraph(doc, cert, font_size=10, keep_together=True)
+
+
+# ============================================================================
+# CUSTOM SECTIONS BUILDERS
+# ============================================================================
+
+def add_custom_text_section(doc: Document, section_data: Dict[str, Any], section_name: str):
+    """
+    Add custom text section
+
+    Args:
+        doc: Document object
+        section_data: Custom section data with 'content' field
+        section_name: Display name for the section
+    """
+    if not section_data or not section_data.get('content'):
+        return
+
+    # Add section header
+    add_section_header(doc, section_name, keep_with_next=True)
+
+    # Add content paragraph
+    content = section_data.get('content', '')
+    para = doc.add_paragraph(sanitize_text(content))
+    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    para.paragraph_format.left_indent = Inches(0)
+    para.paragraph_format.first_line_indent = Inches(0)
+    para.paragraph_format.space_before = Pt(0)
+    para.paragraph_format.space_after = Pt(0)
+    para.paragraph_format.line_spacing = 1.0
+    para.paragraph_format.keep_together = True
+    if para.runs:
+        para.runs[0].font.size = Pt(10)
+        para.runs[0].font.name = 'Calibri'
+
+
+def add_custom_list_section(doc: Document, section_data: Dict[str, Any], section_name: str):
+    """
+    Add custom list section with items containing title, subtitle, description, and bullets
+
+    Args:
+        doc: Document object
+        section_data: Custom section data with 'items' field
+        section_name: Display name for the section
+    """
+    items = section_data.get('items', [])
+    if not items:
+        return
+
+    # Add section header
+    add_section_header(doc, section_name, keep_with_next=True)
+
+    for i, item in enumerate(items):
+        title = item.get('title', '')
+        subtitle = item.get('subtitle', '')
+        description = item.get('description', '')
+        bullets = item.get('bullets', [])
+
+        # Add title and subtitle row (similar to experience)
+        if title or subtitle:
+            row_para = doc.add_paragraph()
+            row_para.paragraph_format.space_before = Pt(0)
+            row_para.paragraph_format.space_after = Pt(0)
+            row_para.paragraph_format.keep_with_next = True
+            row_para.paragraph_format.keep_together = True
+
+            # Title (bold, left-aligned)
+            if title:
+                title_run = row_para.add_run(sanitize_text(title))
+                title_run.font.size = Pt(10)
+                title_run.font.name = 'Calibri'
+                title_run.font.bold = True
+
+            # Subtitle (italic, right-aligned via tab)
+            if subtitle:
+                if title:
+                    row_para.add_run('\t')  # Tab to push subtitle to right
+                subtitle_run = row_para.add_run(sanitize_text(subtitle))
+                subtitle_run.font.size = Pt(10)
+                subtitle_run.font.name = 'Calibri'
+                subtitle_run.font.italic = True
+
+            # Set tab stop for right alignment
+            if title and subtitle:
+                from docx.shared import Inches
+                from docx.enum.text import WD_TAB_ALIGNMENT
+                tab_stops = row_para.paragraph_format.tab_stops
+                tab_stops.add_tab_stop(Inches(6.0), WD_TAB_ALIGNMENT.RIGHT)
+
+        # Add description if present
+        if description:
+            desc_para = doc.add_paragraph(sanitize_text(description))
+            desc_para.paragraph_format.space_before = Pt(0)
+            desc_para.paragraph_format.space_after = Pt(2)
+            desc_para.paragraph_format.keep_together = True
+            if desc_para.runs:
+                desc_para.runs[0].font.size = Pt(10)
+                desc_para.runs[0].font.name = 'Calibri'
+
+        # Add bullets if present
+        if bullets:
+            for bullet in bullets:
+                if bullet and bullet.strip():
+                    add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
+
+        # Add spacing between items (except after last item)
+        if i < len(items) - 1:
+            spacer = doc.add_paragraph()
+            spacer.paragraph_format.space_before = Pt(4)
+            spacer.paragraph_format.space_after = Pt(0)
+
+
+def add_custom_simple_list_section(doc: Document, section_data: Dict[str, Any], section_name: str):
+    """
+    Add custom simple list section (just bullet points)
+
+    Args:
+        doc: Document object
+        section_data: Custom section data with 'items' field (array of strings)
+        section_name: Display name for the section
+    """
+    items = section_data.get('items', [])
+    if not items:
+        return
+
+    # Add section header
+    add_section_header(doc, section_name, keep_with_next=True)
+
+    # Add each item as a bullet point
+    for item in items:
+        if item and item.strip():
+            add_bullet_paragraph(doc, item, font_size=10, keep_together=True)
 
 
 # ============================================================================
@@ -913,8 +1013,25 @@ def generate_resume_from_json(
 
         # Build sections in order
         for section_name in section_order:
+            # Check if it's a standard section
             if section_name in section_builders:
                 section_builders[section_name]()
+            # Check if it's a custom section
+            elif section_name.startswith('custom_'):
+                custom_sections = resume_json.get('custom_sections', [])
+                custom_section = next((s for s in custom_sections if s.get('id') == section_name), None)
+
+                if custom_section:
+                    section_type = custom_section.get('type')
+                    section_display_name = get_section_name(section_name)
+
+                    # Call appropriate builder based on section type
+                    if section_type == 'text':
+                        add_custom_text_section(doc, custom_section, section_display_name)
+                    elif section_type == 'list':
+                        add_custom_list_section(doc, custom_section, section_display_name)
+                    elif section_type == 'simple_list':
+                        add_custom_simple_list_section(doc, custom_section, section_display_name)
 
         # Save to bytes
         output = BytesIO()

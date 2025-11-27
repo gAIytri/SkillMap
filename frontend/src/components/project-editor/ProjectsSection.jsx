@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -20,6 +20,14 @@ const ProjectsSection = ({
 
   // Track which version is being viewed (always a number)
   const [viewingVersion, setViewingVersion] = useState(currentVersion);
+
+  // Auto-switch to latest version when currentVersion updates (after tailoring)
+  useEffect(() => {
+    setViewingVersion(currentVersion);
+    if (onViewingVersionChange) {
+      onViewingVersionChange(currentVersion);
+    }
+  }, [currentVersion, onViewingVersionChange]);
 
   if (!data || data.length === 0) return null;
 
@@ -137,30 +145,40 @@ const ProjectsSection = ({
                     Description (Bullet Points)
                   </Typography>
                   {(() => {
-                    const bullets = proj.bullets || proj.description ? (
-                      proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim())
-                    ) : [''];
+                    // Handle both bullets array and description string for backward compatibility
+                    let bullets;
+                    if (proj.bullets && Array.isArray(proj.bullets) && proj.bullets.length > 0) {
+                      bullets = proj.bullets;
+                    } else if (proj.description && typeof proj.description === 'string') {
+                      // If we have description string, split it into bullets
+                      bullets = proj.description.split('\n').filter(b => b.trim());
+                    } else {
+                      bullets = [''];
+                    }
                     const bulletsCount = bullets.length;
 
                     return bullets.map((bullet, bulletIdx) => (
-                      <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'center' }}>
+                      <Box key={bulletIdx} sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
                         <TextField
                           value={bullet}
                           onChange={(e) => {
-                            const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || [''])];
+                            const newBullets = [...bullets];
                             newBullets[bulletIdx] = e.target.value;
-                            const updatedData = [...tempData];
-                            updatedData[idx] = { ...proj, bullets: newBullets };
-                            updateTempField(null, null, updatedData);
+                            updateTempField(idx, 'bullets', newBullets);
                           }}
                           multiline
                           rows={3}
                           placeholder={`Bullet point ${bulletIdx + 1}`}
                           variant="standard"
-                          InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '90%' } }}
+                          slotProps={{
+                            input: {
+                              style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' }
+                            }
+                          }}
                           sx={{
                             flex: 1,
                             minWidth: 0,
+                            maxWidth: 'calc(100% - 48px)',
                             '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
                             '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
                           }}
@@ -170,13 +188,11 @@ const ProjectsSection = ({
                           <IconButton
                             size="small"
                             onClick={() => {
-                              const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || [''])];
+                              const newBullets = [...bullets];
                               newBullets.splice(bulletIdx, 1);
-                              const updatedData = [...tempData];
-                              updatedData[idx] = { ...proj, bullets: newBullets.length > 0 ? newBullets : [''] };
-                              updateTempField(null, null, updatedData);
+                              updateTempField(idx, 'bullets', newBullets.length > 0 ? newBullets : ['']);
                             }}
-                            sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
+                            sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0, ml: 0 }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -187,10 +203,17 @@ const ProjectsSection = ({
                   <Button
                     startIcon={<AddIcon />}
                     onClick={() => {
-                      const newBullets = [...(proj.bullets || proj.description.split(/[.\n]/).filter(b => b.trim()) || ['']), ''];
-                      const updatedData = [...tempData];
-                      updatedData[idx] = { ...proj, bullets: newBullets };
-                      updateTempField(null, null, updatedData);
+                      // Get current bullets (from either bullets array or description string)
+                      let currentBullets;
+                      if (proj.bullets && Array.isArray(proj.bullets) && proj.bullets.length > 0) {
+                        currentBullets = proj.bullets;
+                      } else if (proj.description && typeof proj.description === 'string') {
+                        currentBullets = proj.description.split('\n').filter(b => b.trim());
+                      } else {
+                        currentBullets = [''];
+                      }
+                      const newBullets = [...currentBullets, ''];
+                      updateTempField(idx, 'bullets', newBullets);
                     }}
                     size="small"
                     sx={{ color: colorPalette.secondary.mediumGreen, textTransform: 'none', fontSize: '12px' }}
@@ -214,7 +237,7 @@ const ProjectsSection = ({
           <Button
             startIcon={<AddIcon />}
             onClick={() => {
-              const newData = [...tempData, { name: '', description: '', technologies: [], start_date: '', end_date: '' }];
+              const newData = [...tempData, { name: '', bullets: [], technologies: [], start_date: '', end_date: '' }];
               updateTempField(null, null, newData);
             }}
             sx={{ color: '#fff', textTransform: 'none', mt: 2 }}
@@ -227,45 +250,39 @@ const ProjectsSection = ({
       // VIEW MODE
       return (
         <>
-          {projectsData.map((proj, idx) => (
-            <Box key={idx} sx={{ mb: 2.5, fontSize: isMobile ? '14px' : '13px' }}>
-              <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff' }}>{proj.name}</Typography>
-              {(proj.start_date || proj.end_date) && (
-                <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen, display: 'block' }}>
-                  {proj.start_date} {proj.start_date && proj.end_date && '-'} {proj.end_date}
-                </Typography>
-              )}
-              {/* Display bullet points */}
-              {proj.description && (
-                <Box component="ul" sx={{ pl: 1.5, pr: 0, mt: 0.5, mb: 0, ml: 0, mr: 0, width: '100%', boxSizing: 'border-box' }}>
-                  {proj.description.split('\n').filter(b => b.trim()).map((bullet, bIdx) => (
-                    <Typography
-                      key={bIdx}
-                      component="li"
-                      variant="caption"
-                      sx={{
-                        fontSize: isMobile ? '13px' : '12px',
-                        color: '#fff',
-                        mb: 0.3,
-                        lineHeight: 1.5,
-                        pr: 0,
-                        width: '100%',
-                        wordWrap: 'break-word',
-                        textAlign:'justify'
-                      }}
-                    >
-                      {bullet.trim()}
-                    </Typography>
-                  ))}
-                </Box>
-              )}
-              {proj.technologies && proj.technologies.length > 0 && (
-                <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', mt: 0.5, fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen }}>
-                  Tech: {proj.technologies.join(', ')}
-                </Typography>
-              )}
-            </Box>
-          ))}
+          {projectsData.map((proj, idx) => {
+            // Get bullets from either bullets array or description string
+            let displayBullets = [];
+            if (proj.bullets && Array.isArray(proj.bullets) && proj.bullets.length > 0) {
+              displayBullets = proj.bullets;
+            } else if (proj.description && typeof proj.description === 'string') {
+              displayBullets = proj.description.split('\n').filter(b => b.trim());
+            }
+
+            return (
+              <Box key={idx} sx={{ mb: 2.5, fontSize: isMobile ? '14px' : '13px' }}>
+                <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff' }}>{proj.name}</Typography>
+                {(proj.start_date || proj.end_date) && (
+                  <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen, display: 'block' }}>
+                    {proj.start_date} {proj.start_date && proj.end_date && '-'} {proj.end_date}
+                  </Typography>
+                )}
+                {/* Display bullet points */}
+                {displayBullets.length > 0 && (
+                  <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                    {displayBullets.map((bullet, bidx) => (
+                      <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px', textAlign: 'justify' }}>{bullet}</li>
+                    ))}
+                  </ul>
+                )}
+                {proj.technologies && proj.technologies.length > 0 && (
+                  <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', mt: 0.5, fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen }}>
+                    Tech: {proj.technologies.join(', ')}
+                  </Typography>
+                )}
+              </Box>
+            );
+          })}
         </>
       );
     }

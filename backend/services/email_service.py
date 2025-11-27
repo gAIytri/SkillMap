@@ -117,7 +117,7 @@ def send_verification_email(
 
                                     <!-- Help text -->
                                     <p style="margin: 30px 0 0 0; color: #666666; font-size: 14px; line-height: 1.6;">
-                                        Need help? Contact us at <a href="mailto:support@skillmap.com" style="color: #29B770; text-decoration: none;">support@skillmap.com</a>
+                                        Need help? Contact us at <a href="mailto:admin@gaiytri.com" style="color: #29B770; text-decoration: none;">admin@gaiytri.com</a>
                                     </p>
                                 </td>
                             </tr>
@@ -154,7 +154,7 @@ def send_verification_email(
 
         If you didn't create a SkillMap account, please ignore this email.
 
-        Need help? Contact us at support@skillmap.com
+        Need help? Contact us at admin@gaiytri.com
 
         © {datetime.now().year} SkillMap. All rights reserved.
         """

@@ -36,6 +36,8 @@ import ProjectsSection from '../components/project-editor/ProjectsSection';
 import EducationSection from '../components/project-editor/EducationSection';
 import SkillsSection from '../components/project-editor/SkillsSection';
 import CertificationsSection from '../components/project-editor/CertificationsSection';
+import CustomSection from '../components/project-editor/CustomSection';
+import SectionTemplateModal from '../components/project-editor/SectionTemplateModal';
 import {
   KeyboardSensor,
   PointerSensor,
@@ -110,6 +112,7 @@ const ProjectEditor = () => {
 
   const [selectedSection, setSelectedSection] = useState('personal_info'); // Currently selected section tab (default: personal_info)
   const [viewingPreviousVersion, setViewingPreviousVersion] = useState(false); // Track if user is viewing a previous version
+  const [sectionTemplateModalOpen, setSectionTemplateModalOpen] = useState(false); // Control custom section template modal
   const [expandedSections, setExpandedSections] = useState({
     personal_info: false,
     professional_summary: false,
@@ -413,11 +416,26 @@ const ProjectEditor = () => {
       setTempSectionData(JSON.parse(JSON.stringify(extractedData.skills)));
     } else if (sectionKey === 'certifications') {
       setTempSectionData(JSON.parse(JSON.stringify(extractedData.certifications)));
+    } else if (sectionKey.startsWith('custom_')) {
+      // Handle custom sections
+      const customSections = extractedData.custom_sections || [];
+      const customSection = customSections.find(s => s.id === sectionKey);
+      if (customSection) {
+        setTempSectionData(JSON.parse(JSON.stringify(customSection)));
+      }
     }
   };
 
   const handleSaveSection = () => {
     if (!editingSection) return;
+
+    // Validation for personal_info: Name is required
+    if (editingSection === 'personal_info') {
+      if (!tempSectionData?.name || !tempSectionData.name.trim()) {
+        toast.error('Name is required and cannot be empty');
+        return; // Don't save
+      }
+    }
 
     // Validation for projects: Require at least one non-empty bullet point
     if (editingSection === 'projects' && Array.isArray(tempSectionData)) {
@@ -445,12 +463,12 @@ const ProjectEditor = () => {
           toast.error(`Company is required for "${exp.title}"`);
           return; // Don't save
         }
-        if (!exp.location || !exp.location.trim()) {
-          toast.error(`Location is required for "${exp.title}" at ${exp.company}`);
-          return; // Don't save
-        }
         if (!exp.start_date || !exp.start_date.trim()) {
           toast.error(`Start Date is required for "${exp.title}" at ${exp.company}`);
+          return; // Don't save
+        }
+        if (!exp.location || !exp.location.trim()) {
+          toast.error(`Location is required for "${exp.title}" at ${exp.company}`);
           return; // Don't save
         }
 
@@ -466,6 +484,20 @@ const ProjectEditor = () => {
         // Auto-fill end_date with "Present" if empty
         if (!exp.end_date || !exp.end_date.trim()) {
           exp.end_date = 'Present';
+        }
+      }
+    }
+
+    // Validation for skills: Each category must have at least one skill
+    if (editingSection === 'skills' && Array.isArray(tempSectionData)) {
+      for (const skillCategory of tempSectionData) {
+        const category = skillCategory.category || 'Untitled';
+        const skills = skillCategory.skills || [];
+        const hasValidSkill = skills.some(s => s && s.trim().length > 0);
+
+        if (!hasValidSkill) {
+          toast.error(`Category "${category}" cannot be empty. Please add at least one skill or remove the category.`);
+          return; // Don't save
         }
       }
     }
@@ -501,7 +533,21 @@ const ProjectEditor = () => {
       });
     }
 
-    updatedData[editingSection] = dataToSave;
+    // Handle custom sections differently
+    if (editingSection.startsWith('custom_')) {
+      const customSections = updatedData.custom_sections || [];
+      const sectionIndex = customSections.findIndex(s => s.id === editingSection);
+
+      if (sectionIndex !== -1) {
+        customSections[sectionIndex] = {
+          ...customSections[sectionIndex],
+          ...tempSectionData
+        };
+        updatedData.custom_sections = customSections;
+      }
+    } else {
+      updatedData[editingSection] = dataToSave;
+    }
     // Section names are already updated in state via the TextField onChange
 
     setExtractedData(updatedData);
@@ -703,6 +749,91 @@ const ProjectEditor = () => {
     } finally {
       setCompiling(false);
     }
+  };
+
+  // Handle adding custom section
+  const handleAddCustomSection = () => {
+    setSectionTemplateModalOpen(true);
+  };
+
+  // Handle template selection and create new section
+  const handleSelectTemplate = (template) => {
+    // Generate unique section ID
+    const customSectionId = `custom_${Date.now()}`;
+
+    // Add to extractedData.custom_sections
+    const updatedExtractedData = {
+      ...extractedData,
+      custom_sections: [
+        ...(extractedData.custom_sections || []),
+        {
+          id: customSectionId,
+          name: 'New Section',
+          ...template.structure
+        }
+      ]
+    };
+
+    // Add to section order (after certifications, before the end)
+    const newSectionOrder = [...sectionOrder, customSectionId];
+
+    // Add to section names
+    const newSectionNames = {
+      ...sectionNames,
+      [customSectionId]: 'New Section'
+    };
+
+    setExtractedData(updatedExtractedData);
+    setSectionOrder(newSectionOrder);
+    setSectionNames(newSectionNames);
+    setPendingChanges(true);
+
+    // Auto-select and expand the new section
+    setSelectedSection(customSectionId);
+    setExpandedSections(prev => ({
+      ...prev,
+      [customSectionId]: true
+    }));
+
+    toast.success('Custom section added! Click "Compile PDF" to see changes.');
+  };
+
+  // Handle deleting custom section
+  const handleDeleteSection = (sectionId) => {
+    // Show confirmation toast
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${sectionNames[sectionId]}"? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    // Remove from custom_sections array
+    const updatedCustomSections = (extractedData.custom_sections || []).filter(
+      section => section.id !== sectionId
+    );
+
+    // Remove from section order
+    const updatedSectionOrder = sectionOrder.filter(key => key !== sectionId);
+
+    // Remove from section names
+    const updatedSectionNames = { ...sectionNames };
+    delete updatedSectionNames[sectionId];
+
+    // Update state
+    setExtractedData({
+      ...extractedData,
+      custom_sections: updatedCustomSections
+    });
+    setSectionOrder(updatedSectionOrder);
+    setSectionNames(updatedSectionNames);
+    setPendingChanges(true);
+
+    // If deleted section was selected, switch to first section
+    if (selectedSection === sectionId) {
+      setSelectedSection(updatedSectionOrder[0] || 'personal_info');
+    }
+
+    toast.success('Section deleted. Click "Compile PDF" to update.');
   };
 
   // Toggle section expansion
@@ -930,6 +1061,24 @@ const ProjectEditor = () => {
         );
 
       default:
+        // Handle custom sections
+        if (sectionKey.startsWith('custom_')) {
+          const customSections = extractedData.custom_sections || [];
+          const customSection = customSections.find(section => section.id === sectionKey);
+
+          if (!customSection) return null;
+
+          return (
+            <CustomSection
+              sectionKey={sectionKey}
+              sectionName={sectionNames[sectionKey] || 'New Section'}
+              customSection={customSection}
+              isEditing={editingSection === sectionKey}
+              tempData={tempSectionData}
+              updateTempField={updateTempField}
+            />
+          );
+        }
         return null;
     }
   };
@@ -1067,6 +1216,9 @@ const ProjectEditor = () => {
         onSelectedSectionChange={setSelectedSection}
         sensors={sensors}
         onDragEnd={handleDragEnd}
+        // Custom section props
+        onAddCustomSection={handleAddCustomSection}
+        onDeleteSection={handleDeleteSection}
       />
 
       {/* Main Content Area - 90% width on desktop, full width on mobile */}
@@ -1147,6 +1299,13 @@ const ProjectEditor = () => {
         onClose={() => setShowRechargeDialog(false)}
         currentCredits={user?.credits || 0}
         blocking={rechargeDialogBlocking}
+      />
+
+      {/* Section Template Modal */}
+      <SectionTemplateModal
+        open={sectionTemplateModalOpen}
+        onClose={() => setSectionTemplateModalOpen(false)}
+        onSelectTemplate={handleSelectTemplate}
       />
     </Box>
   );

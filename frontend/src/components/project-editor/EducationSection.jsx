@@ -92,19 +92,27 @@ const EducationSection = ({
                           onChange={(e) => updateTempField(idx, 'gpa', e.target.value)}
                           fullWidth
                           variant="standard"
-                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen }, shrink: true }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
                           sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                         <TextField
-                          label="GPA Out of (optional)"
+                          label="Out of"
                           value={edu.gpa_out_of || ''}
-                          onChange={(e) => updateTempField(idx, 'gpa_out_of', e.target.value)}
+                          onChange={(e) => {
+                            // Only allow numbers
+                            const value = e.target.value;
+                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                              updateTempField(idx, 'gpa_out_of', value);
+                            }
+                          }}
                           fullWidth
                           variant="standard"
-                          placeholder="e.g., 4"
-                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-                          InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
+                          InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen }, shrink: true }}
+                          InputProps={{
+                            style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' },
+                            inputProps: { inputMode: 'decimal' }
+                          }}
                           sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                         />
                       </Box>

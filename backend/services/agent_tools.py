@@ -85,6 +85,98 @@ def sanitize_json_hyphens(data: Any) -> Any:
         return data
 
 
+def _validate_resume_modification(user_message: str) -> dict:
+    """
+    Internal helper to validate if a resume modification request is supported.
+
+    Checks if the user is asking for:
+    - Supported: Content changes (text, bullets, dates, adding/removing entries)
+    - Unsupported: Structural changes (section order, section names, template changes, formatting)
+
+    Returns:
+        dict: {
+            "supported": bool,
+            "message": str (error message if not supported),
+            "suggestions": str (alternative actions user can take)
+        }
+    """
+    try:
+        messages = [
+            SystemMessage(content="""You are validating whether a resume modification request is supported by the system.
+
+THE SYSTEM CAN MODIFY (Supported):
+✅ Content within sections:
+   - Personal info (name, email, phone, location, links)
+   - Professional summary text
+   - Work experience (company, title, dates, location, bullet points)
+   - Education (degree, institution, dates, GPA)
+   - Skills (categories and skills within them)
+   - Projects (name, bullet points, technologies, links, dates)
+   - Certifications (list items)
+✅ Adding or removing entries within sections (new job, new project, etc.)
+✅ Rewriting/improving content
+✅ Changing dates, locations, text content
+
+THE SYSTEM CANNOT MODIFY (Unsupported):
+❌ Section order/reordering sections
+❌ Renaming section headers (e.g., "Experience" to "Work History")
+❌ Adding new custom section types
+❌ Template/formatting changes (fonts, colors, layout, spacing)
+❌ PDF/DOCX formatting preferences
+❌ Page breaks, margins, or document structure
+❌ Adding images, logos, or graphics
+
+Analyze the user's request and return JSON:
+{
+    "supported": true/false,
+    "request_type": "content_modification" | "structural_modification" | "formatting_modification",
+    "specific_ask": "what specifically they're asking for",
+    "reasoning": "why it's supported or not"
+}"""),
+            HumanMessage(content=f"Is this modification request supported?\n\nUser request: {user_message}")
+        ]
+
+        structured_llm = _llm_mini.bind(response_format={"type": "json_object"})
+        response = structured_llm.invoke(messages)
+        result = json.loads(response.content)
+
+        supported = result.get("supported", False)
+        request_type = result.get("request_type", "unknown")
+        specific_ask = result.get("specific_ask", "")
+        reasoning = result.get("reasoning", "")
+
+        if supported:
+            return {
+                "supported": True,
+                "message": "Modification request is supported"
+            }
+
+        # Build helpful error message based on what they were trying to do
+        if request_type == "structural_modification":
+            error_msg = f"I cannot modify the section structure. {specific_ask}. You can manually reorder sections using the editor's drag-and-drop feature."
+            suggestions = "Try: Editing content within existing sections, or use the UI to reorder sections."
+        elif request_type == "formatting_modification":
+            error_msg = f"I cannot modify formatting or template design. {specific_ask}. The PDF format and styling are automatically generated."
+            suggestions = "Try: Editing the content itself, which will be reflected in the generated PDF."
+        else:
+            error_msg = f"This modification is not supported. {reasoning}."
+            suggestions = "I can help you edit content within sections: professional summary, experience bullets, skills, projects, education, and certifications."
+
+        return {
+            "supported": False,
+            "message": error_msg,
+            "suggestions": suggestions
+        }
+
+    except Exception as e:
+        logger.error(f"Modification validation failed: {e}")
+        # On error, allow the request through (fail open)
+        return {
+            "supported": True,
+            "message": "Proceeding with modification"
+        }
+
+
 @tool
 @traceable(name="validate_intent")
 def validate_intent(user_message: str) -> dict:
@@ -93,8 +185,11 @@ def validate_intent(user_message: str) -> dict:
 
     This tool checks if the user's message is:
     - A job description to tailor the resume against
-    - A request to modify specific parts of the resume
+    - A request to modify specific parts of the resume (and if supported)
     - Or something unrelated (reject)
+
+    For resume modifications, it validates whether the requested changes are
+    supported by the system (content changes vs structural/formatting changes).
 
     Args:
         user_message: The message from the user to validate
@@ -102,9 +197,9 @@ def validate_intent(user_message: str) -> dict:
     Returns:
         dict: {
             "valid": bool,
-            "intent_type": "job_description" | "resume_modification" | "invalid",
+            "intent_type": "job_description" | "resume_modification" | "unsupported_modification" | "invalid",
             "message": str,
-            "details": str (optional)
+            "details": str (optional - contains suggestions for unsupported modifications)
         }
     """
     try:
@@ -156,6 +251,19 @@ Return your response as JSON with:
                 "details": reasoning,
                 "token_usage": token_usage
             }
+
+        # If it's a resume modification, validate if the request is supported
+        if intent_type == "resume_modification":
+            modification_check = _validate_resume_modification(user_message)
+
+            if not modification_check["supported"]:
+                return {
+                    "valid": False,
+                    "intent_type": "unsupported_modification",
+                    "message": modification_check["message"],
+                    "details": modification_check.get("suggestions", ""),
+                    "token_usage": token_usage
+                }
 
         # Valid intent
         return {
@@ -375,6 +483,7 @@ Then tailor the resume:
    - MEDIUM RELEVANCE: Add technical detail, highlight overlaps
    - LOW RELEVANCE: Keep clear but concise
    - Example: "Built e-commerce website" → "Developed full-stack e-commerce platform using React, Node.js, PostgreSQL with Stripe integration, JWT auth, Redis caching, serving 5K+ users with <200ms response time"
+   - IMPORTANT: Use "bullets" array field, NOT "description" field. Each project must have a "bullets" array containing separate bullet points as individual strings
 
 4. SKILLS:
    - REORDER each category: job-required skills first, then preferred, then others
@@ -384,6 +493,12 @@ Then tailor the resume:
    - Analyze majority format (MM/YYYY vs Month YYYY)
    - Apply consistently to ALL dates (education, projects, experience)
    - Default to "Month YYYY" if unclear
+
+CRITICAL JSON STRUCTURE REQUIREMENTS:
+- Projects: MUST use "bullets" field (array of strings), NOT "description" field
+- Experience: MUST use "bullets" field (array of strings)
+- Each bullet point should be a separate string in the array
+- Do NOT concatenate multiple points into a single string
 
 OUTPUT: Return complete resume JSON with exact structure. Make SUBSTANTIAL improvements."""
 
@@ -557,9 +672,13 @@ TONE: Professional, confident, specific, and genuine."""
         if candidate_email:
             contact_info_lines.append(candidate_email)
         if linkedin_link:
-            contact_info_lines.append(linkedin_link)
+            # Sanitize LinkedIn link - remove https:// and http://
+            sanitized_linkedin = linkedin_link.replace('https://', '').replace('http://', '')
+            contact_info_lines.append(sanitized_linkedin)
         if portfolio_link:
-            contact_info_lines.append(portfolio_link)
+            # Sanitize portfolio link - remove https:// and http://
+            sanitized_portfolio = portfolio_link.replace('https://', '').replace('http://', '')
+            contact_info_lines.append(sanitized_portfolio)
 
         contact_info = '\n'.join(contact_info_lines)
 

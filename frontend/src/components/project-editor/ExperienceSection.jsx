@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -20,6 +20,14 @@ const ExperienceSection = ({
 
   // Track which version is being viewed (always a number)
   const [viewingVersion, setViewingVersion] = useState(currentVersion);
+
+  // Auto-switch to latest version when currentVersion updates (after tailoring)
+  useEffect(() => {
+    setViewingVersion(currentVersion);
+    if (onViewingVersionChange) {
+      onViewingVersionChange(currentVersion);
+    }
+  }, [currentVersion, onViewingVersionChange]);
 
   if (!data || data.length === 0) return null;
 
@@ -408,7 +416,7 @@ const ExperienceSection = ({
                           const bulletsCount = bullets.length;
 
                           return bullets.map((bullet, bulletIdx) => (
-                            <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'flex-start' }}>
+                            <Box key={bulletIdx} sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
                               <TextField
                                 value={bullet}
                                 onChange={(e) => {
@@ -420,10 +428,11 @@ const ExperienceSection = ({
                                 rows={3}
                                 placeholder={`Bullet point ${bulletIdx + 1}`}
                                 variant="standard"
-                                InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '90%' } }}
+                                InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' } }}
                                 sx={{
                                   flex: 1,
                                   minWidth: 0,
+                                  maxWidth: 'calc(100% - 48px)',
                                   '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
                                   '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
                                 }}
@@ -437,7 +446,7 @@ const ExperienceSection = ({
                                     newBullets.splice(bulletIdx, 1);
                                     updateTempField(idx, 'bullets', newBullets.length > 0 ? newBullets : ['']);
                                   }}
-                                  sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
+                                  sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0, ml: 0 }}
                                 >
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>

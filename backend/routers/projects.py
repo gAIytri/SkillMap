@@ -868,12 +868,16 @@ async def update_section_order(
             detail="Project has no resume data"
         )
 
-    # Validate section order contains valid sections
+    # Validate section order contains valid sections (including custom sections)
     valid_sections = {'personal_info', 'professional_summary', 'experience', 'projects', 'education', 'skills', 'certifications'}
     provided_sections = set(order_update.section_order)
 
-    if not provided_sections.issubset(valid_sections):
-        invalid = provided_sections - valid_sections
+    # Check that all provided sections are either valid standard sections OR custom sections
+    custom_sections = project.resume_json.get('custom_sections', [])
+    custom_section_ids = {section['id'] for section in custom_sections}
+
+    invalid = provided_sections - valid_sections - custom_section_ids
+    if invalid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid sections: {invalid}"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, Button, Chip } from '@mui/material';
 import { colorPalette } from '../../styles/theme';
 
@@ -18,6 +18,14 @@ const ProfessionalSummarySection = ({
 
   // Track which version is being viewed (now it's always a number, not 'current')
   const [viewingVersion, setViewingVersion] = useState(currentVersion);
+
+  // Auto-switch to latest version when currentVersion updates (after tailoring)
+  useEffect(() => {
+    setViewingVersion(currentVersion);
+    if (onViewingVersionChange) {
+      onViewingVersionChange(currentVersion);
+    }
+  }, [currentVersion, onViewingVersionChange]);
 
   if (!data) return null;
 

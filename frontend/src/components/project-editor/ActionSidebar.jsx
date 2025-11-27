@@ -5,6 +5,7 @@ import EmailIcon from '@mui/icons-material/Email';
 import SendIcon from '@mui/icons-material/Send';
 import DownloadIcon from '@mui/icons-material/Download';
 import CloseIcon from '@mui/icons-material/Close';
+import AddIcon from '@mui/icons-material/Add';
 import { colorPalette } from '../../styles/theme';
 import {
   DndContext,
@@ -18,7 +19,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 // Sortable Section Button Component
-const SortableSectionButton = ({ id, label, isActive, onClick }) => {
+const SortableSectionButton = ({ id, label, isActive, onClick, onDelete, isCustom }) => {
   const {
     attributes,
     listeners,
@@ -70,11 +71,39 @@ const SortableSectionButton = ({ id, label, isActive, onClick }) => {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            color:isActive?"white":'black'
+            color:isActive?"white":'black',
+            pr: isCustom ? 2.5 : 0  // Add padding when delete icon is present
           }}
         >
           {label}
         </Typography>
+        {/* Delete icon for custom sections */}
+        {isCustom && (
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(id);
+            }}
+            sx={{
+              position: 'absolute',
+              right: 2,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 16,
+              height: 16,
+              padding: 0,
+              color: isActive ? '#fff' : '#e74c3c',
+              opacity: 0.7,
+              '&:hover': {
+                opacity: 1,
+                bgcolor: 'rgba(231, 76, 60, 0.2)'
+              }
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 12 }} />
+          </IconButton>
+        )}
       </Button>
     </Box>
   );
@@ -98,6 +127,8 @@ const ActionSidebar = ({
   // Section navigation props
   sectionOrder,
   sectionNames,
+  onAddCustomSection,
+  onDeleteSection,
   selectedSection,
   onSelectedSectionChange,
   sensors,
@@ -226,20 +257,35 @@ const ActionSidebar = ({
 
         {/* Section Navigation - Vertical & Draggable */}
         {extractedData && sectionOrder && sectionOrder.length > 0 && (
-          <Box sx={{  pb: 1, flex: 1, overflow: 'auto', borderBottom: '2px solid #e1e8ed' }}>
-            <Typography
-              variant="caption"
-              sx={{
-                px: 1,
-                pb:0.5,
-                color: '#666',
-                fontWeight: 600,
-                display: 'block',
-                fontSize: '0.85rem',
-              }}
-            >
-              SECTIONS
-            </Typography>
+          <Box sx={{  pb: 1, flex: 1, overflow: 'auto', borderBottom: '2px solid #e1e8ed', minHeight: 0 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, pb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#666',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                }}
+              >
+                SECTIONS
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={onAddCustomSection}
+                sx={{
+                  color: colorPalette.primary.darkGreen,
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                  width: 24,
+                  height: 24,
+                  '&:hover': {
+                    bgcolor: colorPalette.primary.brightGreen,
+                    color: 'white',
+                  }
+                }}
+              >
+                <AddIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -251,6 +297,12 @@ const ActionSidebar = ({
               >
                 {sectionOrder
                   .filter((sectionKey) => {
+                    // Check if this is a custom section
+                    if (sectionKey.startsWith('custom_')) {
+                      const customSections = extractedData.custom_sections || [];
+                      return customSections.some(section => section.id === sectionKey);
+                    }
+
                     // Only show sections that have data
                     const data = extractedData[sectionKey];
 
@@ -275,6 +327,8 @@ const ActionSidebar = ({
                       label={sectionNames[sectionKey]}
                       isActive={selectedSection === sectionKey}
                       onClick={() => onSelectedSectionChange(sectionKey)}
+                      onDelete={onDeleteSection}
+                      isCustom={sectionKey.startsWith('custom_')}
                     />
                   ))}
               </SortableContext>
@@ -418,49 +472,102 @@ const ActionSidebar = ({
         {/* Section Navigation - Mobile */}
         {extractedData && sectionOrder && sectionOrder.length > 0 && (
           <Box sx={{ mb: 3 }}>
-            <Typography
-              variant="caption"
-              sx={{
-                mb: 1,
-                color: '#666',
-                fontWeight: 600,
-                display: 'block',
-                fontSize: '0.75rem',
-              }}
-            >
-              SECTIONS
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#666',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                }}
+              >
+                SECTIONS
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  onAddCustomSection();
+                  onMobileDrawerClose();
+                }}
+                sx={{
+                  color: colorPalette.primary.darkGreen,
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                  width: 24,
+                  height: 24,
+                  '&:hover': {
+                    bgcolor: colorPalette.primary.brightGreen,
+                    color: 'white',
+                  }
+                }}
+              >
+                <AddIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {sectionOrder
                 .filter((sectionKey) => {
+                  // Check if this is a custom section
+                  if (sectionKey.startsWith('custom_')) {
+                    const customSections = extractedData.custom_sections || [];
+                    return customSections.some(section => section.id === sectionKey);
+                  }
+
                   const data = extractedData[sectionKey];
                   if (sectionKey === 'personal_info') return data && data.name;
                   if (sectionKey === 'professional_summary') return data && data.trim().length > 0;
                   return Array.isArray(data) && data.length > 0;
                 })
                 .map((sectionKey) => (
-                  <Button
-                    key={sectionKey}
-                    fullWidth
-                    onClick={() => {
-                      onSelectedSectionChange(sectionKey);
-                      onMobileDrawerClose();
-                    }}
-                    sx={{
-                      justifyContent: 'flex-start',
-                      color: selectedSection === sectionKey ? '#fff' : colorPalette.primary.darkGreen,
-                      bgcolor: selectedSection === sectionKey ? colorPalette.primary.darkGreen : 'transparent',
-                      textTransform: 'none',
-                      fontSize: '0.8rem',
-                      py: 1,
-                      border: '1px solid #e1e8ed',
-                      '&:hover': {
-                        bgcolor: selectedSection === sectionKey ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
-                      },
-                    }}
-                  >
-                    {sectionNames[sectionKey]}
-                  </Button>
+                  <Box key={sectionKey} sx={{ position: 'relative' }}>
+                    <Button
+                      fullWidth
+                      onClick={() => {
+                        onSelectedSectionChange(sectionKey);
+                        onMobileDrawerClose();
+                      }}
+                      sx={{
+                        justifyContent: 'flex-start',
+                        color: selectedSection === sectionKey ? '#fff' : colorPalette.primary.darkGreen,
+                        bgcolor: selectedSection === sectionKey ? colorPalette.primary.darkGreen : 'transparent',
+                        textTransform: 'none',
+                        fontSize: '0.8rem',
+                        py: 1,
+                        border: '1px solid #e1e8ed',
+                        '&:hover': {
+                          bgcolor: selectedSection === sectionKey ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                        },
+                      }}
+                    >
+                      {sectionNames[sectionKey]}
+                    </Button>
+                    {/* Delete icon for custom sections */}
+                    {sectionKey.startsWith('custom_') && (
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSection(sectionKey);
+                        }}
+                        sx={{
+                          position: 'absolute',
+                          right: 8,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: 20,
+                          height: 20,
+                          padding: 0,
+                          color: selectedSection === sectionKey ? '#fff' : '#e74c3c',
+                          opacity: 0.7,
+                          '&:hover': {
+                            opacity: 1,
+                            bgcolor: 'rgba(231, 76, 60, 0.2)'
+                          }
+                        }}
+                      >
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    )}
+                  </Box>
                 ))}
             </Box>
           </Box>

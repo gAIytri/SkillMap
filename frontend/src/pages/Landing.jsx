@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Box, Container, Typography, Button, Grid, Card, CardContent, useTheme, useMediaQuery, Chip, IconButton } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +8,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DownloadIcon from '@mui/icons-material/Download';
 import FolderIcon from '@mui/icons-material/Folder';
 import StarIcon from '@mui/icons-material/Star';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import ArrowUpIcon from '../components/icons/ArrowUpIcon';
 import LoginForm from '../components/auth/LoginForm';
 import SignupForm from '../components/auth/SignupForm';
 
@@ -19,12 +19,17 @@ const Landing = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const [authMode, setAuthMode] = useState(null); // null, 'login', or 'signup'
+  const topRef = useRef(null);
+
+  const scrollToTop = () => {
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const features = [
     {
       icon: <DescriptionIcon sx={{ fontSize: 50, color: colorPalette.primary.brightGreen }} />,
       title: 'Upload Any Resume Format',
-      description: 'Upload DOCX, PDF, or Images (JPG, PNG). Our AI extracts all content automatically.',
+      description: 'Upload DOCX or PDF file . Our AI extracts all content automatically.',
     },
     {
       icon: <EditIcon sx={{ fontSize: 50, color: colorPalette.primary.brightGreen }} />,
@@ -44,7 +49,7 @@ const Landing = () => {
   ];
 
   return (
-    <Box>
+    <Box ref={topRef}>
       {/* Hero Section or Auth Forms */}
       <Box
         sx={{
@@ -98,8 +103,8 @@ const Landing = () => {
               {!isAuthenticated && (
                 <Box display="flex" justifyContent="center" mb={3}>
                   <Chip
-                    icon={<StarIcon sx={{ color: '#FFD700 !important' }} />}
-                    label="Sign up and get 100 FREE credits to start!"
+                    
+                    label="Sign up and get 100 FREE CREDITS to start!"
                     sx={{
                       bgcolor: colorPalette.primary.darkGreen,
                       color: '#FFFFFF',
@@ -274,8 +279,8 @@ const Landing = () => {
               {/* Free credits incentive */}
               <Box display="flex" justifyContent="center" mb={3}>
                 <Chip
-                  icon={<StarIcon sx={{ color: '#FFD700 !important' }} />}
-                  label="Get 100 FREE credits when you sign up!"
+                 
+                  label="Get 100 FREE CREDITS when you sign up!"
                   sx={{
                     bgcolor: 'rgba(255, 255, 255, 0.15)',
                     color: '#FFFFFF',
@@ -293,7 +298,12 @@ const Landing = () => {
               <Button
                 variant="contained"
                 size={isMobile ? 'medium' : 'large'}
-                onClick={() => setAuthMode('signup')}
+                onClick={() => {
+                  setAuthMode('signup');
+                  setTimeout(() => {
+                    scrollToTop();
+                  }, 100);
+                }}
                 sx={{
                   py: isMobile ? 1.5 : 2,
                   px: isMobile ? 3 : 4,
@@ -319,13 +329,40 @@ const Landing = () => {
           color: '#fff',
           py: 4,
           mt: 'auto',
+          position: 'relative',
         }}
       >
+        {/* Back to Top Icon Button - Top Right of Footer */}
+        <IconButton
+          onClick={scrollToTop}
+          sx={{
+            position: 'absolute',
+            top: { xs: 20, md: 30 },
+            right: { xs: 20, md: 40 },
+            bgcolor: colorPalette.primary.darkGreen,
+            color: '#fff',
+            border: `2px solid ${colorPalette.primary.brightGreen}`,
+            width: { xs: '50px', md: '56px' },
+            height: { xs: '50px', md: '56px' },
+            boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+            '&:hover': {
+              bgcolor: colorPalette.primary.brightGreen,
+              borderColor: '#fff',
+              transform: 'translateY(-4px)',
+              boxShadow: '0 6px 20px rgba(76, 175, 80, 0.5)',
+            },
+            transition: 'all 0.3s ease',
+            zIndex: 10,
+          }}
+        >
+          <ArrowUpIcon size={28} color="#fff" />
+        </IconButton>
+
         <Container maxWidth="lg">
           <Grid container spacing={4}>
             {/* About Section */}
             <Grid item xs={12} md={4}>
-              <Typography variant="h6" fontWeight={700} gutterBottom>
+              <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: colorPalette.primary.brightGreen }}>
                 SkillMap
               </Typography>
               <Typography variant="body2" sx={{ color: '#bbb', lineHeight: 1.8 }}>
@@ -335,7 +372,7 @@ const Landing = () => {
 
             {/* Quick Links */}
             <Grid item xs={12} md={4}>
-              <Typography variant="h6" fontWeight={700} gutterBottom>
+              <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: colorPalette.primary.brightGreen }}>
                 Quick Links
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -345,8 +382,10 @@ const Landing = () => {
                       variant="body2"
                       sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
                       onClick={() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        setTimeout(() => setAuthMode('login'), 300);
+                        setAuthMode('login');
+                        setTimeout(() => {
+                          scrollToTop();
+                        }, 100);
                       }}
                     >
                       Login
@@ -355,8 +394,10 @@ const Landing = () => {
                       variant="body2"
                       sx={{ color: '#bbb', cursor: 'pointer', '&:hover': { color: colorPalette.primary.brightGreen } }}
                       onClick={() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        setTimeout(() => setAuthMode('signup'), 300);
+                        setAuthMode('signup');
+                        setTimeout(() => {
+                          scrollToTop();
+                        }, 100);
                       }}
                     >
                       Sign Up
@@ -368,14 +409,14 @@ const Landing = () => {
 
             {/* Contact */}
             <Grid item xs={12} md={4}>
-              <Typography variant="h6" fontWeight={700} gutterBottom>
+              <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: colorPalette.primary.brightGreen }}>
                 Contact
               </Typography>
               <Typography variant="body2" sx={{ color: '#bbb', lineHeight: 1.8 }}>
                 Need help? Reach out to us at:
               </Typography>
               <Typography variant="body2" sx={{ color: colorPalette.primary.brightGreen, mt: 1 }}>
-                support@skillmap.com
+                admin@gaiytri.com
               </Typography>
             </Grid>
           </Grid>
@@ -410,27 +451,6 @@ const Landing = () => {
               >
                 Terms of Service
               </Typography>
-              {/* Back to Top Icon Button */}
-              <IconButton
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                sx={{
-                  bgcolor: '#1a1a1a',
-                  color: '#fff',
-                  border: '2px solid #444',
-                  width: '40px',
-                  height: '40px',
-                  '&:hover': {
-                    bgcolor: '#2a2a2a',
-                    borderColor: colorPalette.primary.brightGreen,
-                    color: colorPalette.primary.brightGreen,
-                    transform: 'translateY(-2px)',
-                  },
-                  transition: 'all 0.3s ease',
-                  ml: 2,
-                }}
-              >
-                <KeyboardArrowUpIcon sx={{ fontSize: 28 }} />
-              </IconButton>
             </Box>
           </Box>
         </Container>

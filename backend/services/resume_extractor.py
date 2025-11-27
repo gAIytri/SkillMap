@@ -69,9 +69,12 @@ class SkillCategory(BaseModel):
 class ProjectEntry(BaseModel):
     """Project entry"""
     name: str
-    description: str
+    bullets: List[str] = []  # Changed from description to bullets for consistency with experience
+    description: Optional[str] = None  # Keep for backward compatibility
     technologies: List[str] = []
     link: Optional[str] = None
+    start_date: Optional[str] = None  # Added for consistency
+    end_date: Optional[str] = None  # Added for consistency
 
 
 class ResumeData(BaseModel):
@@ -409,13 +412,25 @@ INSTRUCTIONS:
 - For skills, group by logical categories (remove duplicates within each category)
 - Preserve dates exactly (e.g., "Sept 2025", "Present")
 - For personal_info:
-  * Extract current_role/job title if mentioned in the header (e.g., "Software Engineer", "Data Analyst")
+  * Extract current_role/job title if mentioned in the header
+  * Clean up the job title to be professional and standard:
+    - Remove marketing buzzwords like "AI-driven", "Innovative", "Dynamic", "Passionate"
+    - Extract the core role (e.g., "Full Stack Developer", "Software Engineer", "Data Analyst")
+    - Acceptable prefixes: "Senior", "Junior", "Lead", "Principal", "Staff"
+    - Examples: "AI-driven Full Stack Developer" → "Full Stack Developer"
+                "Innovative Software Engineer" → "Software Engineer"
+                "Passionate Data Scientist" → "Data Scientist"
   * DO NOT include email/phone in header_links (they have dedicated fields)
   * For header_links: Extract social/professional links (LinkedIn, GitHub, Portfolio, etc.)
   * If you see a "--- Hyperlinks ---" section, use it to extract both link text AND URL
   * Format: text field should be the link display text, url field should be the actual URL
   * Keep link text clean and simple (e.g., "LinkedIn" not "LinkedinLinkedinLinkedin")
   * Avoid repeating text multiple times in link names
+- For projects:
+  * Extract each bullet point as a separate item in the bullets array
+  * DO NOT concatenate bullets into a single description string
+  * Each bullet should be a distinct array element
+  * Include start_date and end_date if mentioned
 
 RESUME:
 {text}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip } from '@mui/material';
 import { colorPalette } from '../../styles/theme';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -20,6 +20,14 @@ const SkillsSection = ({
 
   // Track which version is being viewed (always a number)
   const [viewingVersion, setViewingVersion] = useState(currentVersion);
+
+  // Auto-switch to latest version when currentVersion updates (after tailoring)
+  useEffect(() => {
+    setViewingVersion(currentVersion);
+    if (onViewingVersionChange) {
+      onViewingVersionChange(currentVersion);
+    }
+  }, [currentVersion, onViewingVersionChange]);
 
   if (!data || data.length === 0) return null;
 

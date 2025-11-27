@@ -21,6 +21,7 @@ import {
   DialogActions,
   useTheme,
   useMediaQuery,
+  Checkbox,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
@@ -29,6 +30,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
@@ -54,6 +57,8 @@ const Dashboard = () => {
   });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState([]);
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -131,6 +136,44 @@ const Dashboard = () => {
     setDeleteConfirmOpen(true);
   };
 
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedProjects([]); // Clear selections when toggling mode
+  };
+
+  const toggleProjectSelection = (projectId) => {
+    setSelectedProjects((prev) =>
+      prev.includes(projectId)
+        ? prev.filter((id) => id !== projectId)
+        : [...prev, projectId]
+    );
+  };
+
+  const selectAllProjects = () => {
+    if (selectedProjects.length === filteredProjects.length) {
+      setSelectedProjects([]);
+    } else {
+      setSelectedProjects(filteredProjects.map((p) => p.id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProjects.length === 0) return;
+
+    const toastId = toast.loading(`Deleting ${selectedProjects.length} project(s)...`);
+    try {
+      // Delete all selected projects
+      await Promise.all(
+        selectedProjects.map((projectId) => deleteProjectFromCache(projectId))
+      );
+      toast.success(`Successfully deleted ${selectedProjects.length} project(s)!`, { id: toastId });
+      setSelectedProjects([]);
+      setSelectionMode(false);
+    } catch (err) {
+      toast.error('Failed to delete some projects. Please try again.', { id: toastId });
+    }
+  };
+
   const filteredProjects = projects.filter((project) =>
     project.project_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -151,40 +194,106 @@ const Dashboard = () => {
             <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight={700} color={colorPalette.primary.darkGreen}>
               Your Projects
             </Typography>
-            <InfoOutlinedIcon
+            {/* <InfoOutlinedIcon
               sx={{
                 fontSize: 20,
                 color: colorPalette.secondary.mediumGreen,
                 cursor: 'help',
               }}
               titleAccess="Each project tailors your resume for a specific job, including a cover letter and email"
-            />
+            /> */}
           </Box>
           <Typography variant="body2" color="text.secondary" mt={1}>
             Each project creates a tailored resume, cover letter, and email for a specific job
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenCreateDialog(true)}
-          size={isMobile ? 'medium' : 'large'}
-          sx={{
-            bgcolor: colorPalette.primary.brightGreen,
-            whiteSpace: 'nowrap',
-            '&:hover': {
-              bgcolor: colorPalette.secondary.mediumGreen,
-            },
-          }}
-        >
-          New Project
-        </Button>
+        <Box display="flex" gap={2} flexDirection={isMobile ? 'column' : 'row'}>
+          {filteredProjects.length > 0 && (
+            <Button
+              variant={selectionMode ? 'contained' : 'outlined'}
+              startIcon={selectionMode ? <CheckBoxIcon /> : <CheckBoxOutlineBlankIcon />}
+              onClick={toggleSelectionMode}
+              size={isMobile ? 'medium' : 'large'}
+              sx={{
+                borderColor: colorPalette.primary.darkGreen,
+                color: selectionMode ? '#fff' : colorPalette.primary.darkGreen,
+                bgcolor: selectionMode ? colorPalette.primary.darkGreen : 'transparent',
+                '&:hover': {
+                  bgcolor: selectionMode ? colorPalette.secondary.mediumGreen : 'rgba(0,0,0,0.05)',
+                  borderColor: colorPalette.secondary.mediumGreen,
+                },
+              }}
+            >
+              {selectionMode ? 'Cancel' : 'Select'}
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenCreateDialog(true)}
+            size={isMobile ? 'medium' : 'large'}
+            sx={{
+              bgcolor: colorPalette.primary.brightGreen,
+              whiteSpace: 'nowrap',
+              '&:hover': {
+                bgcolor: colorPalette.secondary.mediumGreen,
+              },
+            }}
+          >
+            New Project
+          </Button>
+        </Box>
       </Box>
 
       {localError && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {localError}
         </Alert>
+      )}
+
+      {/* Bulk Action Bar */}
+      {selectionMode && (
+        <Box
+          sx={{
+            mb: 3,
+            p: 2,
+            bgcolor: colorPalette.secondary.lightGreen,
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 2,
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={2}>
+            <Checkbox
+              checked={selectedProjects.length === filteredProjects.length && filteredProjects.length > 0}
+              indeterminate={selectedProjects.length > 0 && selectedProjects.length < filteredProjects.length}
+              onChange={selectAllProjects}
+              sx={{
+                color: colorPalette.primary.darkGreen,
+                '&.Mui-checked': { color: colorPalette.primary.darkGreen },
+              }}
+            />
+            <Typography variant="body2" fontWeight={600}>
+              {selectedProjects.length === 0
+                ? 'Select projects'
+                : `${selectedProjects.length} project(s) selected`}
+            </Typography>
+          </Box>
+          {selectedProjects.length > 0 && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+              size="medium"
+            >
+              Delete Selected
+            </Button>
+          )}
+        </Box>
       )}
 
       {/* Search */}
@@ -238,7 +347,7 @@ const Dashboard = () => {
                 sx={{
                   mb: 3,
                   textAlign: 'left',
-                  bgcolor: colorPalette.secondary.lightGreen,
+                  bgcolor: "#f4f4f4",
                   border: `1px solid ${colorPalette.secondary.mediumGreen}`,
                 }}
               >
@@ -255,46 +364,39 @@ const Dashboard = () => {
                   </Box>
                 </Typography>
               </Alert>
-              <Typography variant="body2" color="text.secondary" mb={3}>
-                Create your first project to get started!
-              </Typography>
+           
             </Box>
           ) : (
             <Typography variant="body2" color="text.secondary" mb={3}>
               Try a different search term
             </Typography>
           )}
-          {projects.length === 0 && (
-            <Alert
-              severity="success"
-              sx={{
-                mb: 3,
-                maxWidth: isMobile ? '100%' : '500px',
-                bgcolor: 'rgba(76, 175, 80, 0.1)',
-                border: '1px solid rgba(76, 175, 80, 0.3)',
-              }}
-            >
-              <Typography variant="body2" fontWeight={600} gutterBottom>
-                Welcome! You've received 100 free credits to get started!
-              </Typography>
-              <Typography variant="caption">
-                Each resume tailoring costs 5 credits. That's 20 tailored resumes to help you land your dream job!
-              </Typography>
-            </Alert>
-          )}
+         `
         </Box>
       ) : (
         <Grid container spacing={3}>
           {filteredProjects.map((project) => (
             <Grid item xs={12} sm={6} md={4} key={project.id}>
               <Card
-                onClick={() => navigate(`/project/${project.id}`)}
+                onClick={() => {
+                  if (selectionMode) {
+                    toggleProjectSelection(project.id);
+                  } else {
+                    navigate(`/project/${project.id}`);
+                  }
+                }}
                 sx={{
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
                   transition: 'all 0.3s ease',
                   cursor: 'pointer',
+                  border: selectionMode && selectedProjects.includes(project.id)
+                    ? `2px solid ${colorPalette.primary.brightGreen}`
+                    : '1px solid rgba(0, 0, 0, 0.12)',
+                  bgcolor: selectionMode && selectedProjects.includes(project.id)
+                    ? colorPalette.secondary.lightGreen
+                    : 'white',
                   '&:hover': {
                     transform: 'translateY(-4px)',
                     boxShadow: 4,
@@ -302,53 +404,71 @@ const Dashboard = () => {
                 }}
               >
                 <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography
-                    variant="h6"
-                    fontWeight={600}
-                    gutterBottom
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {project.project_name}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                      mb: 2,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {project.job_description || 'No job description provided'}
-                  </Typography>
-                  <Chip
-                    label={new Date(project.updated_at).toLocaleDateString()}
-                    size="small"
-                    sx={{
-                      bgcolor: colorPalette.secondary.lightGreen,
-                      color: colorPalette.primary.darkGreen,
-                    }}
-                  />
+                  <Box display="flex" alignItems="flex-start" gap={1}>
+                    {selectionMode && (
+                      <Checkbox
+                        checked={selectedProjects.includes(project.id)}
+                        onChange={() => toggleProjectSelection(project.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                          p: 0,
+                          color: colorPalette.primary.darkGreen,
+                          '&.Mui-checked': { color: colorPalette.primary.brightGreen },
+                        }}
+                      />
+                    )}
+                    <Box flex={1}>
+                      <Typography
+                        variant="h6"
+                        fontWeight={600}
+                        gutterBottom
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {project.project_name}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          mb: 2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                        }}
+                      >
+                        {project.job_description || 'No job description provided'}
+                      </Typography>
+                      <Chip
+                        label={new Date(project.updated_at).toLocaleDateString()}
+                        size="small"
+                        sx={{
+                          bgcolor: colorPalette.secondary.lightGreen,
+                          color: colorPalette.primary.darkGreen,
+                        }}
+                      />
+                    </Box>
+                  </Box>
                 </CardContent>
-                <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent card click when deleting
-                      openDeleteConfirm(project.id);
-                    }}
-                    sx={{ color: 'error.main' }}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </CardActions>
+                {!selectionMode && (
+                  <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent card click when deleting
+                        openDeleteConfirm(project.id);
+                      }}
+                      sx={{ color: 'error.main' }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </CardActions>
+                )}
               </Card>
             </Grid>
           ))}

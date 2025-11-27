@@ -224,6 +224,31 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
           {/* Auto-scroll anchor */}
           <div ref={messagesEndRef} />
         </Box>
+
+        {/* AI Disclaimer Footer */}
+        <Box
+          sx={{
+            bgcolor: '#f9f9f9',
+            borderTop: '1px solid #e0e0e0',
+            px: 3,
+            py: 2,
+            borderBottomLeftRadius: '16px',
+            borderBottomRightRadius: '16px',
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              fontSize: '11px',
+              color: '#666',
+              fontStyle: 'italic',
+              display: 'block',
+              textAlign: 'center',
+            }}
+          >
+            Please note: AI-generated content may contain errors or inaccuracies. We recommend reviewing all tailored content before submission.
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );

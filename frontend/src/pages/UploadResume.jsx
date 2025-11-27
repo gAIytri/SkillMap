@@ -10,22 +10,36 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { colorPalette } from '../styles/theme';
 import resumeService from '../services/resumeService';
 import templatePreview from '../assets/resume-template-preview.png';
 import { useProjects } from '../context/ProjectContext';
+import toast from 'react-hot-toast';
 
 const UploadResume = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const { refreshProjects } = useProjects(); // Get refreshProjects from context
   const abortControllerRef = useRef(null); // For cancelling requests
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Show notification if redirected from create project
+  useEffect(() => {
+    if (location.state?.fromCreateProject) {
+      toast.error('Please upload your base resume first to create projects', {
+        duration: 4000,
+        icon: '📄',
+      });
+      // Clear the state to prevent showing notification again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Cleanup pending requests on unmount
   useEffect(() => {

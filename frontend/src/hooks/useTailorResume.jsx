@@ -101,6 +101,16 @@ export const useTailorResume = ({
               setTailoring(false);
               setDocumentTab(0); // Switch to Resume tab
 
+              // Refresh project data immediately to update version_history
+              // User will see updated versions right away when they check sections
+              if (loadProject) {
+                loadProject(true).then(() => {
+                  console.log('✓ Version history updated immediately after PDF ready');
+                }).catch((error) => {
+                  console.error('Failed to refresh version history:', error);
+                });
+              }
+
             } catch (error) {
               console.error('Failed to process PDF data:', error);
               // On error, still close overlay but show error
@@ -153,16 +163,8 @@ export const useTailorResume = ({
           }
         }
 
-        // Refresh project data to get version_history and saved documents
-        // Skip PDF reload since we already have it from the tailoring response
-        if (loadProject) {
-          try {
-            await loadProject(true); // skipPdfLoad = true
-            console.log('✓ Project data refreshed (version_history, cover_letter, email updated)');
-          } catch (error) {
-            console.error('Failed to refresh project data:', error);
-          }
-        }
+        // NOTE: loadProject() was already called earlier when PDF was ready
+        // This ensures version history updates immediately when user sees the resume
 
         console.log('✓ Tailoring complete - Resume, cover letter, and email ready');
 
@@ -172,8 +174,9 @@ export const useTailorResume = ({
           setShowRechargeDialog(true);
         }
       } else {
-        // Check if it's an invalid intent error
+        // Check if it's an invalid intent error or unsupported modification
         const errorMsg = finalResult?.message || 'Failed to tailor resume - no result';
+        const errorDetails = finalResult?.details || '';
         console.error('Tailoring failed:', finalResult);
 
         if (errorMsg.toLowerCase().includes('invalid') || errorMsg.toLowerCase().includes('not related') || errorMsg.toLowerCase().includes('unrelated')) {
@@ -182,19 +185,24 @@ export const useTailorResume = ({
           if (lastJD) {
             toast.error(
               `${errorMsg}. Reverted to previous job description.`,
-              { duration: 5000 }
+              { duration: 7000 }
             );
             setJobDescription(lastJD);
           } else {
             toast.error(
               `${errorMsg}. Please provide a valid job description.`,
-              { duration: 5000 }
+              { duration: 7000 }
             );
             setJobDescription(''); // Clear invalid JD
           }
+        } else if (errorMsg.toLowerCase().includes('cannot modify') || errorMsg.toLowerCase().includes('not supported')) {
+          // Unsupported modification - show longer toast with suggestions
+          const fullMessage = errorDetails ? `${errorMsg}\n\n${errorDetails}` : errorMsg;
+          toast.error(fullMessage, { duration: 10000 }); // 10 seconds for longer message
+          setJobDescription(''); // Clear the invalid modification request
         } else {
           setError(errorMsg);
-          toast.error(errorMsg);
+          toast.error(errorMsg, { duration: 6000 });
         }
       }
     } catch (err) {
@@ -212,11 +220,11 @@ export const useTailorResume = ({
       setError(errorMsg);
       toast.error(errorMsg);
 
-      // If it's an auth error, redirect to login
+      // If it's an auth error, redirect to landing page
       if (errorMsg.includes('authentication') || errorMsg.includes('Session expired') || errorMsg.includes('login again')) {
         toast.error(`${errorMsg} Redirecting to login...`, { duration: 3000 });
         setTimeout(() => {
-          navigate('/login');
+          navigate('/');
         }, 1500);
       } else {
         toast.error(errorMsg);

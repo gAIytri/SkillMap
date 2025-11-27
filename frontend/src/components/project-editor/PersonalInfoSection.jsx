@@ -32,6 +32,7 @@ const PersonalInfoSection = ({
       <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
             {isEditing ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                {/* Name - No delete button */}
                 <TextField
                   label="Name"
                   value={displayData?.name || ''}
@@ -42,36 +43,99 @@ const PersonalInfoSection = ({
                   InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
                   sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                 />
-                <TextField
-                  label="Email"
-                  value={displayData?.email || ''}
-                  onChange={(e) => updateTempField(null, 'email', e.target.value)}
-                  fullWidth
-                  variant="standard"
-                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-                  InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
-                />
-                <TextField
-                  label="Phone"
-                  value={displayData?.phone || ''}
-                  onChange={(e) => updateTempField(null, 'phone', e.target.value)}
-                  fullWidth
-                  variant="standard"
-                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-                  InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
-                />
-                <TextField
-                  label="Location"
-                  value={displayData?.location || ''}
-                  onChange={(e) => updateTempField(null, 'location', e.target.value)}
-                  fullWidth
-                  variant="standard"
-                  InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
-                  InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                  sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
-                />
+
+                {/* Current Role - with delete button */}
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <TextField
+                    label="Current Role"
+                    value={displayData?.current_role || ''}
+                    onChange={(e) => updateTempField(null, 'current_role', e.target.value)}
+                    fullWidth
+                    variant="standard"
+                    placeholder="e.g., Software Engineer, Data Analyst"
+                    InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+                    InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
+                    sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  />
+                  {displayData?.current_role && (
+                    <IconButton
+                      size="small"
+                      onClick={() => updateTempField(null, 'current_role', '')}
+                      sx={{ color: '#e74c3c', mt: 2.5 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+
+                {/* Email - with delete button */}
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <TextField
+                    label="Email"
+                    value={displayData?.email || ''}
+                    onChange={(e) => updateTempField(null, 'email', e.target.value)}
+                    fullWidth
+                    variant="standard"
+                    InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+                    InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
+                    sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  />
+                  {displayData?.email && (
+                    <IconButton
+                      size="small"
+                      onClick={() => updateTempField(null, 'email', '')}
+                      sx={{ color: '#e74c3c', mt: 2.5 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+
+                {/* Phone - with delete button */}
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <TextField
+                    label="Phone"
+                    value={displayData?.phone || ''}
+                    onChange={(e) => updateTempField(null, 'phone', e.target.value)}
+                    fullWidth
+                    variant="standard"
+                    InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+                    InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
+                    sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  />
+                  {displayData?.phone && (
+                    <IconButton
+                      size="small"
+                      onClick={() => updateTempField(null, 'phone', '')}
+                      sx={{ color: '#e74c3c', mt: 2.5 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+
+                {/* Location - with delete button */}
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <TextField
+                    label="Location"
+                    value={displayData?.location || ''}
+                    onChange={(e) => updateTempField(null, 'location', e.target.value)}
+                    fullWidth
+                    variant="standard"
+                    InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
+                    InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
+                    sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                  />
+                  {displayData?.location && (
+                    <IconButton
+                      size="small"
+                      onClick={() => updateTempField(null, 'location', '')}
+                      sx={{ color: '#e74c3c', mt: 2.5 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
                     Links
@@ -136,6 +200,11 @@ const PersonalInfoSection = ({
                 <Typography variant="body2" fontWeight={600} sx={{ mb: 1, color: '#fff' }}>
                   {data.name}
                 </Typography>
+                {data.current_role && (
+                  <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#fff', fontStyle: 'italic' }}>
+                    {data.current_role}
+                  </Typography>
+                )}
                 {data.email && (
                   <Typography variant="body2" display="block" sx={{ mb: 0.5, color: '#fff' }}>
                     {data.email}
