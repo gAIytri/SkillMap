@@ -28,7 +28,9 @@ const DocumentViewer = ({
   coverLetter,
   email,
   project,
-  tailoring, // NEW: To show loading spinner during tailoring
+  tailoring, // NEW: To show loading spinner during tailoring (Resume tab only)
+  generatingCoverLetter, // NEW: Separate loading for cover letter
+  generatingEmail, // NEW: Separate loading for email
 }) => {
   return (
     <Box
@@ -272,7 +274,7 @@ const DocumentViewer = ({
         {/* Cover Letter Tab */}
         {documentTab === 1 && (
           <Box sx={{ width: '100%', height: '100%', p: 1, overflow: 'auto' }}>
-            {tailoring ? (
+            {generatingCoverLetter ? (
               <Box
                 sx={{
                   display: 'flex',
@@ -356,7 +358,7 @@ const DocumentViewer = ({
         {/* Email Tab */}
         {documentTab === 2 && (
           <Box sx={{ width: '100%', height: '100%', p: 1, overflow: 'auto' }}>
-            {tailoring ? (
+            {generatingEmail ? (
               <Box
                 sx={{
                   display: 'flex',

@@ -193,6 +193,9 @@ def add_bullet_paragraph(doc: Document, text: str, font_size: int = 10, keep_tog
     para.paragraph_format.left_indent = Inches(0.12)
     para.paragraph_format.first_line_indent = Inches(-0.10)
 
+    # Set JUSTIFY alignment for bullets
+    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
     # Ensure no extra spacing
     para.paragraph_format.space_before = Pt(0)
     para.paragraph_format.space_after = Pt(0)
@@ -697,7 +700,7 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]], section_name
 
         if category and skill_items:
             skill_para = doc.add_paragraph(style='Normal')
-            skill_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            skill_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # JUSTIFY alignment
             # Explicitly set indents to 0 to align with section header
             skill_para.paragraph_format.left_indent = Pt(1)
             skill_para.paragraph_format.first_line_indent = Inches(0)
@@ -1051,7 +1054,12 @@ def generate_resume_from_json(
 # ============================================================================
 
 def get_default_section_order() -> List[str]:
-    """Get default section order"""
+    """
+    Get default section order
+
+    NOTE: personal_info is NOT included here because it's ALWAYS rendered first
+    as the header section. This list only contains sections that appear after the header.
+    """
     return [
         'professional_summary',
         'experience',

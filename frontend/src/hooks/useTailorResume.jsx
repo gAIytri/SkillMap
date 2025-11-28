@@ -18,6 +18,8 @@ export const useTailorResume = ({
   setPdfUrl, // NEW: For setting PDF directly from tailoring
   setCoverLetter,
   setEmail,
+  setGeneratingCoverLetter, // NEW: Separate loading for cover letter
+  setGeneratingEmail, // NEW: Separate loading for email
   setRechargeDialogBlocking,
   setShowRechargeDialog,
   setJobDescription,
@@ -52,6 +54,8 @@ export const useTailorResume = ({
     setTailoring(true);
     setError('');
     setAgentMessages([]); // Clear previous messages
+    setGeneratingCoverLetter(true); // Start cover letter loading
+    setGeneratingEmail(true); // Start email loading
 
     // Auto-switch to Resume tab
     setDocumentTab(0);
@@ -122,6 +126,7 @@ export const useTailorResume = ({
           } else if (message.type === 'cover_letter_complete') {
             console.log('✓ Cover letter generated!');
             setCoverLetter(message.cover_letter);
+            setGeneratingCoverLetter(false); // Stop cover letter loading
 
             // DON'T hide spinner yet - wait for email
           } else if (message.type === 'email_complete') {
@@ -130,6 +135,7 @@ export const useTailorResume = ({
               subject: message.email_subject,
               body: message.email_body,
             });
+            setGeneratingEmail(false); // Stop email loading
 
             // DON'T hide spinner yet - will be hidden in finally block
           }
@@ -231,6 +237,8 @@ export const useTailorResume = ({
       }
     } finally {
       setTailoring(false);
+      setGeneratingCoverLetter(false); // Reset cover letter loading
+      setGeneratingEmail(false); // Reset email loading
       abortControllerRef.current = null; // Clean up controller
     }
   };

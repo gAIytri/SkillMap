@@ -328,7 +328,18 @@ You have access to the user's resume JSON and job description through the runtim
                 await asyncio.sleep(0)
                 return  # Exit after editing is complete
 
-            # Step 2: Tailor resume (now with direct JD analysis)
+            # Step 2a: Analyzing job requirements
+            yield {
+                "type": "status",
+                "message": "Analyzing job requirements and extracting key skills...",
+                "step": "analyzing"
+            }
+            await asyncio.sleep(0)  # Force flush
+
+            # Small delay to show the analyzing step
+            await asyncio.sleep(1.5)
+
+            # Step 2b: Tailoring resume
             yield {
                 "type": "status",
                 "message": "Tailoring your resume to match the job requirements...",

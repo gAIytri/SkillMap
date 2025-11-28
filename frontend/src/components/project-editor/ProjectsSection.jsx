@@ -27,7 +27,7 @@ const ProjectsSection = ({
     if (onViewingVersionChange) {
       onViewingVersionChange(currentVersion);
     }
-  }, [currentVersion, onViewingVersionChange]);
+  }, [currentVersion]); // FIXED: Removed onViewingVersionChange from deps to prevent infinite loop
 
   if (!data || data.length === 0) return null;
 

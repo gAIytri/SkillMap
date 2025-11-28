@@ -109,7 +109,6 @@ const Dashboard = () => {
       addProject(newProject);
       setOpenCreateDialog(false);
       setNewProjectData({ project_name: '', job_description: '' });
-      toast.success('Project created successfully!');
       navigate(`/project/${newProject.id}`);
     } catch (err) {
       toast.error('Failed to create project. Please try again.');
@@ -119,13 +118,11 @@ const Dashboard = () => {
   const handleDeleteProject = async () => {
     if (!projectToDelete) return;
 
-    const toastId = toast.loading('Deleting project...');
     try {
       await deleteProjectFromCache(projectToDelete);
-      toast.success('Project deleted successfully!', { id: toastId });
       setDeleteConfirmOpen(false);
     } catch (err) {
-      toast.error('Failed to delete project. Please try again.', { id: toastId });
+      toast.error('Failed to delete project. Please try again.');
     } finally {
       setProjectToDelete(null);
     }
@@ -160,17 +157,15 @@ const Dashboard = () => {
   const handleBulkDelete = async () => {
     if (selectedProjects.length === 0) return;
 
-    const toastId = toast.loading(`Deleting ${selectedProjects.length} project(s)...`);
     try {
       // Delete all selected projects
       await Promise.all(
         selectedProjects.map((projectId) => deleteProjectFromCache(projectId))
       );
-      toast.success(`Successfully deleted ${selectedProjects.length} project(s)!`, { id: toastId });
       setSelectedProjects([]);
       setSelectionMode(false);
     } catch (err) {
-      toast.error('Failed to delete some projects. Please try again.', { id: toastId });
+      toast.error('Failed to delete some projects. Please try again.');
     }
   };
 

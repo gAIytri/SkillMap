@@ -25,7 +25,7 @@ const ProfessionalSummarySection = ({
     if (onViewingVersionChange) {
       onViewingVersionChange(currentVersion);
     }
-  }, [currentVersion, onViewingVersionChange]);
+  }, [currentVersion]); // FIXED: Removed onViewingVersionChange from deps to prevent infinite loop
 
   if (!data) return null;
 

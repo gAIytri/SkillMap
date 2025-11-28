@@ -72,6 +72,8 @@ const ProjectEditor = () => {
   const [email, setEmail] = useState(null); // { subject, body }
   const [pdfZoom, setPdfZoom] = useState(100);
   const [tailoring, setTailoring] = useState(false);
+  const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false); // Separate loading for cover letter
+  const [generatingEmail, setGeneratingEmail] = useState(false); // Separate loading for email
   const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
   const [showRechargeDialog, setShowRechargeDialog] = useState(false);
   const [rechargeDialogBlocking, setRechargeDialogBlocking] = useState(false);
@@ -101,6 +103,7 @@ const ProjectEditor = () => {
   // Section-level editing state
   const [editingSection, setEditingSection] = useState(null); // Which section is being edited (e.g., 'professional_summary', 'experience', etc.)
   const [tempSectionData, setTempSectionData] = useState(null); // Temporary data for the entire section while editing
+  const [originalSectionName, setOriginalSectionName] = useState(null); // Track original section name before editing
 
   // Track which version is being viewed for each section
   const [viewingVersions, setViewingVersions] = useState({
@@ -241,6 +244,8 @@ const ProjectEditor = () => {
     setPdfUrl, // NEW: Set PDF directly from tailoring (no need to loadPdfPreview)
     setCoverLetter,
     setEmail,
+    setGeneratingCoverLetter, // NEW: Separate loading state for cover letter
+    setGeneratingEmail, // NEW: Separate loading state for email
     setRechargeDialogBlocking,
     setShowRechargeDialog,
     setJobDescription,
@@ -396,6 +401,8 @@ const ProjectEditor = () => {
     console.log('📊 Current extractedData:', extractedData);
 
     setEditingSection(sectionKey);
+    // Save the original section name so we can restore it if user cancels
+    setOriginalSectionName(sectionNames[sectionKey]);
 
     // Copy the entire section data for editing
     if (sectionKey === 'personal_info') {
@@ -553,12 +560,22 @@ const ProjectEditor = () => {
     setExtractedData(updatedData);
     setEditingSection(null);
     setTempSectionData(null);
+    setOriginalSectionName(null); // Clear original name on save
     setPendingChanges(true);
   };
 
   const handleCancelEditingSection = () => {
+    // Restore original section name if it was being edited
+    if (editingSection && originalSectionName !== null) {
+      setSectionNames(prev => ({
+        ...prev,
+        [editingSection]: originalSectionName
+      }));
+    }
+
     setEditingSection(null);
     setTempSectionData(null);
+    setOriginalSectionName(null);
   };
 
   // Restore a previous version
@@ -646,7 +663,6 @@ const ProjectEditor = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      toast.success('PDF downloaded successfully!');
     } catch (err) {
       toast.error('Failed to download PDF. Please try again.');
     } finally {
@@ -668,7 +684,6 @@ const ProjectEditor = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      toast.success('DOCX downloaded successfully!');
     } catch (err) {
       toast.error('Failed to download DOCX. Please try again.');
     } finally {
@@ -1245,6 +1260,8 @@ const ProjectEditor = () => {
           email={email}
           project={project}
           tailoring={tailoring}
+          generatingCoverLetter={generatingCoverLetter}
+          generatingEmail={generatingEmail}
         />
 
         {/* Extracted Data Panel - Desktop Sidebar & Mobile Drawer */}

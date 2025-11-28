@@ -30,11 +30,11 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
     // 4. Tailoring result tool message
     if (msg.tool === 'tailor_resume_content') return false;
 
-    // 5. Cover letter/email messages (they happen in background after overlay closes)
+    // 5. Cover letter/email messages (they happen in background after overlay closes - no need to show)
     if (msg.step === 'cover_letter' || msg.step === 'email') return false;
-    if (msg.tool === 'generate_cover_letter') return false;
-    if (msg.tool === 'generate_recruiter_email') return false;
+    if (msg.tool === 'generate_cover_letter' || msg.tool === 'generate_recruiter_email') return false;
     if (msg.type === 'cover_letter_complete' || msg.type === 'email_complete') return false;
+    if (msg.message?.includes('cover letter') || msg.message?.includes('recruiter email')) return false;
 
     // Show all other messages (status messages for main steps and complete notifications)
     return true;
@@ -100,7 +100,7 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
         </Box>
 
         {/* Messages Container */}
-        <Box sx={{ p: 3, flex: 1, overflow: 'auto', minHeight: '250px', maxHeight: '500px' }}>
+        <Box sx={{ p: 3, flex: 1, overflow: 'auto', minHeight: '150px', maxHeight: '500px' }}>
           {filteredMessages.length === 0 && (
             <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={4}>
               <CircularProgress size={40} sx={{ color: colorPalette.primary.darkGreen }} />
@@ -146,10 +146,15 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
                   <CheckCircleIcon sx={{ color: '#29B770', fontSize: 20 }} />
                 )}
                 <Typography variant="caption" fontWeight={700} color="#555" textTransform="uppercase">
-                  {msg.type === 'status' && `${msg.step}`}
+                  {msg.type === 'status' && msg.step === 'analyzing' && '📊 Analyzing'}
+                  {msg.type === 'status' && msg.step === 'tailoring' && '✨ Tailoring'}
+                  {msg.type === 'status' && msg.step === 'cover_letter' && '📝 Generating'}
+                  {msg.type === 'status' && msg.step === 'email' && '✉️ Creating Email'}
+                  {msg.type === 'status' && !['analyzing', 'tailoring', 'cover_letter', 'email'].includes(msg.step) && `${msg.step}`}
                   {msg.type === 'tool_result' && `${msg.tool}`}
-                  {msg.type === 'final' && 'Complete'}
-                  {msg.type === 'db_update' && 'Database Update'}
+                  {msg.type === 'final' && '✅ Complete'}
+                  {msg.type === 'db_update' && '💾 Saving'}
+                  {msg.type === 'resume_complete' && '🎯 Resume Ready'}
                 </Typography>
               </Box>
               <Typography variant="body2" sx={{ fontSize: '14px', color: '#333', fontWeight: 500 }}>
@@ -216,7 +221,11 @@ const TailoringOverlay = ({ tailoring, agentMessages, messagesEndRef }) => {
             <Box display="flex" alignItems="center" gap={1} mt={2} p={2} bgcolor="#e3f2fd" borderRadius="8px">
               <CircularProgress size={20} sx={{ color: '#2196f3' }} />
               <Typography variant="body2" color="#1976d2" fontWeight={500}>
-                Processing...
+                {agentMessages.some(m => m.step === 'analyzing') && !agentMessages.some(m => m.step === 'tailoring')
+                  ? 'Processing job description...'
+                  : agentMessages.some(m => m.step === 'tailoring')
+                  ? 'Applying changes to your resume...'
+                  : 'Processing...'}
               </Typography>
             </Box>
           )}

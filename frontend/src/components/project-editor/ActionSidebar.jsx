@@ -257,7 +257,7 @@ const ActionSidebar = ({
 
         {/* Section Navigation - Vertical & Draggable */}
         {extractedData && sectionOrder && sectionOrder.length > 0 && (
-          <Box sx={{  pb: 1, flex: 1, overflow: 'auto', borderBottom: '2px solid #e1e8ed', minHeight: 0 }}>
+          <Box sx={{  pb: 1, flex: 1, overflow: 'auto', borderBottom: '2px solid #e1e8ed' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, pb: 0.5 }}>
               <Typography
                 variant="caption"
@@ -286,17 +286,64 @@ const ActionSidebar = ({
                 <AddIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </Box>
+
+            {/* Personal Info - Fixed at top, non-draggable */}
+            {extractedData.personal_info && extractedData.personal_info.name && (
+              <Button
+                fullWidth
+                onClick={() => onSelectedSectionChange('personal_info')}
+                sx={{
+                  justifyContent: 'flex-start',
+                  color: selectedSection === 'personal_info' ? '#fff' : colorPalette.primary.darkGreen,
+                  bgcolor: selectedSection === 'personal_info' ? colorPalette.primary.darkGreen : 'transparent',
+                  textTransform: 'none',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontSize: '0.65rem',
+                  px: 1,
+                  py: 0.75,
+                  mb: 0.5,
+                  border: '1px solid',
+                  borderColor: selectedSection === 'personal_info' ? colorPalette.primary.darkGreen : '#e1e8ed',
+                  cursor: 'pointer',
+                  opacity: 0.8, // Slightly dimmed to show it's fixed
+                  '&:hover': {
+                    bgcolor: selectedSection === 'personal_info' ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                    opacity: 1,
+                  },
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: selectedSection === 'personal_info' ? 600 : 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: selectedSection === 'personal_info' ? 'white' : 'black',
+                  }}
+                >
+                  {sectionNames['personal_info']}
+                </Typography>
+              </Button>
+            )}
+
+            {/* Other sections - Draggable */}
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={onDragEnd}
             >
               <SortableContext
-                items={sectionOrder}
+                items={sectionOrder.filter(key => key !== 'personal_info')}
                 strategy={verticalListSortingStrategy}
               >
                 {sectionOrder
                   .filter((sectionKey) => {
+                    // Exclude personal_info - it's rendered separately above
+                    if (sectionKey === 'personal_info') {
+                      return false;
+                    }
+
                     // Check if this is a custom section
                     if (sectionKey.startsWith('custom_')) {
                       const customSections = extractedData.custom_sections || [];
@@ -305,11 +352,6 @@ const ActionSidebar = ({
 
                     // Only show sections that have data
                     const data = extractedData[sectionKey];
-
-                    // For personal_info (object), check if it exists and has name
-                    if (sectionKey === 'personal_info') {
-                      return data && data.name;
-                    }
 
                     // For professional_summary (string), check if not empty
                     if (sectionKey === 'professional_summary') {
@@ -504,8 +546,43 @@ const ActionSidebar = ({
               </IconButton>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {/* Personal Info - Fixed at top (mobile) */}
+              {extractedData.personal_info && extractedData.personal_info.name && (
+                <Box sx={{ position: 'relative' }}>
+                  <Button
+                    fullWidth
+                    onClick={() => {
+                      onSelectedSectionChange('personal_info');
+                      onMobileDrawerClose();
+                    }}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      color: selectedSection === 'personal_info' ? '#fff' : colorPalette.primary.darkGreen,
+                      bgcolor: selectedSection === 'personal_info' ? colorPalette.primary.darkGreen : 'transparent',
+                      textTransform: 'none',
+                      fontSize: '0.8rem',
+                      py: 1,
+                      border: '1px solid #e1e8ed',
+                      opacity: 0.8, // Slightly dimmed to show it's fixed
+                      '&:hover': {
+                        bgcolor: selectedSection === 'personal_info' ? colorPalette.primary.darkGreen : 'rgba(76, 175, 80, 0.1)',
+                        opacity: 1,
+                      },
+                    }}
+                  >
+                    {sectionNames['personal_info']}
+                  </Button>
+                </Box>
+              )}
+
+              {/* Other sections */}
               {sectionOrder
                 .filter((sectionKey) => {
+                  // Exclude personal_info - rendered separately above
+                  if (sectionKey === 'personal_info') {
+                    return false;
+                  }
+
                   // Check if this is a custom section
                   if (sectionKey.startsWith('custom_')) {
                     const customSections = extractedData.custom_sections || [];
@@ -513,7 +590,6 @@ const ActionSidebar = ({
                   }
 
                   const data = extractedData[sectionKey];
-                  if (sectionKey === 'personal_info') return data && data.name;
                   if (sectionKey === 'professional_summary') return data && data.trim().length > 0;
                   return Array.isArray(data) && data.length > 0;
                 })

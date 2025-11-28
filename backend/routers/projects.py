@@ -883,8 +883,19 @@ async def update_section_order(
             detail=f"Invalid sections: {invalid}"
         )
 
+    # IMPORTANT: Ensure personal_info is always at the top
+    # Remove personal_info from the provided order (if present) and prepend it
+    section_order_without_personal = [s for s in order_update.section_order if s != 'personal_info']
+
+    # If personal_info exists in resume data, ensure it's always first
+    if 'personal_info' in project.resume_json and project.resume_json['personal_info']:
+        final_section_order = ['personal_info'] + section_order_without_personal
+    else:
+        # If no personal_info, just use the provided order
+        final_section_order = section_order_without_personal
+
     # Update section_order in resume_json
-    project.resume_json['section_order'] = order_update.section_order
+    project.resume_json['section_order'] = final_section_order
 
     # IMPORTANT: Mark JSON column as modified for SQLAlchemy to detect the change
     from sqlalchemy.orm.attributes import flag_modified

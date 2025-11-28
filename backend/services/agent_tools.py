@@ -450,7 +450,7 @@ RULES:
 
 Analyze the job description and tailor the resume in one optimized step."""
 
-        # Build detailed user prompt (simplified but comprehensive)
+        # Build detailed user prompt with comprehensive instructions
         user_prompt = f"""JOB DESCRIPTION:
 {job_description}
 
@@ -459,48 +459,90 @@ RESUME JSON:
 
 TAILORING INSTRUCTIONS:
 
-First, analyze the job description to identify:
-- Required technical skills (languages, frameworks, tools)
-- Key responsibilities and role focus
-- Experience requirements
-- Important ATS keywords
+STEP 1 - ANALYZE JOB DESCRIPTION:
+Extract: required skills, preferred skills, key responsibilities, seniority level, ATS keywords.
 
-Then tailor the resume:
+⚠️ CRITICAL: REWRITE each bullet completely - don't just append words at the end!
+
+CORE RULES:
+1. WORK EXPERIENCE: REWRITE each bullet from scratch, WEAVING IN JD tech throughout. Never just append.
+2. PROJECTS: REWRITE each bullet, INTEGRATING details naturally. Not "original + additions".
+3. SKILLS: REORDER + ADD 2-4 new skills from JD.
+4. Write naturally - NO "Dynamic, results-driven..." templates
+5. Technologies should be WOVEN throughout sentences, not tacked on at the end
+
+EXAMPLE - How to REWRITE (not append):
+BEFORE: "Developed features for web application"
+WRONG: "Developed features for web application using React and Redux with 40% improvement"
+RIGHT: "Engineered key features for web application leveraging React and Redux state management, implementing real-time notifications via WebSocket connections and optimizing component rendering to improve page load time by 40%"
+(Notice: Technologies WOVEN throughout, not just added at end)
+
+Now tailor each section:
 
 1. PROFESSIONAL SUMMARY:
-   - Rewrite emphasizing role focus with 2-4 required skills keywords
-   - Single paragraph, 3-4 sentences, professional and compelling
+Rewrite to highlight relevant experience for this role. Lead with expertise, mention 2-3 key JD technologies naturally. NO adjectives like "Dynamic" or "Results-driven" before job title. Keep 3-4 sentences, natural and professional.
 
 2. WORK EXPERIENCE:
-   - HIGH RELEVANCE bullets (match job requirements): Enhance with specific tech, metrics, impact
-   - MEDIUM RELEVANCE: Refine language, connect to job requirements
-   - LOW RELEVANCE: Keep concise, improve quality
-   - Format: [Action Verb] + [What] + [Tech/Tools] + [Impact/Result]
+DO NOT reorder jobs. COMPLETELY REWRITE each bullet by WEAVING IN details naturally:
 
-3. PROJECTS (CRITICAL):
-   - REORDER by relevance (required skills match = highest priority)
-   - HIGH RELEVANCE: Expand with architectural details, scale, metrics, tech stack
-   - MEDIUM RELEVANCE: Add technical detail, highlight overlaps
-   - LOW RELEVANCE: Keep clear but concise
-   - Example: "Built e-commerce website" → "Developed full-stack e-commerce platform using React, Node.js, PostgreSQL with Stripe integration, JWT auth, Redis caching, serving 5K+ users with <200ms response time"
-   - IMPORTANT: Use "bullets" array field, NOT "description" field. Each project must have a "bullets" array containing separate bullet points as individual strings
+❌ WRONG - Don't just append at the end:
+"Developed backend API using Node.js and Express with JWT authentication"
+(This feels like technologies were just tacked on)
+
+✅ RIGHT - Rewrite the ENTIRE bullet, weaving details throughout:
+"Architected scalable REST API using Node.js and Express, implementing JWT-based authentication with Redis session management, handling 10K+ daily requests with <100ms response time"
+(Technologies and details are INTEGRATED naturally throughout)
+
+INSTRUCTIONS:
+- REWRITE the entire bullet from scratch, don't just add words at the end
+- WEAVE IN JD technologies naturally throughout the sentence
+- INTEGRATE metrics and scale into the flow
+- PRESERVE all original accomplishments but express them more impressively
+- Make it read like ONE cohesive professional sentence, not "original + additions"
+
+3. PROJECTS:
+Reorder by relevance (most matching projects first). COMPLETELY REWRITE each bullet by WEAVING IN details:
+
+❌ WRONG - Don't append at the end:
+"Built chat application with React and Node.js with 50K users"
+(Just added tech at end - awkward)
+
+✅ RIGHT - Rewrite ENTIRE bullet, weaving throughout:
+"Engineered real-time chat platform leveraging React and Node.js with Socket.io for WebSocket connections, implementing message persistence using MongoDB and Redis Pub/Sub for multi-server synchronization, scaling to support 50K+ concurrent users with <50ms message latency"
+(Technologies are INTEGRATED naturally throughout the description)
+
+INSTRUCTIONS:
+- REWRITE each bullet completely from scratch
+- WEAVE IN JD technologies throughout the sentence naturally
+- INTEGRATE architectural details (authentication, caching, APIs) into the flow
+- BLEND IN metrics and scale naturally
+- Make it ONE cohesive, impressive sentence - not "original + tacked-on additions"
+
+Use "bullets" array field (NOT "description"). Each bullet = separate string in array.
 
 4. SKILLS:
-   - REORDER each category: job-required skills first, then preferred, then others
-   - Keep all existing skills
+You MUST make visible changes:
+1. REORDER each category - put JD-required skills at the FRONT
+2. ADD 2-4 new skills from JD that are logical (e.g., if user has React and JD wants TypeScript, ADD TypeScript)
+3. If category names are generic ("Tools"), rename to be specific ("Cloud & DevOps")
 
-5. DATE FORMATTING:
-   - Analyze majority format (MM/YYYY vs Month YYYY)
-   - Apply consistently to ALL dates (education, projects, experience)
-   - Default to "Month YYYY" if unclear
+Example:
+BEFORE: Languages: JavaScript, Java, Python, C++
+JD WANTS: Python, TypeScript
+AFTER: Languages: Python, TypeScript, JavaScript, Java, C++ (Python moved to front, TypeScript added)
 
-CRITICAL JSON STRUCTURE REQUIREMENTS:
-- Projects: MUST use "bullets" field (array of strings), NOT "description" field
-- Experience: MUST use "bullets" field (array of strings)
-- Each bullet point should be a separate string in the array
-- Do NOT concatenate multiple points into a single string
+5. DO NOT TOUCH:
+NEVER modify: Personal Info, Education, Certifications. Keep them exactly as provided.
 
-OUTPUT: Return complete resume JSON with exact structure. Make SUBSTANTIAL improvements."""
+6. DATE FORMATTING:
+Use consistent format across all dates. Check if majority uses "MM/YYYY" or "Month YYYY" and apply that format everywhere.
+
+JSON STRUCTURE:
+- Projects and Experience MUST use "bullets" array (separate strings)
+- Return complete JSON with exact same structure
+- Professional summary = single paragraph string
+
+OUTPUT: Return complete tailored resume JSON. Make SUBSTANTIAL improvements to content."""
 
         # Use LangChain ChatOpenAI for LangSmith tracing
         logger.info("Calling LLM for tailoring...")
@@ -510,12 +552,12 @@ OUTPUT: Return complete resume JSON with exact structure. Make SUBSTANTIAL impro
             HumanMessage(content=user_prompt)
         ]
 
-        # Create tailoring LLM with optimized settings
+        # Create tailoring LLM with optimized settings for detailed output
         tailoring_llm = ChatOpenAI(
             model="gpt-4o",
             api_key=settings.OPENAI_API_KEY,
-            temperature=0.2,
-            max_tokens=4096
+            temperature=0.3,  # Slightly higher for more creative tailoring
+            max_tokens=4096   # Sufficient for detailed resume JSON
         )
 
         # Bind JSON response format
