@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip } from '@mui/material';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { colorPalette } from '../../styles/theme';
@@ -13,7 +13,8 @@ const ProjectsSection = ({
   versionHistory,      // NEW: { "0": data, "1": data, ... }
   currentVersion,      // NEW: version number (e.g., 0, 1, 2)
   onRestoreVersion,    // NEW: (versionNumber) => void
-  onViewingVersionChange  // NEW: callback to notify parent of version change
+  onViewingVersionChange,  // NEW: callback to notify parent of version change
+  restoringVersion = false  // NEW: loading state for version restoration
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -28,6 +29,17 @@ const ProjectsSection = ({
       onViewingVersionChange(currentVersion);
     }
   }, [currentVersion]); // FIXED: Removed onViewingVersionChange from deps to prevent infinite loop
+
+  // Listen for external version changes (e.g., when switching to edit mode)
+  useEffect(() => {
+    // This effect runs when isEditing becomes true
+    if (isEditing && viewingVersion !== currentVersion) {
+      setViewingVersion(currentVersion);
+      if (onViewingVersionChange) {
+        onViewingVersionChange(currentVersion);
+      }
+    }
+  }, [isEditing]); // Switch to current version when entering edit mode
 
   if (!data || data.length === 0) return null;
 
@@ -63,8 +75,8 @@ const ProjectsSection = ({
     }
   };
 
-  // Show version tabs if we have multiple versions
-  const showVersionTabs = currentVersion > 0 || (hasHistory && versionNumbers.length > 0);
+  // Show version tabs only if we have multiple versions (more than just V0)
+  const showVersionTabs = hasHistory && versionNumbers.length > 1;
 
   // Render project content (used by both with/without history)
   const renderProjectContent = (projectsData, canEdit) => {
@@ -76,8 +88,8 @@ const ProjectsSection = ({
             <Box
               key={idx}
               sx={{
-                mb: 3,
-                p: 2.5,
+                mb: 2,
+                p: 2,
                 borderRadius: '8px',
                 bgcolor: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -106,7 +118,7 @@ const ProjectsSection = ({
                 <DeleteIcon fontSize="small" />
               </IconButton>
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pr: 5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pr: 2 }}>
                 <TextField
                   label="Project Name"
                   value={proj.name || ''}
@@ -140,7 +152,7 @@ const ProjectsSection = ({
                   />
                 </Box>
                 {/* Description Bullet Points */}
-                <Box width={'120%'}>
+                <Box width={'100%'}>
                   <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
                     Description (Bullet Points)
                   </Typography>
@@ -222,9 +234,9 @@ const ProjectsSection = ({
                   </Button>
                 </Box>
                 <TextField
-                  label="Technologies (comma-separated)"
-                  value={proj.technologies ? proj.technologies.join(', ') : ''}
-                  onChange={(e) => updateTempField(idx, 'technologies', e.target.value.split(',').map(t => t.trim()))}
+                  label="Technologies"
+                  value={Array.isArray(proj.technologies) ? proj.technologies.join(', ') : (proj.technologies || '')}
+                  onChange={(e) => updateTempField(idx, 'technologies', e.target.value)}
                   fullWidth
                   variant="standard"
                   InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
@@ -275,9 +287,9 @@ const ProjectsSection = ({
                     ))}
                   </ul>
                 )}
-                {proj.technologies && proj.technologies.length > 0 && (
+                {proj.technologies && (Array.isArray(proj.technologies) ? proj.technologies.length > 0 : proj.technologies.trim().length > 0) && (
                   <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', mt: 0.5, fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen }}>
-                    Tech: {proj.technologies.join(', ')}
+                    Tech: {Array.isArray(proj.technologies) ? proj.technologies.join(', ') : proj.technologies}
                   </Typography>
                 )}
               </Box>
@@ -292,7 +304,7 @@ const ProjectsSection = ({
   if (!showVersionTabs) {
     return (
       <Box>
-          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
+          <Paper elevation={0} sx={{ p: isMobile ? 1 : 2, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
             {renderProjectContent(data, true)}
           </Paper>
       </Box>
@@ -354,7 +366,7 @@ const ProjectsSection = ({
       </Box>
 
       {/* Content Area - Full Width */}
-      <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
+      <Paper elevation={0} sx={{ p: isMobile ? 1 : 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff', position: 'relative' }}>
         {renderProjectContent(displayData, viewingVersion === currentVersion)}
         {/* Restore Version Button - Show ONLY when viewing a version that is NOT current */}
         {!isEditing && viewingVersion !== currentVersion && (
@@ -363,15 +375,18 @@ const ProjectsSection = ({
               variant="contained"
               size="small"
               onClick={handleRestoreVersion}
+              disabled={restoringVersion}
+              startIcon={restoringVersion ? <CircularProgress size={16} sx={{ color: '#000' }} /> : null}
               sx={{
                 bgcolor: colorPalette.primary.brightGreen,
                 color: '#000',
                 textTransform: 'none',
                 fontWeight: 600,
-                '&:hover': { bgcolor: colorPalette.secondary.mediumGreen }
+                '&:hover': { bgcolor: colorPalette.secondary.mediumGreen },
+                '&:disabled': { bgcolor: colorPalette.secondary.mediumGreen, color: '#000' }
               }}
             >
-              Make This Current
+              {restoringVersion ? 'Restoring...' : 'Make This Current'}
             </Button>
           </Box>
         )}

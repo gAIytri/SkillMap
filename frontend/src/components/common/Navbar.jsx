@@ -69,21 +69,24 @@ const Navbar = () => {
 
         {isAuthenticated && user ? (
           <Box display="flex" alignItems="center" gap={isMobile ? 1 : 2}>
-            <Button
-              color="inherit"
-              onClick={() => navigate('/dashboard')}
-              size={isMobile ? 'small' : 'medium'}
-              sx={{
-                color: '#ffffff',
-                fontSize: isMobile ? '0.75rem' : '0.875rem',
-                px: isMobile ? 1 : 2,
-                '&:hover': {
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                },
-              }}
-            >
-              Projects
-            </Button>
+            {/* Only show Projects button if user has uploaded base resume */}
+            {user?.base_resume_id && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/dashboard')}
+                size={isMobile ? 'small' : 'medium'}
+                sx={{
+                  color: '#ffffff',
+                  fontSize: isMobile ? '0.75rem' : '0.875rem',
+                  px: isMobile ? 1 : 2,
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  },
+                }}
+              >
+                Projects
+              </Button>
+            )}
             {!isSmallMobile && (
               <Chip
                 icon={<AccountBalanceWalletIcon sx={{ color: '#ffffff !important', fontSize: isMobile ? 16 : 20 }} />}

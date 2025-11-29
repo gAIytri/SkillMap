@@ -18,6 +18,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import { useAuth } from '../context/AuthContext';
@@ -74,9 +75,11 @@ const ProjectEditor = () => {
   const [tailoring, setTailoring] = useState(false);
   const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false); // Separate loading for cover letter
   const [generatingEmail, setGeneratingEmail] = useState(false); // Separate loading for email
+  const [restoringVersion, setRestoringVersion] = useState(false); // Loading state for version restoration
   const [agentMessages, setAgentMessages] = useState([]); // Agent progress messages
   const [showRechargeDialog, setShowRechargeDialog] = useState(false);
   const [rechargeDialogBlocking, setRechargeDialogBlocking] = useState(false);
+  const [showReplaceConfirmDialog, setShowReplaceConfirmDialog] = useState(false); // Confirmation dialog for replacing resume
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null);
   const [sectionOrder, setSectionOrder] = useState([
     'personal_info',
@@ -400,6 +403,19 @@ const ProjectEditor = () => {
     console.log('🎯 Starting to edit section:', sectionKey);
     console.log('📊 Current extractedData:', extractedData);
 
+    // If user is viewing an old version, switch to current version before editing
+    const sectionsWithVersioning = ['professional_summary', 'experience', 'projects', 'skills'];
+    if (sectionsWithVersioning.includes(sectionKey)) {
+      const currentVersionNum = project?.current_versions?.[sectionKey] || 0;
+      const viewingVersionNum = viewingVersions[sectionKey];
+
+      if (viewingVersionNum !== currentVersionNum) {
+        // Switch to current version
+        setViewingVersions(prev => ({ ...prev, [sectionKey]: currentVersionNum }));
+        console.log(`🔄 Switched from V${viewingVersionNum} to current V${currentVersionNum} before editing`);
+      }
+    }
+
     setEditingSection(sectionKey);
     // Save the original section name so we can restore it if user cancels
     setOriginalSectionName(sectionNames[sectionKey]);
@@ -495,15 +511,22 @@ const ProjectEditor = () => {
       }
     }
 
-    // Validation for skills: Each category must have at least one skill
+    // Validation for skills: Each category must have a name and at least one skill
     if (editingSection === 'skills' && Array.isArray(tempSectionData)) {
       for (const skillCategory of tempSectionData) {
-        const category = skillCategory.category || 'Untitled';
+        const category = skillCategory.category || '';
         const skills = skillCategory.skills || [];
-        const hasValidSkill = skills.some(s => s && s.trim().length > 0);
 
+        // Check if category name is empty
+        if (!category.trim()) {
+          toast.error('Category name cannot be empty. Please provide a name or remove the category.');
+          return; // Don't save
+        }
+
+        // Check if category has at least one skill
+        const hasValidSkill = skills.some(s => s && s.trim().length > 0);
         if (!hasValidSkill) {
-          toast.error(`Category "${category}" cannot be empty. Please add at least one skill or remove the category.`);
+          toast.error(`Category "${category}" must have at least one skill. Please add a skill or remove the category.`);
           return; // Don't save
         }
       }
@@ -580,6 +603,7 @@ const ProjectEditor = () => {
 
   // Restore a previous version
   const handleRestoreVersion = async (sectionName, versionNumber) => {
+    setRestoringVersion(true);
     try {
       // Call the new backend API endpoint
       const response = await api.post(
@@ -604,6 +628,32 @@ const ProjectEditor = () => {
     } catch (error) {
       console.error('Failed to restore version:', error);
       toast.error('Failed to restore version');
+    } finally {
+      setRestoringVersion(false);
+    }
+  };
+
+  // Handle replace resume with confirmation
+  const handleReplaceConfirm = async () => {
+    try {
+      // Clear version history from backend
+      await api.post(`/api/projects/${projectId}/clear-version-history`);
+
+      // Reset local viewing versions to 0
+      setViewingVersions({
+        professional_summary: 0,
+        experience: 0,
+        projects: 0,
+        skills: 0,
+      });
+
+      // Close dialog and trigger file input
+      setShowReplaceConfirmDialog(false);
+      fileInputRef.current?.click();
+    } catch (error) {
+      console.error('Failed to clear version history:', error);
+      toast.error('Failed to prepare for replacement. Please try again.');
+      setShowReplaceConfirmDialog(false);
     }
   };
 
@@ -990,6 +1040,7 @@ const ProjectEditor = () => {
             onViewingVersionChange={(versionNumber) => {
               setViewingVersions(prev => ({ ...prev, professional_summary: versionNumber }));
             }}
+            restoringVersion={restoringVersion}
           />
         );
 
@@ -1007,6 +1058,7 @@ const ProjectEditor = () => {
             onViewingVersionChange={(versionNumber) => {
               setViewingVersions(prev => ({ ...prev, experience: versionNumber }));
             }}
+            restoringVersion={restoringVersion}
           />
         );
 
@@ -1024,6 +1076,7 @@ const ProjectEditor = () => {
             onViewingVersionChange={(versionNumber) => {
               setViewingVersions(prev => ({ ...prev, projects: versionNumber }));
             }}
+            restoringVersion={restoringVersion}
           />
         );
 
@@ -1058,6 +1111,7 @@ const ProjectEditor = () => {
             onViewingVersionChange={(versionNumber) => {
               setViewingVersions(prev => ({ ...prev, skills: versionNumber }));
             }}
+            restoringVersion={restoringVersion}
           />
         );
 
@@ -1218,7 +1272,7 @@ const ProjectEditor = () => {
         downloading={downloading}
         tailoring={tailoring}
         extractedData={extractedData}
-        onReplaceClick={() => fileInputRef.current?.click()}
+        onReplaceClick={() => setShowReplaceConfirmDialog(true)}
         onDownloadClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
         onTailorClick={() => setJobDescDrawerOpen(true)}
         onNavigateToDashboard={() => navigate('/dashboard')}
@@ -1316,6 +1370,18 @@ const ProjectEditor = () => {
         onClose={() => setShowRechargeDialog(false)}
         currentCredits={user?.credits || 0}
         blocking={rechargeDialogBlocking}
+      />
+
+      {/* Replace Resume Confirmation Dialog */}
+      <ConfirmDialog
+        open={showReplaceConfirmDialog}
+        onClose={() => setShowReplaceConfirmDialog(false)}
+        onConfirm={handleReplaceConfirm}
+        title="Replace Resume"
+        message="Replacing your resume will clear all version history for this project. This will make it a fresh project with no previous versions. Are you sure you want to continue?"
+        confirmText="Yes, Replace"
+        cancelText="Cancel"
+        confirmColor="warning"
       />
 
       {/* Section Template Modal */}

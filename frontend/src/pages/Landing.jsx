@@ -14,7 +14,7 @@ import SignupForm from '../components/auth/SignupForm';
 
 const Landing = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
@@ -123,11 +123,11 @@ const Landing = () => {
 
               <Box display="flex" gap={isMobile ? 1 : 2} justifyContent="center" flexDirection={isMobile ? 'column' : 'row'} px={isMobile ? 2 : 0}>
                 {isAuthenticated ? (
-                  /* Show Dashboard button if logged in */
+                  /* Show "Upload Resume" if no base resume, otherwise "Go to Dashboard" */
                   <Button
                     variant="contained"
                     size={isMobile ? 'medium' : 'large'}
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => navigate(user?.base_resume_id ? '/dashboard' : '/upload-resume')}
                     sx={{
                       py: isMobile ? 1.5 : 2,
                       px: isMobile ? 3 : 4,
@@ -138,7 +138,7 @@ const Landing = () => {
                       },
                     }}
                   >
-                    Go to Dashboard
+                    {user?.base_resume_id ? 'Go to Dashboard' : 'Upload Resume'}
                   </Button>
                 ) : (
                   /* Show Sign Up and Login buttons if NOT logged in */

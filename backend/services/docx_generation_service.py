@@ -158,6 +158,12 @@ def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColo
         sz.set(qn('w:val'), str(size * 2))  # Word uses half-points
         rPr.append(sz)
 
+    # Set font name to Calibri
+    rFonts = OxmlElement('w:rFonts')
+    rFonts.set(qn('w:ascii'), 'Calibri')
+    rFonts.set(qn('w:hAnsi'), 'Calibri')
+    rPr.append(rFonts)
+
     new_run.append(rPr)
 
     # Add text
@@ -583,63 +589,44 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
     add_section_header(doc, section_name, keep_with_next=False)
 
     for idx, project in enumerate(projects):
-        # Project header (Heading 2) with date on right
+        # Project header (similar to experience: name + date on line 1, technologies on line 2)
         name = project.get('name', '')
         technologies = project.get('technologies', [])
         link = project.get('link', '')
         date = project.get('date', '')
 
-        # Create plain paragraph WITHOUT Heading2 style to avoid built-in spacing
-        # All formatting (bold, size, font) is applied manually below
+        # Build tech string first to determine spacing
+        tech_str = ''
+        if technologies:
+            if isinstance(technologies, list):
+                tech_str = ', '.join(technologies)
+            else:
+                tech_str = str(technologies)
+
+        # Line 1: Project Name (bold) + Date (right-aligned)
         project_para = doc.add_paragraph()
 
         # Explicitly set indents to 0 to align with section header
         project_para.paragraph_format.left_indent = Pt(1)
         project_para.paragraph_format.first_line_indent = Inches(0)
-        # First item: NO gap after section underline. Subsequent items: add minimal spacing
-        project_para.paragraph_format.space_before = Pt(0) if idx == 0 else Pt(4)
-        project_para.paragraph_format.space_after = Pt(0)  # NO gap after project header
-        project_para.paragraph_format.line_spacing = 1.0  # Single line spacing
-        project_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE  # Force exact single spacing
-        # Pagination: Keep project header with its bullets (don't split entry)
+        # First item: minimal gap after section underline. Subsequent items: add spacing
+        project_para.paragraph_format.space_before = Pt(2) if idx == 0 else Pt(6)
+        # If no technologies, add MORE spacing after project name (bullets have 0 space_before). Otherwise, no gap (tech line will be tight)
+        project_para.paragraph_format.space_after = Pt(2) if not tech_str else Pt(0)
+        project_para.paragraph_format.line_spacing = Pt(11)  # Tight exact spacing for 11pt font
+        project_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        # Pagination: Keep project name with next element (either tech line or bullets)
         project_para.paragraph_format.keep_with_next = True
         project_para.paragraph_format.keep_together = True
 
-        # Dynamic layout: Keep technologies on line 1 if short, wrap to line 2 if long
         if name:
-            # Build tech string
-            tech_str = ''
-            if technologies:
-                if isinstance(technologies, list):
-                    tech_str = ', '.join(technologies)
-                else:
-                    tech_str = str(technologies)
-
-            # Estimate text width to decide layout
-            # Rough estimation: 11pt bold ~0.09 in/char, 10pt normal ~0.07 in/char
-            # Tab stop at 7.5", need ~1" for date, so max ~6.5" for text
-            name_width = len(name) * 0.09
-            tech_width = len(tech_str) * 0.07 if tech_str else 0
-            separator_width = 0.2  # " – " separator
-            total_width = name_width + separator_width + tech_width
-
-            # If text would exceed 5.5 inches, wrap tech to line 2
-            wrap_tech = (total_width > 5.5) and tech_str
-
-            # Add project name (always on line 1)
+            # Add project name (bold, 11pt)
             project_run = project_para.add_run(sanitize_text(name))
             project_run.font.bold = True
             project_run.font.size = Pt(11)
             project_run.font.name = 'Calibri'
 
-            # If tech is short, add it on line 1
-            if tech_str and not wrap_tech:
-                tech_run = project_para.add_run(f" – {sanitize_text(tech_str)}")
-                tech_run.font.bold = False
-                tech_run.font.size = Pt(10)
-                tech_run.font.name = 'Calibri'
-
-            # Add date on right side (ALWAYS on line 1)
+            # Add date on right side (bold, 11pt)
             if date:
                 tab_stops = project_para.paragraph_format.tab_stops
                 tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
@@ -649,13 +636,27 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
                 date_run.font.size = Pt(11)
                 date_run.font.name = 'Calibri'
 
-            # If tech is long, add it on line 2
-            if tech_str and wrap_tech:
-                project_para.add_run('\n')
-                tech_run = project_para.add_run(sanitize_text(tech_str))
-                tech_run.font.bold = False
-                tech_run.font.size = Pt(10)
-                tech_run.font.name = 'Calibri'
+        # Line 2: Technologies (light weight, 10pt, very close to project name line)
+        if tech_str:
+            tech_para = doc.add_paragraph()
+
+            # Explicitly set indents to 0 to align with section header
+            tech_para.paragraph_format.left_indent = Pt(1)
+            tech_para.paragraph_format.first_line_indent = Inches(0)
+            # EXTREMELY tight spacing - minimal gap between project name and tech line
+            tech_para.paragraph_format.space_before = Pt(0)  # Zero spacing to keep very close to project name above
+            tech_para.paragraph_format.space_after = Pt(2)  # Small gap after tech line before bullets
+            tech_para.paragraph_format.line_spacing = Pt(10)  # Exact line height for 10pt font
+            tech_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+            # Pagination: Keep tech with bullets
+            tech_para.paragraph_format.keep_with_next = True
+            tech_para.paragraph_format.keep_together = True
+
+            # Add technologies text (normal weight, 10pt)
+            tech_run = tech_para.add_run(sanitize_text(tech_str))
+            tech_run.font.bold = False
+            tech_run.font.size = Pt(10)
+            tech_run.font.name = 'Calibri'
 
         # Get bullets from either bullets array or description string (backward compatibility)
         bullets = project.get('bullets', [])
@@ -672,8 +673,14 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
 
         # Add bullets with keep_with_next to keep project entry together
         for i, bullet in enumerate(all_bullets):
+            is_first_bullet = (i == 0)
             is_last_bullet = (i == len(all_bullets) - 1)
             bullet_para = add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
+
+            # If this is the first bullet AND there are no technologies, add spacing before it
+            if is_first_bullet and not tech_str:
+                bullet_para.paragraph_format.space_before = Pt(2)
+
             if not is_last_bullet:
                 bullet_para.paragraph_format.keep_with_next = True
 

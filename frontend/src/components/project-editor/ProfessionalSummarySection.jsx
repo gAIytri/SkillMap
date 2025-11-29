@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, Button, Chip } from '@mui/material';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, Button, Chip, CircularProgress } from '@mui/material';
 import { colorPalette } from '../../styles/theme';
 
 const ProfessionalSummarySection = ({
@@ -11,7 +11,8 @@ const ProfessionalSummarySection = ({
   versionHistory,      // NEW: { "0": content, "1": content, ... }
   currentVersion,      // NEW: version number (e.g., 0, 1, 2)
   onRestoreVersion,    // NEW: (versionNumber) => void
-  onViewingVersionChange  // NEW: callback to notify parent of version change
+  onViewingVersionChange,  // NEW: callback to notify parent of version change
+  restoringVersion = false  // NEW: loading state for version restoration
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -26,6 +27,17 @@ const ProfessionalSummarySection = ({
       onViewingVersionChange(currentVersion);
     }
   }, [currentVersion]); // FIXED: Removed onViewingVersionChange from deps to prevent infinite loop
+
+  // Listen for external version changes (e.g., when switching to edit mode)
+  useEffect(() => {
+    // This effect runs when isEditing becomes true
+    if (isEditing && viewingVersion !== currentVersion) {
+      setViewingVersion(currentVersion);
+      if (onViewingVersionChange) {
+        onViewingVersionChange(currentVersion);
+      }
+    }
+  }, [isEditing]); // Switch to current version when entering edit mode
 
   if (!data) return null;
 
@@ -62,9 +74,8 @@ const ProfessionalSummarySection = ({
     }
   };
 
-  // Show version tabs if we have multiple versions (currentVersion > 0)
-  // OR if version history has at least one version stored
-  const showVersionTabs = currentVersion > 0 || (hasHistory && versionNumbers.length > 0);
+  // Show version tabs only if we have multiple versions (more than just V0)
+  const showVersionTabs = hasHistory && versionNumbers.length > 1;
 
   // If no version tabs needed, show simple view
   if (!showVersionTabs) {
@@ -188,15 +199,18 @@ const ProfessionalSummarySection = ({
                   variant="contained"
                   size="small"
                   onClick={handleRestoreVersion}
+                  disabled={restoringVersion}
+                  startIcon={restoringVersion ? <CircularProgress size={16} sx={{ color: '#000' }} /> : null}
                   sx={{
                     bgcolor: colorPalette.primary.brightGreen,
                     color: '#000',
                     textTransform: 'none',
                     fontWeight: 600,
-                    '&:hover': { bgcolor: colorPalette.secondary.mediumGreen }
+                    '&:hover': { bgcolor: colorPalette.secondary.mediumGreen },
+                    '&:disabled': { bgcolor: colorPalette.secondary.mediumGreen, color: '#000' }
                   }}
                 >
-                  Make This Current
+                  {restoringVersion ? 'Restoring...' : 'Make This Current'}
                 </Button>
               </Box>
             )}

@@ -28,6 +28,7 @@ class UserResponse(BaseModel):
     full_name: str
     profile_picture_url: Optional[str] = None
     credits: float = 100.0
+    base_resume_id: Optional[int] = None  # ID of user's base resume (null if not uploaded)
     created_at: datetime
     last_login: Optional[datetime] = None
 

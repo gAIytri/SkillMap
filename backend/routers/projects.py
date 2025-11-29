@@ -495,27 +495,43 @@ async def tailor_project_resume_with_agent(
                         current_resume_json = project_to_update.resume_json
                         new_resume_json = final_result["tailored_json"]
 
-                        # For each section, save current version and create new version
+                        # For each section, save current version and create new version ONLY if section changed
                         sections_to_track = ["professional_summary", "experience", "projects", "skills"]
 
                         for section in sections_to_track:
                             if section in current_resume_json and section in new_resume_json:
-                                # Get the current version number for this section
-                                current_version_num = project_to_update.current_versions.get(section, 0)
+                                # Check if section actually changed by comparing old and new data
+                                section_changed = current_resume_json[section] != new_resume_json[section]
 
-                                # Only save if version doesn't already exist in history
-                                # (prevents overwriting during first tailoring after migration)
-                                if str(current_version_num) not in project_to_update.version_history[section]:
-                                    project_to_update.version_history[section][str(current_version_num)] = current_resume_json[section]
+                                if section_changed:
+                                    # Section changed - create new version
+                                    logger.info(f"Section '{section}' changed - creating new version")
 
-                                # Increment version number for new tailored data
-                                new_version_num = current_version_num + 1
+                                    # Get the current version number for this section
+                                    current_version_num = project_to_update.current_versions.get(section, 0)
 
-                                # Save the NEW tailored data to version_history
-                                project_to_update.version_history[section][str(new_version_num)] = new_resume_json[section]
+                                    # Only save if version doesn't already exist in history
+                                    # (prevents overwriting during first tailoring after migration)
+                                    if str(current_version_num) not in project_to_update.version_history[section]:
+                                        project_to_update.version_history[section][str(current_version_num)] = current_resume_json[section]
 
-                                # Update current_versions to point to new version
-                                project_to_update.current_versions[section] = new_version_num
+                                    # Increment version number for new tailored data
+                                    new_version_num = current_version_num + 1
+
+                                    # Save the NEW tailored data to version_history
+                                    project_to_update.version_history[section][str(new_version_num)] = new_resume_json[section]
+
+                                    # Update current_versions to point to new version
+                                    project_to_update.current_versions[section] = new_version_num
+                                else:
+                                    # Section unchanged - keep same version number, but ensure current data is in history
+                                    logger.info(f"Section '{section}' unchanged - keeping version {project_to_update.current_versions.get(section, 0)}")
+
+                                    current_version_num = project_to_update.current_versions.get(section, 0)
+
+                                    # Ensure current version exists in history (for first-time or migration cases)
+                                    if str(current_version_num) not in project_to_update.version_history[section]:
+                                        project_to_update.version_history[section][str(current_version_num)] = current_resume_json[section]
 
                         # Mark as modified for SQLAlchemy
                         flag_modified(project_to_update, "version_history")
@@ -742,12 +758,76 @@ async def edit_project_resume(
                     ).first()
 
                     if project_to_update:
-                        # Save current version to history before updating
+                        # NEW VERSION SYSTEM: Save versions with permanent version numbers (same as tailoring)
                         from datetime import datetime
+                        from sqlalchemy.orm.attributes import flag_modified
 
+                        # Initialize version_history and current_versions if they don't exist
+                        if project_to_update.version_history is None:
+                            project_to_update.version_history = {
+                                "professional_summary": {},
+                                "experience": {},
+                                "projects": {},
+                                "skills": {}
+                            }
+
+                        if project_to_update.current_versions is None:
+                            project_to_update.current_versions = {
+                                "professional_summary": 0,
+                                "experience": 0,
+                                "projects": 0,
+                                "skills": 0
+                            }
+
+                        # Get current and new resume data
+                        current_resume_json = project_to_update.resume_json
+                        new_resume_json = final_result["edited_json"]
+
+                        # For each section, save current version and create new version ONLY if section changed
+                        sections_to_track = ["professional_summary", "experience", "projects", "skills"]
+
+                        for section in sections_to_track:
+                            if section in current_resume_json and section in new_resume_json:
+                                # Check if section actually changed by comparing old and new data
+                                section_changed = current_resume_json[section] != new_resume_json[section]
+
+                                if section_changed:
+                                    # Section changed - create new version
+                                    logger.info(f"Section '{section}' changed during edit - creating new version")
+
+                                    # Get the current version number for this section
+                                    current_version_num = project_to_update.current_versions.get(section, 0)
+
+                                    # Only save if version doesn't already exist in history
+                                    if str(current_version_num) not in project_to_update.version_history[section]:
+                                        project_to_update.version_history[section][str(current_version_num)] = current_resume_json[section]
+
+                                    # Increment version number for new edited data
+                                    new_version_num = current_version_num + 1
+
+                                    # Save the NEW edited data to version_history
+                                    project_to_update.version_history[section][str(new_version_num)] = new_resume_json[section]
+
+                                    # Update current_versions to point to new version
+                                    project_to_update.current_versions[section] = new_version_num
+                                else:
+                                    # Section unchanged - keep same version number
+                                    logger.info(f"Section '{section}' unchanged during edit - keeping version {project_to_update.current_versions.get(section, 0)}")
+
+                                    current_version_num = project_to_update.current_versions.get(section, 0)
+
+                                    # Ensure current version exists in history
+                                    if str(current_version_num) not in project_to_update.version_history[section]:
+                                        project_to_update.version_history[section][str(current_version_num)] = current_resume_json[section]
+
+                        # Mark as modified for SQLAlchemy
+                        flag_modified(project_to_update, "version_history")
+                        flag_modified(project_to_update, "current_versions")
+
+                        # OLD SYSTEM: Also save to tailoring_history for backward compatibility
                         history_entry = {
                             "timestamp": datetime.utcnow().isoformat(),
-                            "resume_json": project_to_update.resume_json,
+                            "resume_json": current_resume_json,
                             "edit_instructions": request.job_description,
                             "changes_made": final_result.get("sections_modified", []),
                             "changes_description": final_result.get("changes_description", "")
@@ -762,8 +842,10 @@ async def edit_project_resume(
                         if len(project_to_update.tailoring_history) > 10:
                             project_to_update.tailoring_history = project_to_update.tailoring_history[:10]
 
+                        flag_modified(project_to_update, "tailoring_history")
+
                         # Update with edited resume
-                        project_to_update.resume_json = final_result["edited_json"]
+                        project_to_update.resume_json = new_resume_json
 
                         # Don't update cover letter or email (editing only)
 
@@ -1002,6 +1084,64 @@ async def restore_version(
     db.refresh(project)
 
     logger.info(f"Restored version {version_number} for section {section_name} in project {project_id}")
+
+    return project
+
+
+@router.post("/{project_id}/clear-version-history", response_model=ProjectResponse)
+async def clear_version_history(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Clear all version history for a project, resetting it to a fresh state.
+    This is typically called before replacing the resume to avoid confusion.
+
+    This endpoint:
+    1. Clears version_history dict
+    2. Resets current_versions to all 0s
+    3. Clears tailoring_history
+    4. Returns the updated project
+    """
+    # Get project
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    # Clear version history
+    project.version_history = {}
+    project.current_versions = {
+        "professional_summary": 0,
+        "experience": 0,
+        "projects": 0,
+        "skills": 0
+    }
+
+    # Clear tailoring history
+    project.tailoring_history = []
+
+    # Mark as modified for SQLAlchemy
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(project, 'version_history')
+    flag_modified(project, 'current_versions')
+    flag_modified(project, 'tailoring_history')
+
+    # Mark as updated
+    from sqlalchemy import func
+    project.updated_at = func.now()
+
+    db.commit()
+    db.refresh(project)
+
+    logger.info(f"Cleared version history for project {project_id}")
 
     return project
 

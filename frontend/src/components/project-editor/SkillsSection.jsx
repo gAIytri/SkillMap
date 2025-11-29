@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip } from '@mui/material';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress } from '@mui/material';
 import { colorPalette } from '../../styles/theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -13,7 +13,8 @@ const SkillsSection = ({
   versionHistory,      // NEW: { "0": data, "1": data, ... }
   currentVersion,      // NEW: version number (e.g., 0, 1, 2)
   onRestoreVersion,    // NEW: (versionNumber) => void
-  onViewingVersionChange  // NEW: callback to notify parent of version change
+  onViewingVersionChange,  // NEW: callback to notify parent of version change
+  restoringVersion = false  // NEW: loading state for version restoration
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -28,6 +29,17 @@ const SkillsSection = ({
       onViewingVersionChange(currentVersion);
     }
   }, [currentVersion]); // FIXED: Removed onViewingVersionChange from deps to prevent infinite loop
+
+  // Listen for external version changes (e.g., when switching to edit mode)
+  useEffect(() => {
+    // This effect runs when isEditing becomes true
+    if (isEditing && viewingVersion !== currentVersion) {
+      setViewingVersion(currentVersion);
+      if (onViewingVersionChange) {
+        onViewingVersionChange(currentVersion);
+      }
+    }
+  }, [isEditing]); // Switch to current version when entering edit mode
 
   if (!data || data.length === 0) return null;
 
@@ -63,8 +75,8 @@ const SkillsSection = ({
     }
   };
 
-  // Show version tabs if we have multiple versions
-  const showVersionTabs = currentVersion > 0 || (hasHistory && versionNumbers.length > 0);
+  // Show version tabs only if we have multiple versions (more than just V0)
+  const showVersionTabs = hasHistory && versionNumbers.length > 1;
 
   const displayData = getDisplayContent();
 
@@ -72,7 +84,7 @@ const SkillsSection = ({
   if (!showVersionTabs) {
     return (
       <Box>
-          <Paper elevation={0} sx={{ p: isMobile ? 2 : 3, mb: 2, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
+          <Paper elevation={0} sx={{ p: isMobile ? 1 : 2, mb: 1, bgcolor: colorPalette.primary.darkGreen, color: '#fff' }}>
             {isEditing ? (
               // EDITING MODE
               <>
@@ -80,8 +92,8 @@ const SkillsSection = ({
                   <Box
                     key={idx}
                     sx={{
-                      mb: 3,
-                      p: 2.5,
+                      mb: 2,
+                      p: 2,
                       borderRadius: '8px',
                       bgcolor: 'rgba(255, 255, 255, 0.05)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -301,15 +313,18 @@ const SkillsSection = ({
                   variant="contained"
                   size="small"
                   onClick={handleRestoreVersion}
+                  disabled={restoringVersion}
+                  startIcon={restoringVersion ? <CircularProgress size={16} sx={{ color: '#000' }} /> : null}
                   sx={{
                     bgcolor: colorPalette.primary.brightGreen,
                     color: '#000',
                     textTransform: 'none',
                     fontWeight: 600,
-                    '&:hover': { bgcolor: colorPalette.secondary.mediumGreen }
+                    '&:hover': { bgcolor: colorPalette.secondary.mediumGreen },
+                    '&:disabled': { bgcolor: colorPalette.secondary.mediumGreen, color: '#000' }
                   }}
                 >
-                  Make This Current
+                  {restoringVersion ? 'Restoring...' : 'Make This Current'}
                 </Button>
               </Box>
             )}

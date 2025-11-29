@@ -38,5 +38,10 @@ class User(Base):
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
     credit_transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
 
+    @property
+    def base_resume_id(self):
+        """Get base resume ID from relationship"""
+        return self.base_resume.id if self.base_resume else None
+
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, name={self.full_name})>"
