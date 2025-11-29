@@ -49,6 +49,7 @@ class TransactionResponse(BaseModel):
     description: Optional[str]
     created_at: str
     project_id: Optional[int]
+    project_name: Optional[str]
 
     class Config:
         from_attributes = True
@@ -151,7 +152,8 @@ async def get_credit_transactions(
                 tokens_used=t.tokens_used,
                 description=t.description,
                 created_at=t.created_at.isoformat() if t.created_at else "",
-                project_id=t.project_id
+                project_id=t.project_id,
+                project_name=t.project_name
             )
             for t in transactions
         ]

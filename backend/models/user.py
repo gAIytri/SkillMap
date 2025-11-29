@@ -15,6 +15,7 @@ class User(Base):
     profile_picture_url = Column(Text, nullable=True)
     section_order = Column(JSON, nullable=True)  # Custom section order for resume template
     credits = Column(Float, nullable=False, default=100.0)  # User credits for AI operations
+    tailor_count = Column(Integer, nullable=False, default=0)  # Total number of resume tailorings
 
     # Auto-recharge settings
     auto_recharge_enabled = Column(Boolean, nullable=False, default=False)

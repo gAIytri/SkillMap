@@ -59,6 +59,7 @@ const Dashboard = () => {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [creating, setCreating] = useState(false); // Track project creation state
   const navigate = useNavigate();
   const theme = useTheme();
@@ -165,9 +166,12 @@ const Dashboard = () => {
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedProjects.length === 0) return;
+    setShowBulkDeleteConfirm(true);
+  };
 
+  const confirmBulkDelete = async () => {
     try {
       // Delete all selected projects
       await Promise.all(
@@ -175,6 +179,8 @@ const Dashboard = () => {
       );
       setSelectedProjects([]);
       setSelectionMode(false);
+      setShowBulkDeleteConfirm(false);
+      toast.success(`Successfully deleted ${selectedProjects.length} project(s)`);
     } catch (err) {
       toast.error('Failed to delete some projects. Please try again.');
     }
@@ -567,6 +573,18 @@ const Dashboard = () => {
         title="Delete Project"
         message="Are you sure you want to delete this project? This action cannot be undone."
         confirmText="Delete"
+        cancelText="Cancel"
+        confirmColor="error"
+      />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={confirmBulkDelete}
+        title="Delete Multiple Projects"
+        message={`Are you sure you want to delete ${selectedProjects.length} project(s)? This action cannot be undone.`}
+        confirmText="Delete All"
         cancelText="Cancel"
         confirmColor="error"
       />

@@ -25,6 +25,7 @@ export const useTailorResume = ({
   setJobDescription,
   setDocumentTab,
   loadProject, // Add this to refresh project data
+  setVersionHistoryLoading, // NEW: Show loading overlay on extracted panel
 }) => {
   const navigate = useNavigate();
   const abortControllerRef = useRef(null);
@@ -82,6 +83,19 @@ export const useTailorResume = ({
             setExtractedData(message.tailored_json);
 
             // DON'T close overlay yet - wait for PDF to be ready
+          } else if (message.type === 'final' && message.success && message.tailored_json) {
+            console.log('✓ Resume modification completed!');
+            console.log('Modified JSON received:', message.tailored_json ? 'YES' : 'NO');
+            console.log('Sections modified:', message.sections_modified);
+
+            // Update resume data immediately (for modification)
+            setExtractedData(message.tailored_json);
+
+            // Stop cover letter/email loading (modifications don't generate these)
+            setGeneratingCoverLetter(false);
+            setGeneratingEmail(false);
+
+            // DON'T close overlay yet - wait for PDF to be ready
           } else if (message.type === 'pdf_ready') {
             console.log('✓ PDF generated and ready!');
 
@@ -107,11 +121,14 @@ export const useTailorResume = ({
 
               // Refresh project data immediately to update version_history
               // User will see updated versions right away when they check sections
-              if (loadProject) {
+              if (loadProject && setVersionHistoryLoading) {
+                setVersionHistoryLoading(true); // Show loading overlay on extracted panel
                 loadProject(true).then(() => {
                   console.log('✓ Version history updated immediately after PDF ready');
+                  setVersionHistoryLoading(false); // Hide loading overlay
                 }).catch((error) => {
                   console.error('Failed to refresh version history:', error);
+                  setVersionHistoryLoading(false); // Hide loading overlay even on error
                 });
               }
 

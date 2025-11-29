@@ -25,6 +25,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -33,21 +34,28 @@ import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import HistoryIcon from '@mui/icons-material/History';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import AddIcon from '@mui/icons-material/Add';
+import SettingsIcon from '@mui/icons-material/Settings';
+import DownloadIcon from '@mui/icons-material/Download';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import RemoveIcon from '@mui/icons-material/Remove';
 import WorkIcon from '@mui/icons-material/Work';
 import FolderIcon from '@mui/icons-material/Folder';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SaveIcon from '@mui/icons-material/Save';
+import CancelIcon from '@mui/icons-material/Cancel';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import creditsService from '../services/creditsService';
 import projectService from '../services/projectService';
+import userService from '../services/userService';
 import { colorPalette } from '../styles/theme';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 
 const Profile = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +69,14 @@ const Profile = () => {
   const [rechargeLoading, setRechargeLoading] = useState(false);
   const [autoRecharge, setAutoRecharge] = useState(false);
   const [showBetaModal, setShowBetaModal] = useState(false);
+
+  // Settings tab states
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const hasShownToast = useRef(false);
   const isMounted = useRef(true);
   const theme = useTheme();
@@ -128,7 +144,6 @@ const Profile = () => {
       const transactionsData = await creditsService.getTransactions(1000, 0);
 
       // Calculate stats
-      const tailors = transactionsData.filter(t => t.transaction_type === 'TAILOR').length;
       const creditsUsed = transactionsData
         .filter(t => t.transaction_type === 'TAILOR')
         .reduce((sum, t) => sum + Math.abs(t.amount), 0);
@@ -137,20 +152,20 @@ const Profile = () => {
         .reduce((sum, t) => sum + t.amount, 0);
 
       // Load projects count
-      const projects = await projectService.getAllProjects();
+      const projectsData = await projectService.getAllProjects();
 
       if (isMounted.current) {
         setStats({
-          totalTailors: tailors,
+          totalTailors: user?.tailor_count || 0, // Use user.tailor_count instead of counting transactions
           totalCreditsUsed: creditsUsed,
           totalCreditsPurchased: creditsPurchased,
-          totalProjects: projects.length,
+          totalProjects: projectsData.length,
         });
       }
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
-  }, []);
+  }, [user]);
 
   // Load initial data
   useEffect(() => {
@@ -172,7 +187,8 @@ const Profile = () => {
     return () => {
       isMounted.current = false;
     };
-  }, [refreshUser, loadTransactions, loadStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Handle payment redirect
   useEffect(() => {
@@ -200,6 +216,91 @@ const Profile = () => {
     }
   }, [searchParams, refreshUser, loadTransactions, loadStats]);
 
+  // Export transactions to CSV
+  const exportTransactionsCSV = () => {
+    if (transactions.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+
+    // CSV headers
+    const headers = ['Date', 'Type', 'Project', 'Amount', 'Balance After'];
+
+    // CSV rows
+    const rows = transactions.map(t => [
+      formatDate(t.created_at),
+      t.transaction_type,
+      t.transaction_type?.toLowerCase() === 'tailor' ? (t.project_name || 'N/A') : 'N/A',
+      t.amount.toFixed(2),
+      t.balance_after.toFixed(2)
+    ]);
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `skillmap-transactions-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Transactions exported successfully!');
+  };
+
+  // Edit profile name
+  const handleEditName = () => {
+    setNewName(user?.full_name || '');
+    setEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    if (!newName || newName.trim().length === 0) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      await userService.updateProfile({ full_name: newName.trim() });
+      await refreshUser();
+      setEditingName(false);
+      toast.success('Name updated successfully!');
+    } catch (error) {
+      console.error('Failed to update name:', error);
+      toast.error('Failed to update name. Please try again.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleCancelEditName = () => {
+    setEditingName(false);
+    setNewName('');
+  };
+
+  // Delete account
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await userService.deleteAccount();
+      toast.success('Account deleted successfully');
+      // Logout (clears localStorage and AuthContext state) and redirect
+      logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to delete account:', error);
+      toast.error('Failed to delete account. Please try again.');
+      setDeleting(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -214,21 +315,20 @@ const Profile = () => {
 
   const getTransactionTypeChip = (type) => {
     const typeConfig = {
-      TAILOR: { label: 'Tailor', color: 'error', icon: <RemoveIcon sx={{ fontSize: 16 }} /> },
-      PURCHASE: { label: 'Purchase', color: 'success', icon: <AddIcon sx={{ fontSize: 16 }} /> },
-      GRANT: { label: 'Grant', color: 'info', icon: <AddIcon sx={{ fontSize: 16 }} /> },
-      REFUND: { label: 'Refund', color: 'warning', icon: <AddIcon sx={{ fontSize: 16 }} /> },
-      BONUS: { label: 'Bonus', color: 'success', icon: <AddIcon sx={{ fontSize: 16 }} /> },
+      tailor: { label: 'Tailor', color: 'error' },
+      purchase: { label: 'Purchase', color: 'success' },
+      grant: { label: 'Grant', color: 'info' },
+      refund: { label: 'Refund', color: 'warning' },
+      bonus: { label: 'Bonus', color: 'success' },
     };
 
-    const config = typeConfig[type] || typeConfig.TAILOR;
+    const config = typeConfig[type?.toLowerCase()] || typeConfig.tailor;
 
     return (
       <Chip
         label={config.label}
         color={config.color}
         size="small"
-        icon={config.icon}
         sx={{ fontWeight: 600 }}
       />
     );
@@ -358,6 +458,7 @@ const Profile = () => {
           }}
           sx={{
             justifyContent: 'flex-start',
+            mb: 1,
             bgcolor: activeTab === 'recharge' ? colorPalette.secondary.lightGreen : 'transparent',
             color: activeTab === 'recharge' ? colorPalette.primary.darkGreen : 'text.primary',
             fontWeight: activeTab === 'recharge' ? 700 : 400,
@@ -368,128 +469,238 @@ const Profile = () => {
         >
           Recharge
         </Button>
+        <Button
+          fullWidth
+          startIcon={<SettingsIcon />}
+          onClick={() => {
+            setActiveTab('settings');
+            if (isMobile) setDrawerOpen(false);
+          }}
+          sx={{
+            justifyContent: 'flex-start',
+            bgcolor: activeTab === 'settings' ? colorPalette.secondary.lightGreen : 'transparent',
+            color: activeTab === 'settings' ? colorPalette.primary.darkGreen : 'text.primary',
+            fontWeight: activeTab === 'settings' ? 700 : 400,
+            '&:hover': {
+              bgcolor: colorPalette.secondary.lightGreen,
+            },
+          }}
+        >
+          Settings
+        </Button>
       </Box>
     </Box>
   );
 
   // Dashboard Tab Content
-  const renderDashboard = () => (
-    <Box>
-      <Typography variant="h5" fontWeight={700} mb={3}>
-        Dashboard
-      </Typography>
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={8}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Grid container spacing={3}>
-          {/* Total Tailors */}
-          <Grid item xs={12} sm={6} md={6}>
-            <Card
-              sx={{
-                bgcolor: colorPalette.secondary.lightGreen,
-                borderLeft: `4px solid ${colorPalette.primary.darkGreen}`,
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total Tailors
-                    </Typography>
-                    <Typography variant="h3" fontWeight={700} color={colorPalette.primary.darkGreen}>
-                      {stats.totalTailors}
-                    </Typography>
-                  </Box>
-                  <WorkIcon sx={{ fontSize: 48, color: colorPalette.primary.darkGreen, opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+  const renderDashboard = () => {
+    // Get recent activity (last 10 transactions)
+    const recentActivity = transactions.slice(0, 10);
 
-          {/* Total Projects */}
-          <Grid item xs={12} sm={6} md={6}>
-            <Card
-              sx={{
-                bgcolor: '#E3F2FD',
-                borderLeft: '4px solid #2196F3',
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total Projects
-                    </Typography>
-                    <Typography variant="h3" fontWeight={700} color="#2196F3">
-                      {stats.totalProjects}
-                    </Typography>
-                  </Box>
-                  <FolderIcon sx={{ fontSize: 48, color: '#2196F3', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+    return (
+      <Box>
+        <Typography variant="h5" fontWeight={700} mb={3}>
+          Dashboard
+        </Typography>
+        {loading ? (
+          <Box display="flex" justifyContent="center" py={8}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <Grid container spacing={3} mb={4}>
+              {/* Total Tailors */}
+              <Grid item xs={12} sm={6} md={6}>
+                <Card
+                  sx={{
+                    bgcolor: colorPalette.secondary.lightGreen,
+                    borderLeft: `4px solid ${colorPalette.primary.darkGreen}`,
+                  }}
+                >
+                  <CardContent>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Total Tailors
+                        </Typography>
+                        <Typography variant="h3" fontWeight={700} color={colorPalette.primary.darkGreen}>
+                          {stats.totalTailors}
+                        </Typography>
+                      </Box>
+                      <WorkIcon sx={{ fontSize: 48, color: colorPalette.primary.darkGreen, opacity: 0.3 }} />
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
 
-          {/* Credits Used */}
-          <Grid item xs={12} sm={6} md={6}>
-            <Card
-              sx={{
-                bgcolor: '#FFEBEE',
-                borderLeft: '4px solid #F44336',
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Credits Used
-                    </Typography>
-                    <Typography variant="h3" fontWeight={700} color="#F44336">
-                      {stats.totalCreditsUsed.toFixed(1)}
-                    </Typography>
-                  </Box>
-                  <RemoveIcon sx={{ fontSize: 48, color: '#F44336', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              {/* Total Projects */}
+              <Grid item xs={12} sm={6} md={6}>
+                <Card
+                  sx={{
+                    bgcolor: '#E3F2FD',
+                    borderLeft: '4px solid #2196F3',
+                  }}
+                >
+                  <CardContent>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Total Projects
+                        </Typography>
+                        <Typography variant="h3" fontWeight={700} color="#2196F3">
+                          {stats.totalProjects}
+                        </Typography>
+                      </Box>
+                      <FolderIcon sx={{ fontSize: 48, color: '#2196F3', opacity: 0.3 }} />
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
 
-          {/* Credits Purchased */}
-          <Grid item xs={12} sm={6} md={6}>
-            <Card
-              sx={{
-                bgcolor: '#E8F5E9',
-                borderLeft: '4px solid #4CAF50',
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Credits Purchased
-                    </Typography>
-                    <Typography variant="h3" fontWeight={700} color="#4CAF50">
-                      {stats.totalCreditsPurchased.toFixed(1)}
-                    </Typography>
-                  </Box>
-                  <TrendingUpIcon sx={{ fontSize: 48, color: '#4CAF50', opacity: 0.3 }} />
+              {/* Credits Used */}
+              <Grid item xs={12} sm={6} md={6}>
+                <Card
+                  sx={{
+                    bgcolor: '#FFEBEE',
+                    borderLeft: '4px solid #F44336',
+                  }}
+                >
+                  <CardContent>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Credits Used
+                        </Typography>
+                        <Typography variant="h3" fontWeight={700} color="#F44336">
+                          {stats.totalCreditsUsed.toFixed(1)}
+                        </Typography>
+                      </Box>
+                      <RemoveIcon sx={{ fontSize: 48, color: '#F44336', opacity: 0.3 }} />
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Credits Purchased */}
+              <Grid item xs={12} sm={6} md={6}>
+                <Card
+                  sx={{
+                    bgcolor: '#E8F5E9',
+                    borderLeft: '4px solid #4CAF50',
+                  }}
+                >
+                  <CardContent>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Credits Purchased
+                        </Typography>
+                        <Typography variant="h3" fontWeight={700} color="#4CAF50">
+                          {stats.totalCreditsPurchased.toFixed(1)}
+                        </Typography>
+                      </Box>
+                      <TrendingUpIcon sx={{ fontSize: 48, color: '#4CAF50', opacity: 0.3 }} />
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {/* Recent Activity - Full Width */}
+            <Paper sx={{ p: 3, borderRadius: 2 }}>
+              <Typography variant="h6" fontWeight={700} mb={3} color={colorPalette.primary.darkGreen}>
+                Recent Activity
+              </Typography>
+              {recentActivity.length === 0 ? (
+                <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+                  <Typography variant="body2" color="text.secondary">
+                    No recent activity
+                  </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-    </Box>
-  );
+              ) : (
+                <Grid container spacing={2}>
+                  {recentActivity.map((activity) => (
+                    <Grid item xs={12} sm={6} md={4} lg={3} key={activity.id}>
+                      <Card
+                        sx={{
+                          bgcolor: '#f9f9f9',
+                          border: '1px solid #e0e0e0',
+                          '&:hover': {
+                            boxShadow: 2,
+                            borderColor: colorPalette.primary.brightGreen,
+                          },
+                        }}
+                      >
+                        <CardContent sx={{ p: 2 }}>
+                          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                            {getTransactionTypeChip(activity.transaction_type)}
+                            <Typography
+                              variant="body2"
+                              fontWeight={700}
+                              color={activity.amount > 0 ? 'success.main' : 'error.main'}
+                            >
+                              {activity.amount > 0 ? '+' : ''}
+                              {activity.amount.toFixed(1)}
+                            </Typography>
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            color="text.primary"
+                            fontWeight={600}
+                            sx={{
+                              mb: 0.5,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {activity.transaction_type?.toLowerCase() === 'tailor'
+                              ? (activity.project_name || 'N/A')
+                              : 'N/A'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDate(activity.created_at)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+            </Paper>
+          </>
+        )}
+      </Box>
+    );
+  };
 
   // Transactions Tab Content
   const renderTransactions = () => (
     <Box>
-      <Typography variant="h5" fontWeight={700} mb={3}>
-        Transaction History
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h5" fontWeight={700}>
+          Transaction History
+        </Typography>
+        {transactions.length > 0 && (
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={exportTransactionsCSV}
+            sx={{
+              borderColor: colorPalette.primary.darkGreen,
+              color: colorPalette.primary.darkGreen,
+              fontWeight: 600,
+              '&:hover': {
+                borderColor: colorPalette.primary.darkGreen,
+                bgcolor: colorPalette.secondary.lightGreen,
+              },
+            }}
+          >
+            Export CSV
+          </Button>
+        )}
+      </Box>
       {loading ? (
         <Box display="flex" justifyContent="center" py={8}>
           <CircularProgress />
@@ -513,7 +724,7 @@ const Profile = () => {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" fontWeight={700}>
-                    Description
+                    Project
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
@@ -524,11 +735,6 @@ const Profile = () => {
                 <TableCell align="right">
                   <Typography variant="body2" fontWeight={700}>
                     Balance After
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" fontWeight={700}>
-                    Tokens
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -546,7 +752,9 @@ const Profile = () => {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ maxWidth: 400 }}>
-                      {transaction.description || 'N/A'}
+                      {transaction.transaction_type?.toLowerCase() === 'tailor'
+                        ? (transaction.project_name || 'N/A')
+                        : 'N/A'}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
@@ -564,17 +772,154 @@ const Profile = () => {
                       {transaction.balance_after.toFixed(2)}
                     </Typography>
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2" color="text.secondary">
-                      {transaction.tokens_used ? transaction.tokens_used.toLocaleString() : '—'}
-                    </Typography>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
       )}
+    </Box>
+  );
+
+  // Settings Tab Content
+  const renderSettings = () => (
+    <Box>
+      <Typography variant="h5" fontWeight={700} mb={3}>
+        Settings
+      </Typography>
+
+      {/* Edit Profile Section */}
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+        <Typography variant="h6" fontWeight={700} mb={2} color={colorPalette.primary.darkGreen}>
+          Profile Information
+        </Typography>
+        <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
+          <Box flex={1} minWidth="200px">
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Full Name
+            </Typography>
+            {editingName ? (
+              <TextField
+                fullWidth
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                size="small"
+                autoFocus
+                sx={{ maxWidth: 400 }}
+              />
+            ) : (
+              <Typography variant="body1" fontWeight={600}>
+                {user?.full_name || 'N/A'}
+              </Typography>
+            )}
+          </Box>
+          <Box>
+            {editingName ? (
+              <Box display="flex" gap={1}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSaveName}
+                  disabled={savingName}
+                  sx={{
+                    bgcolor: colorPalette.primary.darkGreen,
+                    '&:hover': { bgcolor: '#1a8050' },
+                  }}
+                >
+                  {savingName ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Save'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<CancelIcon />}
+                  onClick={handleCancelEditName}
+                  disabled={savingName}
+                  sx={{
+                    borderColor: '#999',
+                    color: '#666',
+                    '&:hover': { borderColor: '#666', bgcolor: '#f5f5f5' },
+                  }}
+                >
+                  Cancel
+                </Button>
+              </Box>
+            ) : (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditIcon />}
+                onClick={handleEditName}
+                sx={{
+                  borderColor: colorPalette.primary.darkGreen,
+                  color: colorPalette.primary.darkGreen,
+                  '&:hover': {
+                    borderColor: colorPalette.primary.darkGreen,
+                    bgcolor: colorPalette.secondary.lightGreen,
+                  },
+                }}
+              >
+                Edit
+              </Button>
+            )}
+          </Box>
+        </Box>
+        <Box mt={3}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Email
+          </Typography>
+          <Typography variant="body1" fontWeight={600}>
+            {user?.email}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Email cannot be changed
+          </Typography>
+        </Box>
+      </Paper>
+
+      {/* Delete Account Section */}
+      <Paper
+        sx={{
+          p: 3,
+          borderRadius: 2,
+          border: '2px solid #f44336',
+          bgcolor: '#ffebee',
+        }}
+      >
+        <Typography variant="h6" fontWeight={700} mb={2} color="#d32f2f">
+          Danger Zone
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mb={3}>
+          Once you delete your account, there is no going back. All your projects, resumes, and data will be permanently deleted.
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<DeleteForeverIcon />}
+          onClick={() => setShowDeleteConfirm(true)}
+          sx={{
+            bgcolor: '#d32f2f',
+            color: '#fff',
+            fontWeight: 600,
+            '&:hover': {
+              bgcolor: '#b71c1c',
+            },
+          }}
+        >
+          Delete Account
+        </Button>
+      </Paper>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteAccount}
+        title="Delete Account"
+        message="Are you absolutely sure you want to delete your account? This action cannot be undone. All your projects, resumes, and data will be permanently deleted."
+        confirmText="Delete Forever"
+        confirmColor="error"
+        loading={deleting}
+      />
     </Box>
   );
 
@@ -910,6 +1255,7 @@ const Profile = () => {
           {activeTab === 'dashboard' && renderDashboard()}
           {activeTab === 'transactions' && renderTransactions()}
           {activeTab === 'recharge' && renderRecharge()}
+          {activeTab === 'settings' && renderSettings()}
         </Container>
       </Box>
 

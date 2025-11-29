@@ -28,6 +28,7 @@ class UserResponse(BaseModel):
     full_name: str
     profile_picture_url: Optional[str] = None
     credits: float = 100.0
+    tailor_count: int = 0  # Total number of resume tailorings
     base_resume_id: Optional[int] = None  # ID of user's base resume (null if not uploaded)
     email_verified: bool = False  # Email verification status
     created_at: datetime

@@ -20,6 +20,7 @@ class CreditTransaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    project_name = Column(String(255), nullable=True)  # Denormalized project name for faster lookups
 
     # Transaction details
     amount = Column(Float, nullable=False)  # Negative for deduction, positive for addition

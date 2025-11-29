@@ -421,9 +421,21 @@ async def tailor_project_resume_with_agent(
                 yield f"data: {event_data}\n\n"
 
                 # OPTIMIZATION: Generate PDF immediately when resume is ready
-                if update.get("type") == "resume_complete" and update.get("tailored_json"):
-                    tailored_json_for_pdf = update.get("tailored_json")
+                # Handle BOTH tailoring (resume_complete) AND modification (final)
+                should_generate_pdf = False
 
+                if update.get("type") == "resume_complete" and update.get("tailored_json"):
+                    # Job description tailoring completed
+                    tailored_json_for_pdf = update.get("tailored_json")
+                    should_generate_pdf = True
+                    logger.info(f"Resume tailoring completed - preparing PDF generation")
+                elif update.get("type") == "final" and update.get("success") and update.get("tailored_json"):
+                    # Resume modification completed (modification uses 'final' event)
+                    tailored_json_for_pdf = update.get("tailored_json")
+                    should_generate_pdf = True
+                    logger.info(f"Resume modification completed - preparing PDF generation")
+
+                if should_generate_pdf:
                     try:
                         logger.info(f"Generating PDF immediately from tailored JSON for project {project_id}")
 
@@ -640,10 +652,18 @@ async def tailor_project_resume_with_agent(
                             user_to_update.credits -= credits_to_deduct
                             balance_after = user_to_update.credits
 
+                            # Increment tailor count
+                            user_to_update.tailor_count = (user_to_update.tailor_count or 0) + 1
+
+                            # Get project name for transaction record
+                            project_obj = db_new.query(Project).filter(Project.id == project_id).first()
+                            project_name_for_tx = project_obj.project_name if project_obj else None
+
                             # Create credit transaction record
                             transaction = CreditTransaction(
                                 user_id=current_user.id,
                                 project_id=project_id,
+                                project_name=project_name_for_tx,
                                 amount=-credits_to_deduct,  # Negative for deduction
                                 balance_after=balance_after,
                                 transaction_type=TransactionType.TAILOR,
@@ -744,6 +764,8 @@ async def edit_project_resume(
         try:
             # Stream from the editing agent
             final_result = None
+            edited_json_for_pdf = None  # Store edited JSON for immediate PDF generation
+
             async for update in edit_resume_with_instructions(
                 resume_json=project.resume_json,
                 edit_instructions=request.job_description,  # Reusing field name
@@ -752,6 +774,47 @@ async def edit_project_resume(
                 # Send update as SSE
                 event_data = json.dumps(update)
                 yield f"data: {event_data}\n\n"
+
+                # OPTIMIZATION: Generate PDF immediately when resume modification is complete
+                # Check for 'final' event with 'tailored_json' (resume modification returns this)
+                if update.get("type") == "final" and update.get("success") and update.get("tailored_json"):
+                    edited_json_for_pdf = update.get("tailored_json")
+
+                    try:
+                        logger.info(f"Generating PDF immediately from edited JSON for project {project_id}")
+
+                        # Step 1: Generate DOCX from edited JSON
+                        from services.docx_generation_service import generate_resume_from_json
+                        docx_bytes = generate_resume_from_json(
+                            resume_json=edited_json_for_pdf,
+                            base_resume_docx=project.original_docx,
+                            section_order=edited_json_for_pdf.get('section_order')
+                        )
+
+                        # Step 2: Convert DOCX to PDF
+                        pdf_bytes, _ = convert_docx_to_pdf(docx_bytes)
+
+                        # Step 3: Encode PDF as base64 for transmission
+                        import base64
+                        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+                        logger.info(f"✓ PDF generated successfully for edited resume (project {project_id})")
+
+                        # Send pdf_ready event with PDF data
+                        pdf_ready_event = json.dumps({
+                            "type": "pdf_ready",
+                            "message": "PDF generated successfully!",
+                            "pdf_data": pdf_base64
+                        })
+                        yield f"data: {pdf_ready_event}\n\n"
+
+                    except Exception as pdf_error:
+                        logger.error(f"PDF generation failed for edited resume: {pdf_error}")
+                        error_event = json.dumps({
+                            "type": "pdf_error",
+                            "message": f"PDF generation failed: {str(pdf_error)}"
+                        })
+                        yield f"data: {error_event}\n\n"
 
                 # Store final result
                 if update.get("type") == "final":
@@ -887,10 +950,18 @@ async def edit_project_resume(
                             user_to_update.credits -= credits_to_deduct
                             balance_after = user_to_update.credits
 
+                            # Increment tailor count
+                            user_to_update.tailor_count = (user_to_update.tailor_count or 0) + 1
+
+                            # Get project name for transaction record
+                            project_obj = db_new.query(Project).filter(Project.id == project_id).first()
+                            project_name_for_tx = project_obj.project_name if project_obj else None
+
                             # Create credit transaction record
                             transaction = CreditTransaction(
                                 user_id=current_user.id,
                                 project_id=project_id,
+                                project_name=project_name_for_tx,
                                 amount=-credits_to_deduct,
                                 balance_after=balance_after,
                                 transaction_type=TransactionType.TAILOR,  # Using same type

@@ -71,7 +71,7 @@ const ProjectEditor = () => {
   const [documentTab, setDocumentTab] = useState(0); // 0 = Resume, 1 = Cover Letter, 2 = Email
   const [coverLetter, setCoverLetter] = useState(null);
   const [email, setEmail] = useState(null); // { subject, body }
-  const [pdfZoom, setPdfZoom] = useState(100);
+  const [pdfZoom, setPdfZoom] = useState(100); // Default 100%, will be set to 60% on mobile via useEffect
   const [tailoring, setTailoring] = useState(false);
   const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false); // Separate loading for cover letter
   const [generatingEmail, setGeneratingEmail] = useState(false); // Separate loading for email
@@ -116,6 +116,9 @@ const ProjectEditor = () => {
     skills: null,
   });
 
+  // Track when version history is being loaded (after tailoring)
+  const [versionHistoryLoading, setVersionHistoryLoading] = useState(false);
+
   const [selectedSection, setSelectedSection] = useState('personal_info'); // Currently selected section tab (default: personal_info)
   const [viewingPreviousVersion, setViewingPreviousVersion] = useState(false); // Track if user is viewing a previous version
   const [sectionTemplateModalOpen, setSectionTemplateModalOpen] = useState(false); // Control custom section template modal
@@ -139,6 +142,15 @@ const ProjectEditor = () => {
   const isTablet = useMediaQuery(theme.breakpoints.between('md', 'lg')); // 900px - 1200px
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // Right drawer for extracted data
   const [mobileLeftDrawerOpen, setMobileLeftDrawerOpen] = useState(false); // Left drawer for actions
+
+  // Set PDF zoom to 60% on mobile for better fit
+  useEffect(() => {
+    if (isMobile) {
+      setPdfZoom(60);
+    } else {
+      setPdfZoom(100);
+    }
+  }, [isMobile]);
 
   // Drag and drop sensors with activation constraint
   const sensors = useSensors(
@@ -254,6 +266,7 @@ const ProjectEditor = () => {
     setJobDescription,
     setDocumentTab,
     loadProject, // Add this to refresh project data after tailoring
+    setVersionHistoryLoading, // NEW: Show loading overlay on extracted panel
   });
 
   const { handleResumeUpload, abortControllerRef: uploadAbortRef } = useResumeUpload({
@@ -1382,6 +1395,7 @@ const ProjectEditor = () => {
           width={rightSidebarWidth}
           onResizeStart={handleResizeStart}
           isResizing={isResizing}
+          versionHistoryLoading={versionHistoryLoading}
         />
       </Box>
 
