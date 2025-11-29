@@ -28,30 +28,85 @@ const SignupForm = ({ onBack, onSwitchToLogin }) => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  const validateEmail = (email) => {
+    // Regex that requires:
+    // - @ symbol
+    // - At least 2 alphabetic characters after the dot (TLD)
+    // - No numbers allowed in TLD
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
+    // Validate email on change
+    if (name === 'email') {
+      if (value && !validateEmail(value)) {
+        setEmailError('Invalid email');
+      } else {
+        setEmailError('');
+      }
+    }
+
+    // Validate password on change
+    if (name === 'password') {
+      if (value && value.length < 8) {
+        setPasswordError('Password must be at least 8 characters long');
+      } else {
+        setPasswordError('');
+      }
+
+      // Also check confirm password match if it's filled
+      if (formData.confirmPassword && value !== formData.confirmPassword) {
+        setConfirmPasswordError('Passwords do not match');
+      } else {
+        setConfirmPasswordError('');
+      }
+    }
+
+    // Validate confirm password on change
+    if (name === 'confirmPassword') {
+      if (value && value !== formData.password) {
+        setConfirmPasswordError('Passwords do not match');
+      } else {
+        setConfirmPasswordError('');
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    // Validation
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    // Validate email
+    if (!validateEmail(formData.email)) {
+      setEmailError('Invalid email');
       return;
     }
 
+    // Validate password
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+      setPasswordError('Password must be at least 8 characters long');
+      return;
+    }
+
+    // Validate password match
+    if (formData.password !== formData.confirmPassword) {
+      setConfirmPasswordError('Passwords do not match');
       return;
     }
 
@@ -78,7 +133,6 @@ const SignupForm = ({ onBack, onSwitchToLogin }) => {
       setLoading(true);
       setError('');
       await googleLogin(credentialResponse.credential);
-      toast.success('Successfully signed up with Google!');
       navigate('/upload-resume');
     } catch (err) {
       console.error('Google signup error:', err);
@@ -164,12 +218,14 @@ const SignupForm = ({ onBack, onSwitchToLogin }) => {
             fullWidth
             label="Email"
             name="email"
-            type="email"
+            type="text"
             value={formData.email}
             onChange={handleChange}
             margin="normal"
             required
             autoComplete="email"
+            error={!!emailError}
+            helperText={emailError}
           />
           <TextField
             fullWidth
@@ -181,7 +237,8 @@ const SignupForm = ({ onBack, onSwitchToLogin }) => {
             margin="normal"
             required
             autoComplete="new-password"
-            helperText="Minimum 8 characters"
+            error={!!passwordError}
+            helperText={passwordError || "Minimum 8 characters"}
           />
           <TextField
             fullWidth
@@ -193,6 +250,8 @@ const SignupForm = ({ onBack, onSwitchToLogin }) => {
             margin="normal"
             required
             autoComplete="new-password"
+            error={!!confirmPasswordError}
+            helperText={confirmPasswordError}
           />
 
           <Button

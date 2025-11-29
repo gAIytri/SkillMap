@@ -12,7 +12,7 @@ from datetime import datetime
 from config.database import get_db
 from config.settings import settings
 from schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectList, SectionOrderUpdate
-from middleware.auth_middleware import get_current_user
+from middleware.auth_middleware import get_current_user, get_current_verified_user
 from models.user import User
 from models.project import Project
 from models.base_resume import BaseResume
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 @router.get("", response_model=List[ProjectList])
 async def get_all_projects(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Get all projects for current user"""
@@ -48,7 +48,7 @@ async def get_all_projects(
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
     project_data: ProjectCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Create a new project"""
@@ -62,6 +62,21 @@ async def create_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Base resume not found. Please upload a base resume first."
         )
+
+    # Check for duplicate project names (prevent accidental duplicate clicks)
+    # Only check recent projects created in the last 5 seconds
+    from datetime import datetime, timedelta, timezone
+    five_seconds_ago = datetime.now(timezone.utc) - timedelta(seconds=5)
+
+    recent_duplicate = db.query(Project).filter(
+        Project.user_id == current_user.id,
+        Project.project_name == project_data.project_name,
+        Project.created_at >= five_seconds_ago
+    ).first()
+
+    if recent_duplicate:
+        # Return the existing project instead of creating a duplicate
+        return recent_duplicate
 
     # Create new project - Copy base_resume content
     new_project = Project(
@@ -85,7 +100,7 @@ async def create_project(
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Get a specific project"""
@@ -107,7 +122,7 @@ async def get_project(
 async def update_project(
     project_id: int,
     project_update: ProjectUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Update a project"""
@@ -143,7 +158,7 @@ async def update_project(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Delete a project"""
@@ -166,7 +181,7 @@ async def delete_project(
 @router.get("/{project_id}/pdf")
 async def download_project_pdf(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -263,7 +278,7 @@ async def download_project_pdf(
 async def download_project_docx(
     project_id: int,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Generate and download DOCX for a project (recreated from JSON)"""
@@ -341,7 +356,7 @@ async def download_project_docx(
 async def tailor_project_resume_with_agent(
     project_id: int,
     request: ResumeTailorRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -678,7 +693,7 @@ async def tailor_project_resume_with_agent(
 async def edit_project_resume(
     project_id: int,
     request: ResumeTailorRequest,  # Reusing same request schema
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -923,7 +938,7 @@ async def edit_project_resume(
 async def update_section_order(
     project_id: int,
     order_update: SectionOrderUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1000,7 +1015,7 @@ async def restore_version(
     project_id: int,
     section_name: str,
     version_number: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1091,7 +1106,7 @@ async def restore_version(
 @router.post("/{project_id}/clear-version-history", response_model=ProjectResponse)
 async def clear_version_history(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1149,7 +1164,7 @@ async def clear_version_history(
 @router.get("/{project_id}/cover-letter")
 async def get_cover_letter(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1181,10 +1196,123 @@ async def get_cover_letter(
     }
 
 
+@router.get("/{project_id}/cover-letter/docx")
+async def download_cover_letter_docx(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_verified_user),
+    db: Session = Depends(get_db)
+):
+    """Download cover letter as DOCX with proper formatting and hyperlinks"""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.cover_letter_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cover letter not generated yet. Please tailor the resume first."
+        )
+
+    try:
+        from services.docx_generation_service import generate_cover_letter_docx
+
+        # Generate DOCX with hyperlinks (pass resume_json for LinkedIn URL)
+        docx_bytes = generate_cover_letter_docx(project.cover_letter_text, project.resume_json)
+
+        # Save to temp file
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp:
+            tmp.write(docx_bytes)
+            tmp_path = tmp.name
+
+        # Schedule cleanup
+        background_tasks.add_task(os.unlink, tmp_path)
+
+        # Return file
+        filename = f"{project.project_name.replace(' ', '_')}_cover_letter.docx"
+        return FileResponse(
+            tmp_path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=filename
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to generate cover letter DOCX: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate cover letter: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/cover-letter/pdf")
+async def download_cover_letter_pdf(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_verified_user),
+    db: Session = Depends(get_db)
+):
+    """Download cover letter as PDF with proper formatting and hyperlinks"""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    if not project.cover_letter_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cover letter not generated yet. Please tailor the resume first."
+        )
+
+    try:
+        from services.docx_generation_service import generate_cover_letter_docx
+        from services.docx_to_pdf_service import convert_docx_to_pdf
+
+        # Generate DOCX with hyperlinks first (pass resume_json for LinkedIn URL)
+        docx_bytes = generate_cover_letter_docx(project.cover_letter_text, project.resume_json)
+
+        # Convert to PDF (returns tuple: file_bytes, media_type)
+        file_bytes, media_type = convert_docx_to_pdf(docx_bytes)
+
+        # Determine file extension based on media type
+        is_pdf = media_type == "application/pdf"
+        file_ext = "pdf" if is_pdf else "docx"
+
+        # Return the file directly
+        filename = f"{project.project_name.replace(' ', '_')}_cover_letter.{file_ext}"
+        return Response(
+            content=file_bytes,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to generate cover letter PDF: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate cover letter PDF: {str(e)}"
+        )
+
+
 @router.get("/{project_id}/email")
 async def get_email_body(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1237,7 +1365,7 @@ async def get_email_body(
 async def compile_resume(
     project_id: int,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1310,7 +1438,7 @@ async def compile_resume(
 @router.get("/{project_id}/pdf-status", status_code=status.HTTP_200_OK)
 async def get_pdf_generation_status(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """

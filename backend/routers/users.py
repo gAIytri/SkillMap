@@ -11,7 +11,7 @@ import logging
 
 from config.database import get_db
 from models.user import User
-from middleware.auth_middleware import get_current_user
+from middleware.auth_middleware import get_current_user, get_current_verified_user
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,8 @@ class UserProfile(BaseModel):
     full_name: str
     profile_picture_url: Optional[str]
     credits: float
+    base_resume_id: Optional[int] = None  # ID of user's base resume
+    email_verified: bool = False  # CRITICAL: Email verification status
     created_at: str
     last_login: Optional[str]
     google_id: Optional[str]
@@ -40,7 +42,7 @@ class UpdateProfileRequest(BaseModel):
 
 @router.get("/me", response_model=UserProfile)
 async def get_current_user_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -50,8 +52,10 @@ async def get_current_user_profile(
         UserProfile with all user details
     """
     try:
-        # Refresh user to get latest data
+        # Refresh user to get latest data including base_resume relationship
         db.refresh(current_user)
+        # Explicitly access base_resume to ensure relationship is loaded
+        _ = current_user.base_resume
 
         return UserProfile(
             id=current_user.id,
@@ -59,6 +63,8 @@ async def get_current_user_profile(
             full_name=current_user.full_name,
             profile_picture_url=current_user.profile_picture_url,
             credits=current_user.credits,
+            base_resume_id=current_user.base_resume_id,  # Use the property from User model
+            email_verified=current_user.email_verified,  # CRITICAL: Include verification status
             created_at=current_user.created_at.isoformat() if current_user.created_at else "",
             last_login=current_user.last_login.isoformat() if current_user.last_login else None,
             google_id=current_user.google_id
@@ -74,7 +80,7 @@ async def get_current_user_profile(
 @router.put("/me", response_model=UserProfile)
 async def update_user_profile(
     update_request: UpdateProfileRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -105,6 +111,8 @@ async def update_user_profile(
             full_name=current_user.full_name,
             profile_picture_url=current_user.profile_picture_url,
             credits=current_user.credits,
+            base_resume_id=current_user.base_resume_id,  # Use the property from User model
+            email_verified=current_user.email_verified,  # CRITICAL: Include verification status
             created_at=current_user.created_at.isoformat() if current_user.created_at else "",
             last_login=current_user.last_login.isoformat() if current_user.last_login else None,
             google_id=current_user.google_id
@@ -120,7 +128,7 @@ async def update_user_profile(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_account(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Delete current user account"""

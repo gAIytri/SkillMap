@@ -434,33 +434,35 @@ const ActionSidebar = ({
             {uploading ? 'Replacing...' : 'Replace'}
           </Button>
 
-          {/* Download Button */}
-          <Button
-            onClick={onDownloadClick}
-            disabled={downloading}
-            fullWidth
-            size="small"
-            variant="outlined"
+          {/* Download Button - Hide on Email tab */}
+          {documentTab !== 2 && (
+            <Button
+              onClick={onDownloadClick}
+              disabled={downloading}
+              fullWidth
+              size="small"
+              variant="outlined"
 
-            sx={{
-              color: colorPalette.primary.darkGreen,
-              borderColor: colorPalette.primary.darkGreen,
-              textTransform: 'none',
-              fontFamily: 'Poppins, sans-serif',
-              fontSize: '0.7rem',
-              py: 1,
-              '&:hover': {
-                bgcolor: 'rgba(76, 175, 80, 0.1)',
+              sx={{
+                color: colorPalette.primary.darkGreen,
                 borderColor: colorPalette.primary.darkGreen,
-              },
-              '&:disabled': {
-                borderColor: '#cccccc',
-                color: '#666666',
-              },
-            }}
-          >
-            {downloading ? 'Downloading...' : 'Download'}
-          </Button>
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                fontSize: '0.7rem',
+                py: 1,
+                '&:hover': {
+                  bgcolor: 'rgba(76, 175, 80, 0.1)',
+                  borderColor: colorPalette.primary.darkGreen,
+                },
+                '&:disabled': {
+                  borderColor: '#cccccc',
+                  color: '#666666',
+                },
+              }}
+            >
+              {downloading ? 'Downloading...' : 'Download'}
+            </Button>
+          )}
         </Box>
       </Box>
     );
@@ -676,26 +678,28 @@ const ActionSidebar = ({
             {uploading ? 'Replacing Resume...' : 'Replace Resume'}
           </Button>
 
-          {/* Download Button */}
-          <Button
-            onClick={onDownloadClick}
-            disabled={downloading}
-            variant="contained"
-            fullWidth
-            startIcon={<DownloadIcon />}
-            sx={{
-              bgcolor: colorPalette.primary.darkGreen,
-              color: '#ffffff',
-              textTransform: 'none',
-              fontFamily: 'Poppins, sans-serif',
-              py: 1.5,
-              '&:hover': {
-                bgcolor: '#1a8050',
-              },
-            }}
-          >
-            Download
-          </Button>
+          {/* Download Button - Hide on Email tab */}
+          {documentTab !== 2 && (
+            <Button
+              onClick={onDownloadClick}
+              disabled={downloading}
+              variant="contained"
+              fullWidth
+              startIcon={<DownloadIcon />}
+              sx={{
+                bgcolor: colorPalette.primary.darkGreen,
+                color: '#ffffff',
+                textTransform: 'none',
+                fontFamily: 'Poppins, sans-serif',
+                py: 1.5,
+                '&:hover': {
+                  bgcolor: '#1a8050',
+                },
+              }}
+            >
+              Download
+            </Button>
+          )}
 
           {/* Tailor Resume Button */}
           <Button

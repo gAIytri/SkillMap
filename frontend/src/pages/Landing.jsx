@@ -415,7 +415,21 @@ const Landing = () => {
               <Typography variant="body2" sx={{ color: '#bbb', lineHeight: 1.8 }}>
                 Need help? Reach out to us at:
               </Typography>
-              <Typography variant="body2" sx={{ color: colorPalette.primary.brightGreen, mt: 1 }}>
+              <Typography
+                component="a"
+                href="mailto:admin@gaiytri.com"
+                variant="body2"
+                sx={{
+                  color: colorPalette.primary.brightGreen,
+                  mt: 1,
+                  display: 'block',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
                 admin@gaiytri.com
               </Typography>
             </Grid>

@@ -59,6 +59,7 @@ const Dashboard = () => {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
+  const [creating, setCreating] = useState(false); // Track project creation state
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -78,10 +79,17 @@ const Dashboard = () => {
   }, [fetchProjects]);
 
   const handleCreateProject = async () => {
+    // Prevent multiple clicks
+    if (creating) {
+      return;
+    }
+
     if (!newProjectData.project_name.trim()) {
       toast.error('Please enter a project name');
       return;
     }
+
+    setCreating(true);
 
     // Check if user has a base resume
     try {
@@ -91,6 +99,7 @@ const Dashboard = () => {
       if (!baseResume || !baseResume.id) {
         toast.error('Please upload your base resume first');
         setOpenCreateDialog(false);
+        setCreating(false);
         navigate('/upload-resume');
         return;
       }
@@ -98,6 +107,7 @@ const Dashboard = () => {
       // If 404 or any error, user doesn't have base resume
       toast.error('Please upload your base resume first');
       setOpenCreateDialog(false);
+      setCreating(false);
       navigate('/upload-resume');
       return;
     }
@@ -112,6 +122,7 @@ const Dashboard = () => {
       navigate(`/project/${newProject.id}`);
     } catch (err) {
       toast.error('Failed to create project. Please try again.');
+      setCreating(false);
     }
   };
 
@@ -473,7 +484,12 @@ const Dashboard = () => {
       {/* Create Project Dialog */}
       <Dialog
         open={openCreateDialog}
-        onClose={() => setOpenCreateDialog(false)}
+        onClose={() => {
+          if (!creating) {
+            setOpenCreateDialog(false);
+            setCreating(false);
+          }
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -509,13 +525,33 @@ const Dashboard = () => {
           />
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenCreateDialog(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setOpenCreateDialog(false);
+              setCreating(false);
+            }}
+            disabled={creating}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
             onClick={handleCreateProject}
-            sx={{ bgcolor: colorPalette.primary.brightGreen }}
+            disabled={creating}
+            startIcon={creating ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : null}
+            sx={{
+              bgcolor: colorPalette.primary.brightGreen,
+              '&:hover': {
+                bgcolor: colorPalette.secondary.mediumGreen,
+              },
+              '&.Mui-disabled': {
+                bgcolor: colorPalette.secondary.mediumGreen,
+                color: '#fff',
+                opacity: 0.7,
+              },
+            }}
           >
-            Create Project
+            {creating ? 'Creating...' : 'Create Project'}
           </Button>
         </DialogActions>
       </Dialog>

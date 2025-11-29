@@ -299,22 +299,32 @@ const DocumentViewer = ({
                     Cover Letter
                   </Typography>
                   <Button
-                    startIcon={<DownloadIcon />}
+                    startIcon={<ContentCopyIcon />}
                     size="small"
                     onClick={() => {
-                      // Download as .txt file
-                      const blob = new Blob([coverLetter], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${project?.project_name || 'cover-letter'}_cover_letter.txt`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      toast.success('Cover letter downloaded!');
+                      // Build full cover letter with header for copying
+                      const personalInfo = project?.resume_json?.personal_info || {};
+                      let headerText = '';
+                      if (personalInfo.name) headerText += personalInfo.name + '\n';
+                      if (personalInfo.location) headerText += personalInfo.location + '\n';
+                      if (personalInfo.email) headerText += personalInfo.email + '\n';
+                      if (personalInfo.phone) headerText += personalInfo.phone + '\n';
+
+                      // Add links
+                      const links = personalInfo.header_links || [];
+                      for (let i = 0; i < links.length; i += 2) {
+                        const linksInRow = links.slice(i, i + 2);
+                        const linkTexts = linksInRow.map(link => `${link.text}: ${link.url}`).join(' | ');
+                        headerText += linkTexts + '\n';
+                      }
+
+                      const fullText = headerText + '\n' + coverLetter;
+                      navigator.clipboard.writeText(fullText);
+                      toast.success('Cover letter copied to clipboard!');
                     }}
                     sx={{ textTransform: 'none' }}
                   >
-                    Download
+                    Copy Cover Letter
                   </Button>
                 </Box>
                 <Paper
@@ -323,13 +333,80 @@ const DocumentViewer = ({
                     p: 3,
                     bgcolor: '#fff',
                     border: '1px solid colorPalette.secondary.lightGreen',
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: '"Times New Roman", serif',
+                    fontFamily: 'Calibri, sans-serif',
                     fontSize: '14px',
                     lineHeight: 1.6,
+                    mt: 2,
                   }}
                 >
-                  {coverLetter}
+                  {/* Personal Info Header - Generated from resume_json */}
+                  {project?.resume_json?.personal_info && (
+                    <Box sx={{ mb: 2 }}>
+                      {/* Name */}
+                      {project.resume_json.personal_info.name && (
+                        <Typography sx={{ fontFamily: 'Calibri, sans-serif', fontSize: '14px', lineHeight: 1.6 }}>
+                          {project.resume_json.personal_info.name}
+                        </Typography>
+                      )}
+
+                      {/* Location */}
+                      {project.resume_json.personal_info.location && (
+                        <Typography sx={{ fontFamily: 'Calibri, sans-serif', fontSize: '14px', lineHeight: 1.6 }}>
+                          {project.resume_json.personal_info.location}
+                        </Typography>
+                      )}
+
+                      {/* Email */}
+                      {project.resume_json.personal_info.email && (
+                        <Typography sx={{ fontFamily: 'Calibri, sans-serif', fontSize: '14px', lineHeight: 1.6 }}>
+                          {project.resume_json.personal_info.email}
+                        </Typography>
+                      )}
+
+                      {/* Phone */}
+                      {project.resume_json.personal_info.phone && (
+                        <Typography sx={{ fontFamily: 'Calibri, sans-serif', fontSize: '14px', lineHeight: 1.6 }}>
+                          {project.resume_json.personal_info.phone}
+                        </Typography>
+                      )}
+
+                      {/* Links (2 per row) */}
+                      {project.resume_json.personal_info.header_links && project.resume_json.personal_info.header_links.length > 0 && (
+                        <>
+                          {(() => {
+                            const links = project.resume_json.personal_info.header_links;
+                            const rows = [];
+                            for (let i = 0; i < links.length; i += 2) {
+                              const linksInRow = links.slice(i, i + 2);
+                              rows.push(
+                                <Typography key={i} sx={{ fontFamily: 'Calibri, sans-serif', fontSize: '14px', lineHeight: 1.6 }}>
+                                  {linksInRow.map((link, idx) => (
+                                    <span key={idx}>
+                                      {idx > 0 && ' | '}
+                                      <a
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ color: '#000', textDecoration: 'none' }}
+                                      >
+                                        {link.text}
+                                      </a>
+                                    </span>
+                                  ))}
+                                </Typography>
+                              );
+                            }
+                            return rows;
+                          })()}
+                        </>
+                      )}
+                    </Box>
+                  )}
+
+                  {/* Cover Letter Body */}
+                  <Box sx={{ whiteSpace: 'pre-wrap' }}>
+                    {coverLetter}
+                  </Box>
                 </Paper>
               </Box>
             ) : (
@@ -404,7 +481,7 @@ const DocumentViewer = ({
                   }}
                 >
                   <Typography variant="subtitle2" color="text.secondary" mb={1}>
-                    Subject:
+                    SUBJECT:
                   </Typography>
                   <Typography variant="body1" fontWeight={600} mb={3} sx={{ color: 'colorPalette.primary.darkGreen' }}>
                     {email.subject}
@@ -416,13 +493,13 @@ const DocumentViewer = ({
                     }}
                   >
                     <Typography variant="subtitle2" color="text.secondary" mb={1}>
-                      Body:
+                      BODY:
                     </Typography>
                     <Typography
                       variant="body1"
                       sx={{
                         whiteSpace: 'pre-wrap',
-                        fontFamily: '"Arial", sans-serif',
+                        fontFamily: 'Calibri, sans-serif',
                         fontSize: '14px',
                         lineHeight: 1.6,
                         color: '#333',

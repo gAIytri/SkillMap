@@ -42,16 +42,24 @@ def sanitize_hyphens(text: str) -> str:
     - Em dashes (—)
     - En dashes (–)
 
-    with a single space, while preserving newlines and formatting.
+    with a single space, while preserving newlines, formatting, and URLs.
 
     Args:
         text: Input text that may contain hyphens
 
     Returns:
-        Text with hyphens replaced by spaces, formatting preserved
+        Text with hyphens replaced by spaces, formatting and URLs preserved
     """
     if not text:
         return text
+
+    # Extract all URLs and replace with placeholders
+    url_pattern = r'https?://[^\s]+'
+    urls = re.findall(url_pattern, text)
+
+    # Replace URLs with placeholders
+    for i, url in enumerate(urls):
+        text = text.replace(url, f'__URL_PLACEHOLDER_{i}__')
 
     # Replace all types of hyphens and dashes with a space
     text = text.replace('—', ' ')  # Em dash
@@ -61,6 +69,10 @@ def sanitize_hyphens(text: str) -> str:
     # Clean up multiple consecutive spaces (but NOT newlines or tabs)
     # Use [ ]+ to match only space characters, not \s which includes \n, \t, etc.
     text = re.sub(r'[ ]+', ' ', text)
+
+    # Restore original URLs
+    for i, url in enumerate(urls):
+        text = text.replace(f'__URL_PLACEHOLDER_{i}__', url)
 
     return text
 
@@ -714,13 +726,11 @@ TONE: Professional, confident, specific, and genuine."""
         if candidate_email:
             contact_info_lines.append(candidate_email)
         if linkedin_link:
-            # Sanitize LinkedIn link - remove https:// and http://
-            sanitized_linkedin = linkedin_link.replace('https://', '').replace('http://', '')
-            contact_info_lines.append(sanitized_linkedin)
+            # Keep full LinkedIn URL for hyperlink
+            contact_info_lines.append(f"LinkedIn: {linkedin_link}")
         if portfolio_link:
-            # Sanitize portfolio link - remove https:// and http://
-            sanitized_portfolio = portfolio_link.replace('https://', '').replace('http://', '')
-            contact_info_lines.append(sanitized_portfolio)
+            # Keep full portfolio URL for hyperlink
+            contact_info_lines.append(f"Portfolio: {portfolio_link}")
 
         contact_info = '\n'.join(contact_info_lines)
 
@@ -745,9 +755,10 @@ COMPANY NAME: {company_name}
 HIRING MANAGER: {hiring_manager or 'Hiring Manager'}
 
 FORMAT REQUIREMENTS:
-Use proper business letter format with the following structure:
+Use proper business letter format starting from the date.
+DO NOT include the candidate's contact information header - it will be added automatically.
 
-[Candidate's Full Contact Information Block - include name, location, phone, email, and LinkedIn/portfolio if available]
+Start your cover letter with:
 
 {today_date}
 
@@ -771,8 +782,8 @@ Sincerely,
 
 IMPORTANT:
 - Analyze the full job description to understand requirements
-- Include ALL available contact information in the header (location, phone, email, LinkedIn)
-- Use the actual date {today_date} in the letter (NOT a placeholder like [Today's Date])
+- DO NOT include candidate contact info/header - it will be added automatically from the resume
+- Start directly with the date {today_date} (NOT a placeholder like [Today's Date])
 - Add a company address block after the date
 - Keep professional formatting and spacing
 - Make it compelling and specific to the role based on job description analysis
@@ -808,6 +819,9 @@ Generate the complete cover letter now:"""
 
         # Sanitize hyphens from the cover letter text
         cover_letter_text = sanitize_hyphens(cover_letter_text)
+
+        # DON'T prepend personal info header - it will be generated dynamically when needed
+        # The cover letter text only contains: date, company info, letter body
 
         return {
             "success": True,
@@ -1102,7 +1116,6 @@ REQUIREMENTS:
 STRUCTURE:
 Subject: [Create compelling, specific subject line mentioning role and key qualification]
 
-Body:
 Dear Hiring Manager,
 
 [Opening - mention application submission and express enthusiasm for role]
@@ -1116,6 +1129,10 @@ Dear Hiring Manager,
 
 Best regards,
 [Name]
+
+IMPORTANT FORMAT:
+- Start the body directly with "Dear Hiring Manager," - do NOT include "Body:" label
+- Only include "Subject:" label before the subject line
 
 TONE: Professional, confident, specific, genuine, and enthusiastic."""
 
@@ -1174,6 +1191,9 @@ Generate the email with subject line and body now:"""
                 # Remove "Subject:" prefix
                 subject = subject_line.replace('Subject:', '').replace('SUBJECT:', '').strip()
                 body = parts[1].strip()
+                # Remove "Body:" prefix if present
+                if body.startswith('Body:') or body.startswith('BODY:'):
+                    body = body.replace('Body:', '', 1).replace('BODY:', '', 1).strip()
 
         logger.info("Recruiter email generated successfully")
 

@@ -4,7 +4,8 @@ const authService = {
   // Register new user
   register: async (userData) => {
     const response = await api.post('/api/auth/register', userData);
-    if (response.data.access_token) {
+    // ALWAYS store token and user (even if unverified)
+    if (response.data.access_token && response.data.user) {
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
     }
@@ -14,7 +15,8 @@ const authService = {
   // Login with email and password
   login: async (credentials) => {
     const response = await api.post('/api/auth/login', credentials);
-    if (response.data.access_token) {
+    // ALWAYS store token and user (even if unverified)
+    if (response.data.access_token && response.data.user) {
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
     }

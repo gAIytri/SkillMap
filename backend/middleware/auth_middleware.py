@@ -48,3 +48,27 @@ async def get_optional_user(
         return await get_current_user(credentials, db)
     except HTTPException:
         return None
+
+
+async def get_current_verified_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Dependency to get current authenticated AND email-verified user.
+    Use this for all protected routes that require email verification.
+
+    Google users are automatically verified, so they will pass this check.
+    """
+    # First get the authenticated user
+    user = await get_current_user(credentials, db)
+
+    # Check if email is verified
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please verify your email to access this resource.",
+            headers={"X-Email-Verified": "false"},
+        )
+
+    return user

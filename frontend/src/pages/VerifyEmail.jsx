@@ -16,6 +16,7 @@ import {
 import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead';
 import toast from 'react-hot-toast';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { colorPalette } from '../styles/theme';
 
 const VerifyEmail = () => {
@@ -59,13 +60,19 @@ const VerifyEmail = () => {
     try {
       const response = await api.get(`/api/auth/verify-email/${token}`);
 
-      if (response.data.already_verified) {
-        toast.success('Email already verified!');
-      } else {
-        toast.success('Email verified successfully!');
-      }
+      // Just update the user object in localStorage - keep the same token
+      const existingUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = {
+        ...existingUser,
+        ...response.data.user,
+        email_verified: true, // CRITICAL: Mark as verified
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
 
-      navigate('/upload-resume');
+      toast.success('Email verified successfully! 🎉');
+
+      // Force page reload to refresh AuthContext
+      window.location.href = updatedUser.base_resume_id ? '/dashboard' : '/upload-resume';
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Verification failed. Please try with the code.';
       setError(errorMsg);
@@ -132,20 +139,25 @@ const VerifyEmail = () => {
         code: codeString,
       });
 
-      if (response.data.already_verified) {
-        toast.success('Email already verified!');
-      } else {
-        toast.success('Email verified successfully! 🎉');
-      }
+      // Just update the user object in localStorage - keep the same token
+      const existingUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = {
+        ...existingUser,
+        ...response.data.user,
+        email_verified: true, // CRITICAL: Mark as verified
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
 
-      navigate('/upload-resume');
+      toast.success('Email verified successfully! 🎉');
+
+      // Force page reload to refresh AuthContext
+      window.location.href = updatedUser.base_resume_id ? '/dashboard' : '/upload-resume';
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Invalid or expired code. Please try again.';
       setError(errorMsg);
       toast.error(errorMsg);
       setCode(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-    } finally {
       setLoading(false);
     }
   };

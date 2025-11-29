@@ -18,10 +18,17 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
+  // Not logged in - redirect to landing page
   if (!user) {
     return <Navigate to="/" replace />;
   }
 
+  // Logged in but email not verified - redirect to verification page
+  if (!user.email_verified) {
+    return <Navigate to="/verify-email" state={{ email: user.email }} replace />;
+  }
+
+  // User is logged in AND verified - allow access
   return children;
 };
 

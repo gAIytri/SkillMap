@@ -9,13 +9,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in on mount
+    // Simple: Just load from localStorage
     try {
       const currentUser = authService.getCurrentUser();
       setUser(currentUser);
     } catch (error) {
       console.error('Failed to load user from localStorage:', error);
-      // Clear corrupted data
       localStorage.removeItem('user');
       localStorage.removeItem('access_token');
       setUser(null);
@@ -26,12 +25,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const data = await authService.login(credentials);
+    // Always set user (even if unverified) - ProtectedRoute will handle redirect
     setUser(data.user);
     return data;
   };
 
   const register = async (userData) => {
     const data = await authService.register(userData);
+    // Set user even if unverified - ProtectedRoute will redirect to verification
     setUser(data.user);
     return data;
   };

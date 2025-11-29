@@ -75,7 +75,10 @@ class AuthService:
 
     @staticmethod
     def authenticate_google_user(db: Session, id_token_str: str) -> User:
-        """Authenticate or create user with Google OAuth"""
+        """
+        Authenticate or create user with Google OAuth.
+        Enforces unique email - one email can only have ONE user account.
+        """
         try:
             # Verify the Google ID token
             idinfo = id_token.verify_oauth2_token(
@@ -90,27 +93,38 @@ class AuthService:
             full_name = idinfo.get('name', '')
             picture = idinfo.get('picture')
 
-            # Check if user exists
-            user = db.query(User).filter(User.google_id == google_id).first()
+            # FIRST: Check if user exists by email (UNIQUE email enforcement)
+            user = db.query(User).filter(User.email == email).first()
 
-            if not user:
-                # Check if email is already registered
-                user = db.query(User).filter(User.email == email).first()
-                if user:
-                    # Link Google account to existing user
+            if user:
+                # User exists with this email
+                if user.google_id is None:
+                    # User registered with password, now linking Google account
                     user.google_id = google_id
                     user.profile_picture_url = picture
                     user.email_verified = True  # Google users are pre-verified
-                else:
-                    # Create new user
-                    user = User(
-                        email=email,
-                        google_id=google_id,
-                        full_name=full_name,
-                        profile_picture_url=picture,
-                        email_verified=True  # Google users are pre-verified
+                    # Clear any pending verification tokens since now verified
+                    user.verification_token = None
+                    user.verification_token_expires = None
+                    user.verification_link_token = None
+                elif user.google_id != google_id:
+                    # Email exists but with different Google ID - should not happen
+                    # but handle it by rejecting (security measure)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="This email is already associated with a different Google account"
                     )
-                    db.add(user)
+                # else: same google_id, just logging in normally
+            else:
+                # No user with this email - create new user
+                user = User(
+                    email=email,
+                    google_id=google_id,
+                    full_name=full_name,
+                    profile_picture_url=picture,
+                    email_verified=True  # Google users are pre-verified
+                )
+                db.add(user)
 
             # Update last login
             user.last_login = datetime.utcnow()

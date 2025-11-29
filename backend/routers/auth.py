@@ -40,6 +40,31 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
             detail="Incorrect email or password"
         )
 
+    # Check if email is verified
+    if not user.email_verified:
+        # Generate NEW verification code for this login attempt
+        verification_code = email_service.generate_verification_code()
+        verification_link_token = email_service.generate_verification_link_token()
+        verification_expiry = email_service.get_verification_expiry()
+
+        # Update user with new tokens
+        user.verification_token = verification_code
+        user.verification_token_expires = verification_expiry
+        user.verification_link_token = verification_link_token
+        db.commit()
+
+        # Send new verification email
+        email_service.send_verification_email(
+            email=user.email,
+            full_name=user.full_name,
+            verification_code=verification_code,
+            verification_link_token=verification_link_token
+        )
+
+        # Return token response but frontend will check email_verified flag
+        # and redirect to verification page instead of logging in
+        return AuthService.create_token_response(user)
+
     return AuthService.create_token_response(user)
 
 
@@ -56,9 +81,9 @@ async def logout():
     return {"message": "Successfully logged out"}
 
 
-@router.post("/verify-email")
+@router.post("/verify-email", response_model=Token)
 async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
-    """Verify email with 6-digit code"""
+    """Verify email with 6-digit code and return login token"""
     # Find user by email
     user = db.query(User).filter(User.email == request.email).first()
 
@@ -70,7 +95,8 @@ async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db
 
     # Check if already verified
     if user.email_verified:
-        return {"message": "Email already verified", "already_verified": True}
+        # Still return token so user gets logged in
+        return AuthService.create_token_response(user)
 
     # Check if token exists and matches
     if not user.verification_token or user.verification_token != request.code:
@@ -92,16 +118,18 @@ async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db
     user.verification_token_expires = None
     user.verification_link_token = None
     db.commit()
+    db.refresh(user)
 
     # Send welcome email
     email_service.send_welcome_email(user.email, user.full_name)
 
-    return {"message": "Email verified successfully!", "email_verified": True}
+    # Return token to automatically log user in
+    return AuthService.create_token_response(user)
 
 
-@router.get("/verify-email/{token}")
+@router.get("/verify-email/{token}", response_model=Token)
 async def verify_email_magic_link(token: str, db: Session = Depends(get_db)):
-    """Verify email with magic link token"""
+    """Verify email with magic link token and return login token"""
     # Find user by verification link token
     user = db.query(User).filter(User.verification_link_token == token).first()
 
@@ -113,7 +141,8 @@ async def verify_email_magic_link(token: str, db: Session = Depends(get_db)):
 
     # Check if already verified
     if user.email_verified:
-        return {"message": "Email already verified", "already_verified": True}
+        # Still return token so user gets logged in
+        return AuthService.create_token_response(user)
 
     # Check if token expired (same expiry as code)
     if not user.verification_token_expires or datetime.now(timezone.utc) > user.verification_token_expires:
@@ -128,11 +157,13 @@ async def verify_email_magic_link(token: str, db: Session = Depends(get_db)):
     user.verification_token_expires = None
     user.verification_link_token = None
     db.commit()
+    db.refresh(user)
 
     # Send welcome email
     email_service.send_welcome_email(user.email, user.full_name)
 
-    return {"message": "Email verified successfully!", "email_verified": True}
+    # Return token to automatically log user in
+    return AuthService.create_token_response(user)
 
 
 @router.post("/resend-verification")

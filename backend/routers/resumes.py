@@ -11,7 +11,7 @@ import os
 from config.database import get_db
 from config.settings import settings
 from schemas.resume import ResumeResponse, ResumeUpdate, ResumeConvertResponse, ResumeSave, ResumeTailorRequest
-from middleware.auth_middleware import get_current_user
+from middleware.auth_middleware import get_current_user, get_current_verified_user
 from models.user import User
 from models.base_resume import BaseResume
 from services.resume_extractor import extract_resume
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 @router.post("/upload")
 async def upload_and_convert_resume(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -203,7 +203,7 @@ async def upload_and_convert_resume(
 @router.post("/base", response_model=ResumeResponse, status_code=status.HTTP_201_CREATED)
 async def save_base_resume(
     resume_data: ResumeSave,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Save converted LaTeX as user's base resume"""
@@ -236,7 +236,7 @@ async def save_base_resume(
 
 @router.get("/base", response_model=ResumeResponse)
 async def get_base_resume(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Get user's base resume"""
@@ -256,7 +256,7 @@ async def get_base_resume(
 @router.put("/base", response_model=ResumeResponse)
 async def update_base_resume(
     resume_update: ResumeUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Update user's base resume"""
@@ -281,7 +281,7 @@ async def update_base_resume(
 
 @router.delete("/base", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_base_resume(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Delete user's base resume"""
@@ -302,7 +302,7 @@ async def delete_base_resume(
 
 @router.get("/base/pdf")
 async def get_base_resume_pdf(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """Generate and download PDF of base resume"""
@@ -329,7 +329,7 @@ async def get_base_resume_pdf(
 @router.get("/base/recreated-docx")
 async def get_recreated_docx(
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ):
     """

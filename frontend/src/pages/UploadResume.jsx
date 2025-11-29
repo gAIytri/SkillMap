@@ -16,6 +16,7 @@ import { colorPalette } from '../styles/theme';
 import resumeService from '../services/resumeService';
 import templatePreview from '../assets/resume-template-preview.png';
 import { useProjects } from '../context/ProjectContext';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const UploadResume = () => {
@@ -25,6 +26,7 @@ const UploadResume = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { refreshProjects } = useProjects(); // Get refreshProjects from context
+  const { refreshUser } = useAuth(); // Get refreshUser from AuthContext
   const abortControllerRef = useRef(null); // For cancelling requests
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -114,10 +116,18 @@ const UploadResume = () => {
       );
 
       if (result && result.success) {
-        // Refresh projects cache before navigating to dashboard
-        await refreshProjects();
-        // Navigate to dashboard on success
-        navigate('/dashboard');
+        // Fetch fresh user data to get base_resume_id
+        const updatedProfile = await refreshUser();
+
+        if (updatedProfile) {
+          // Refresh projects cache
+          await refreshProjects();
+
+          // Navigate to dashboard
+          navigate('/dashboard');
+        } else {
+          throw new Error('Failed to refresh user data');
+        }
       } else {
         throw new Error('Upload completed but no data received');
       }

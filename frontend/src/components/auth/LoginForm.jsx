@@ -26,16 +26,37 @@ const LoginForm = ({ onBack, onSwitchToSignup }) => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  const validateEmail = (email) => {
+    // Regex that requires:
+    // - @ symbol
+    // - At least 2 alphabetic characters after the dot (TLD)
+    // - No numbers allowed in TLD
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
+    // Validate email on change
+    if (name === 'email') {
+      if (value && !validateEmail(value)) {
+        setEmailError('Invalid email');
+      } else {
+        setEmailError('');
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -43,10 +64,38 @@ const LoginForm = ({ onBack, onSwitchToSignup }) => {
     setError('');
     setLoading(true);
 
+    // Validate email before submitting
+    if (!validateEmail(formData.email)) {
+      setEmailError('Invalid email');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await login(formData);
-      toast.success('Welcome back!');
-      navigate('/dashboard');
+      const response = await login(formData);
+
+      if (response && response.user) {
+        // Check if email is verified
+        if (!response.user.email_verified) {
+          // User is not verified - redirect to verification page
+          toast('Please verify your email to continue. A new verification code has been sent.', {
+            icon: '📧',
+            duration: 5000,
+          });
+          navigate('/verify-email', { state: { email: formData.email } });
+        } else if (!response.user.base_resume_id) {
+          // User is verified but no base resume - go to upload
+          toast.success('Welcome back!');
+          navigate('/upload-resume');
+        } else {
+          // User is verified and has base resume - go to dashboard
+          toast.success('Welcome back!');
+          navigate('/dashboard');
+        }
+      } else {
+        console.error('Unexpected response format:', response);
+        setError('Unexpected response from server. Please try again.');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to login. Please check your credentials.');
     } finally {
@@ -59,7 +108,6 @@ const LoginForm = ({ onBack, onSwitchToSignup }) => {
       setLoading(true);
       setError('');
       await googleLogin(credentialResponse.credential);
-      toast.success('Successfully logged in with Google!');
       navigate('/dashboard');
     } catch (err) {
       console.error('Google login error:', err);
@@ -135,13 +183,15 @@ const LoginForm = ({ onBack, onSwitchToSignup }) => {
             fullWidth
             label="Email"
             name="email"
-            type="email"
+            type="text"
             value={formData.email}
             onChange={handleChange}
             margin="normal"
             required
             autoComplete="email"
             autoFocus
+            error={!!emailError}
+            helperText={emailError}
           />
           <TextField
             fullWidth

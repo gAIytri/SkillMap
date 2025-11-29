@@ -1133,3 +1133,201 @@ if __name__ == '__main__':
 
     print(f"✅ Test successful! Generated {len(output_bytes)} bytes")
     print(f"   Using programmatic template (no base resume needed)")
+
+
+def generate_cover_letter_docx(cover_letter_text: str, resume_json: dict = None) -> bytes:
+    """
+    Generate a professional cover letter DOCX.
+    Generates personal info header from resume_json, then adds LLM-generated body.
+
+    Args:
+        cover_letter_text: LLM-generated cover letter body (starting from date)
+        resume_json: Resume JSON containing personal info with links
+
+    Returns:
+        bytes: DOCX file as bytes
+    """
+    doc = Document()
+
+    # Set default font to Calibri with tight spacing
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+
+    # Set paragraph spacing to 0 (tight spacing)
+    paragraph_format = style.paragraph_format
+    paragraph_format.space_before = Pt(0)
+    paragraph_format.space_after = Pt(0)
+    paragraph_format.line_spacing = 1.0  # Single line spacing
+
+    # === STEP 1: Generate Personal Info Header from resume_json ===
+    if resume_json:
+        personal_info = resume_json.get('personal_info', {})
+
+        # Name (left-aligned, regular weight, same size as everything else)
+        name = personal_info.get('name', '')
+        if name:
+            name_para = doc.add_paragraph()
+            name_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            name_run = name_para.add_run(name)
+            name_run.font.name = 'Calibri'
+            name_run.font.size = Pt(11)
+            name_para.paragraph_format.space_after = Pt(0)
+
+        # Location on separate line
+        if personal_info.get('location'):
+            loc_para = doc.add_paragraph()
+            loc_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            loc_run = loc_para.add_run(personal_info['location'])
+            loc_run.font.name = 'Calibri'
+            loc_run.font.size = Pt(11)
+            loc_para.paragraph_format.space_after = Pt(0)
+
+        # Email on separate line
+        if personal_info.get('email'):
+            email_para = doc.add_paragraph()
+            email_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            email_run = email_para.add_run(personal_info['email'])
+            email_run.font.name = 'Calibri'
+            email_run.font.size = Pt(11)
+            email_para.paragraph_format.space_after = Pt(0)
+
+        # Phone on separate line
+        if personal_info.get('phone'):
+            phone_para = doc.add_paragraph()
+            phone_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            phone_run = phone_para.add_run(personal_info['phone'])
+            phone_run.font.name = 'Calibri'
+            phone_run.font.size = Pt(11)
+            phone_para.paragraph_format.space_after = Pt(0)
+
+        # Add header links (2 per row)
+        header_links = personal_info.get('header_links', [])
+        if header_links:
+            # Process links 2 at a time
+            for i in range(0, len(header_links), 2):
+                links_in_row = header_links[i:i+2]
+
+                link_para = doc.add_paragraph()
+                link_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                link_para.paragraph_format.space_after = Pt(0)
+
+                for idx, link in enumerate(links_in_row):
+                    text = link.get('text', '')
+                    url = link.get('url', '')
+
+                    if not text:
+                        continue
+
+                    # Add separator between links in the same row
+                    if idx > 0:
+                        sep_run = link_para.add_run(' | ')
+                        sep_run.font.name = 'Calibri'
+                        sep_run.font.size = Pt(11)
+
+                    # Add hyperlink
+                    if url:
+                        add_professional_hyperlink(link_para, url, text, 'Calibri', 11, False)
+                    else:
+                        # No URL, just plain text
+                        text_run = link_para.add_run(text)
+                        text_run.font.name = 'Calibri'
+                        text_run.font.size = Pt(11)
+
+            # Add extra spacing after links section (before date)
+            if header_links:
+                link_para.paragraph_format.space_after = Pt(12)
+
+    # === STEP 2: Add LLM-generated body (starting from date) ===
+    # The cover letter text only contains: date, company info, letter body
+    # Personal info header was already generated above from resume_json
+    paragraphs_text = cover_letter_text.split('\n')
+
+    for para_text in paragraphs_text:
+        if not para_text.strip():
+            # Empty line - add minimal spacing (6pt instead of full paragraph)
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(6)
+            continue
+
+        # Add paragraph as-is (LLM-generated body content)
+        p = doc.add_paragraph(para_text)
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+        # Apply Calibri font and tight spacing
+        for run in p.runs:
+            run.font.name = 'Calibri'
+            run.font.size = Pt(11)
+
+        # Set tight line spacing for this paragraph
+        p.paragraph_format.line_spacing = 1.0
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+
+    # Save to BytesIO
+    output = BytesIO()
+    doc.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
+def add_professional_hyperlink(paragraph, url, text, font_name='Calibri', font_size=11, underline=False):
+    """
+    Add a hyperlink to a paragraph for cover letters.
+    The text will be displayed in the same font and color as normal text (black).
+
+    Args:
+        paragraph: The paragraph to add hyperlink to
+        url: The URL to link to
+        text: The display text for the link
+        font_name: Font name (default: Calibri)
+        font_size: Font size in points (default: 11)
+        underline: Whether to underline (default: False for professional look)
+    """
+    # This gets access to the document.xml.rels file and gets a new relation id value
+    part = paragraph.part
+    r_id = part.relate_to(url, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', is_external=True)
+
+    # Create the w:hyperlink tag and add needed values
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+
+    # Create a new run object (a wrapper over a 'w:r' element)
+    new_run = OxmlElement('w:r')
+
+    # Set font properties
+    rPr = OxmlElement('w:rPr')
+
+    # Font name
+    rFonts = OxmlElement('w:rFonts')
+    rFonts.set(qn('w:ascii'), font_name)
+    rFonts.set(qn('w:hAnsi'), font_name)
+    rPr.append(rFonts)
+
+    # Font size
+    sz = OxmlElement('w:sz')
+    sz.set(qn('w:val'), str(font_size * 2))  # Font size is in half-points
+    rPr.append(sz)
+
+    # Color - use black (same as normal text)
+    color = OxmlElement('w:color')
+    color.set(qn('w:val'), '000000')  # Black
+    rPr.append(color)
+
+    # Remove underline for professional look (optional)
+    if not underline:
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'none')
+        rPr.append(u)
+
+    new_run.append(rPr)
+
+    # Join all the xml elements together
+    new_run.text = text
+    hyperlink.append(new_run)
+
+    # Append the hyperlink to the paragraph
+    paragraph._p.append(hyperlink)
+
+    return hyperlink

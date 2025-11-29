@@ -29,8 +29,10 @@ class UserResponse(BaseModel):
     profile_picture_url: Optional[str] = None
     credits: float = 100.0
     base_resume_id: Optional[int] = None  # ID of user's base resume (null if not uploaded)
+    email_verified: bool = False  # Email verification status
     created_at: datetime
     last_login: Optional[datetime] = None
+    google_id: Optional[str] = None
 
     class Config:
         from_attributes = True

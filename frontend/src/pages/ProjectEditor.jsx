@@ -702,13 +702,34 @@ const ProjectEditor = () => {
   const handleDownloadPDF = async () => {
     setDownloading(true);
     try {
-      const pdfBlob = await projectService.downloadProjectPDF(projectId);
+      let pdfBlob;
+      let filename;
+
+      if (documentTab === 0) {
+        // Resume tab - download resume PDF
+        pdfBlob = await projectService.downloadProjectPDF(projectId);
+        filename = `${(project?.project_name || 'resume').replace(/\s+/g, '_')}.pdf`;
+      } else if (documentTab === 1) {
+        // Cover Letter tab - download cover letter PDF
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/projects/${projectId}/cover-letter/pdf`,
+          {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }
+        );
+        if (!response.ok) {
+          throw new Error('Failed to download cover letter PDF');
+        }
+        pdfBlob = await response.blob();
+        filename = `${(project?.project_name || 'cover-letter').replace(/\s+/g, '_')}_cover_letter.pdf`;
+      }
 
       // Create download link
       const url = window.URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${(project?.project_name || 'resume').replace(/\s+/g, '_')}.pdf`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -723,13 +744,34 @@ const ProjectEditor = () => {
   const handleDownloadDOCX = async () => {
     setDownloading(true);
     try {
-      const docxBlob = await projectService.downloadProjectDOCX(projectId);
+      let docxBlob;
+      let filename;
+
+      if (documentTab === 0) {
+        // Resume tab - download resume DOCX
+        docxBlob = await projectService.downloadProjectDOCX(projectId);
+        filename = `${(project?.project_name || 'resume').replace(/\s+/g, '_')}.docx`;
+      } else if (documentTab === 1) {
+        // Cover Letter tab - download cover letter DOCX
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/projects/${projectId}/cover-letter/docx`,
+          {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }
+        );
+        if (!response.ok) {
+          throw new Error('Failed to download cover letter DOCX');
+        }
+        docxBlob = await response.blob();
+        filename = `${(project?.project_name || 'cover-letter').replace(/\s+/g, '_')}_cover_letter.docx`;
+      }
 
       // Create download link
       const url = window.URL.createObjectURL(docxBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${(project?.project_name || 'resume').replace(/\s+/g, '_')}.docx`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -798,9 +840,7 @@ const ProjectEditor = () => {
       // Compile PDF (with smart caching)
       const response = await api.post(`/api/projects/${projectId}/compile`, {});
 
-      if (response.data.cached) {
-        toast.success('PDF loaded from cache!');
-      } else {
+      if (!response.data.cached) {
         toast.success('PDF compiled successfully!');
       }
 
