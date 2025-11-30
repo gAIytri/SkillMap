@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress, Checkbox, FormControlLabel } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { colorPalette } from '../../styles/theme';
@@ -154,15 +154,41 @@ const ExperienceSection = ({
                         />
                         <TextField
                           label="End Date"
-                          value={exp.end_date || ''}
+                          value={exp.currently_working ? 'Present' : (exp.end_date || '')}
                           onChange={(e) => updateTempField(idx, 'end_date', e.target.value)}
                           fullWidth
                           variant="standard"
+                          disabled={exp.currently_working}
                           InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{
+                            '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
+                            '& .MuiInput-underline:after': { borderBottomColor: '#fff' },
+                            '& .Mui-disabled': { color: '#fff !important', WebkitTextFillColor: '#fff !important' }
+                          }}
                         />
                       </Box>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={exp.currently_working || false}
+                            onChange={(e) => {
+                              updateTempField(idx, 'currently_working', e.target.checked);
+                              if (e.target.checked) {
+                                updateTempField(idx, 'end_date', '');
+                              }
+                            }}
+                            sx={{
+                              color: colorPalette.secondary.mediumGreen,
+                              '&.Mui-checked': {
+                                color: '#fff',
+                              },
+                            }}
+                          />
+                        }
+                        label="Currently working here"
+                        sx={{ color: '#fff', mb: 1 }}
+                      />
                       <TextField
                         label="Location"
                         value={exp.location || ''}
@@ -183,7 +209,7 @@ const ExperienceSection = ({
                           const bulletsCount = bullets.length;
 
                           return bullets.map((bullet, bulletIdx) => (
-                            <Box key={bulletIdx} sx={{ display: 'flex', gap: 0.5, mb: 1.5, alignItems: 'flex-start' }}>
+                            <Box key={bulletIdx} sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
                               <TextField
                                 value={bullet}
                                 onChange={(e) => {
@@ -195,10 +221,15 @@ const ExperienceSection = ({
                                 rows={3}
                                 placeholder={`Bullet point ${bulletIdx + 1}`}
                                 variant="standard"
-                                InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' } }}
+                                slotProps={{
+                                  input: {
+                                    style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' }
+                                  }
+                                }}
                                 sx={{
                                   flex: 1,
                                   minWidth: 0,
+                                  maxWidth: '100%',
                                   '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
                                   '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
                                 }}
@@ -212,7 +243,7 @@ const ExperienceSection = ({
                                     newBullets.splice(bulletIdx, 1);
                                     updateTempField(idx, 'bullets', newBullets.length > 0 ? newBullets : ['']);
                                   }}
-                                  sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0 }}
+                                  sx={{ color: '#e74c3c', mt: 0.5, flexShrink: 0, ml: 0 }}
                                 >
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>
@@ -399,15 +430,41 @@ const ExperienceSection = ({
                         />
                         <TextField
                           label="End Date"
-                          value={exp.end_date || ''}
+                          value={exp.currently_working ? 'Present' : (exp.end_date || '')}
                           onChange={(e) => updateTempField(idx, 'end_date', e.target.value)}
                           fullWidth
                           variant="standard"
+                          disabled={exp.currently_working}
                           InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
                           InputProps={{ style: { color: '#fff', fontSize: isMobile ? '15px' : '14px' } }}
-                          sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
+                          sx={{
+                            '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
+                            '& .MuiInput-underline:after': { borderBottomColor: '#fff' },
+                            '& .Mui-disabled': { color: '#fff !important', WebkitTextFillColor: '#fff !important' }
+                          }}
                         />
                       </Box>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={exp.currently_working || false}
+                            onChange={(e) => {
+                              updateTempField(idx, 'currently_working', e.target.checked);
+                              if (e.target.checked) {
+                                updateTempField(idx, 'end_date', '');
+                              }
+                            }}
+                            sx={{
+                              color: colorPalette.secondary.mediumGreen,
+                              '&.Mui-checked': {
+                                color: '#fff',
+                              },
+                            }}
+                          />
+                        }
+                        label="Currently working here"
+                        sx={{ color: '#fff', mb: 1 }}
+                      />
                       <TextField
                         label="Location"
                         value={exp.location || ''}
@@ -419,7 +476,7 @@ const ExperienceSection = ({
                         sx={{ '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen }, '& .MuiInput-underline:after': { borderBottomColor: '#fff' } }}
                       />
                       {/* Bullet Points - Individual Inputs */}
-                   <Box width={'120%'}>
+                   <Box width={'100%'}>
                         <Typography variant="caption" sx={{ color: colorPalette.secondary.mediumGreen, mb: 1, display: 'block' }}>
                           Responsibilities / Achievements (Bullet Points)
                         </Typography>
@@ -440,11 +497,15 @@ const ExperienceSection = ({
                                 rows={3}
                                 placeholder={`Bullet point ${bulletIdx + 1}`}
                                 variant="standard"
-                                InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' } }}
+                                slotProps={{
+                                  input: {
+                                    style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' }
+                                  }
+                                }}
                                 sx={{
                                   flex: 1,
                                   minWidth: 0,
-                                  maxWidth: 'calc(100% - 48px)',
+                                  maxWidth: '100%',
                                   '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
                                   '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
                                 }}

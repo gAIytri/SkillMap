@@ -480,7 +480,7 @@ const DocumentViewer = ({
                     border: '1px solid colorPalette.secondary.lightGreen',
                   }}
                 >
-                  <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                  <Typography variant="subtitle2" color="text.secondary" fontWeight={700} mb={1}>
                     SUBJECT:
                   </Typography>
                   <Typography variant="body1" fontWeight={600} mb={3} sx={{ color: 'colorPalette.primary.darkGreen' }}>
@@ -492,7 +492,7 @@ const DocumentViewer = ({
                       pt: 3,
                     }}
                   >
-                    <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                    <Typography variant="subtitle2" color="text.secondary" fontWeight={700} mb={1}>
                       BODY:
                     </Typography>
                     <Typography

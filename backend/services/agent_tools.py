@@ -546,8 +546,17 @@ AFTER: Languages: Python, TypeScript, JavaScript, Java, C++ (Python moved to fro
 5. DO NOT TOUCH:
 NEVER modify: Personal Info, Education, Certifications. Keep them exactly as provided.
 
-6. DATE FORMATTING:
-Use consistent format across all dates. Check if majority uses "MM/YYYY" or "Month YYYY" and apply that format everywhere.
+6. DATE FORMATTING - CRITICAL:
+STEP 1: Analyze ALL dates in the resume (work experience, projects, education) and COUNT which format is used most frequently.
+STEP 2: Identify the MAJORITY format from these options:
+   - "Jan 2025" (abbreviated month name + space + full year)
+   - "January 2025" (full month name + space + full year)
+   - "01/2025" (MM/YYYY with slash)
+   - "2025-01" (YYYY-MM with dash)
+STEP 3: Apply the MAJORITY format to ALL dates consistently throughout the entire resume.
+
+IMPORTANT: Do NOT mix formats. If majority is "Jan 2025", convert ALL dates to that exact format (e.g., "Dec 2023", "Mar 2024").
+If majority is "01/2025", convert ALL dates to that format (e.g., "12/2023", "03/2024").
 
 JSON STRUCTURE:
 - Projects and Experience MUST use "bullets" array (separate strings)
@@ -929,7 +938,7 @@ CORE PRINCIPLES:
 4. Keep all other sections unchanged
 5. Be precise and targeted in your edits
 6. Maintain professional language and formatting
-7. Keep date formats consistent with the rest of the resume
+7. DATE FORMATTING: Analyze ALL dates in the resume and determine the MAJORITY format (e.g., "Jan 2025", "January 2025", "01/2025"). Apply that EXACT format to ALL dates consistently.
 
 YOUR TASK:
 Edit the specific sections identified based on the user's instructions."""
@@ -953,7 +962,7 @@ INSTRUCTIONS:
 4. If updating content, make targeted changes while preserving other details
 5. If removing content, ensure the structure remains valid
 6. Keep all other sections exactly as they are
-7. Maintain consistent date formatting throughout
+7. DATE FORMATTING: Count which date format appears most (e.g., "Jan 2025", "01/2025") and apply that SAME format to ALL dates
 8. Return the complete resume JSON with modifications applied
 
 OUTPUT REQUIREMENTS:

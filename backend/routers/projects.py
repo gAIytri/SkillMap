@@ -503,29 +503,31 @@ async def tailor_project_resume_with_agent(
 
                         # Initialize version_history and current_versions if they don't exist
                         if project_to_update.version_history is None:
-                            project_to_update.version_history = {
-                                "professional_summary": {},
-                                "experience": {},
-                                "projects": {},
-                                "skills": {}
-                            }
+                            project_to_update.version_history = {}
 
                         if project_to_update.current_versions is None:
-                            project_to_update.current_versions = {
-                                "professional_summary": 0,
-                                "experience": 0,
-                                "projects": 0,
-                                "skills": 0
-                            }
+                            project_to_update.current_versions = {}
+
+                        # Ensure all required section keys exist (even if version_history/current_versions were not None)
+                        # This prevents KeyError when accessing version_history[section]
+                        sections_to_track = ["professional_summary", "experience", "projects", "skills"]
+                        for section in sections_to_track:
+                            if section not in project_to_update.version_history:
+                                project_to_update.version_history[section] = {}
+                            if section not in project_to_update.current_versions:
+                                project_to_update.current_versions[section] = 0
 
                         # Get current resume data
                         current_resume_json = project_to_update.resume_json
                         new_resume_json = final_result["tailored_json"]
 
                         # For each section, save current version and create new version ONLY if section changed
-                        sections_to_track = ["professional_summary", "experience", "projects", "skills"]
 
                         for section in sections_to_track:
+                            # Log warning if LLM didn't return a required section
+                            if section not in new_resume_json:
+                                logger.warning(f"⚠ LLM did not return '{section}' in tailored JSON - skipping version tracking for this section")
+
                             if section in current_resume_json and section in new_resume_json:
                                 # Check if section actually changed by comparing old and new data
                                 section_changed = current_resume_json[section] != new_resume_json[section]
@@ -842,29 +844,31 @@ async def edit_project_resume(
 
                         # Initialize version_history and current_versions if they don't exist
                         if project_to_update.version_history is None:
-                            project_to_update.version_history = {
-                                "professional_summary": {},
-                                "experience": {},
-                                "projects": {},
-                                "skills": {}
-                            }
+                            project_to_update.version_history = {}
 
                         if project_to_update.current_versions is None:
-                            project_to_update.current_versions = {
-                                "professional_summary": 0,
-                                "experience": 0,
-                                "projects": 0,
-                                "skills": 0
-                            }
+                            project_to_update.current_versions = {}
+
+                        # Ensure all required section keys exist (even if version_history/current_versions were not None)
+                        # This prevents KeyError when accessing version_history[section]
+                        sections_to_track = ["professional_summary", "experience", "projects", "skills"]
+                        for section in sections_to_track:
+                            if section not in project_to_update.version_history:
+                                project_to_update.version_history[section] = {}
+                            if section not in project_to_update.current_versions:
+                                project_to_update.current_versions[section] = 0
 
                         # Get current and new resume data
                         current_resume_json = project_to_update.resume_json
                         new_resume_json = final_result["edited_json"]
 
                         # For each section, save current version and create new version ONLY if section changed
-                        sections_to_track = ["professional_summary", "experience", "projects", "skills"]
 
                         for section in sections_to_track:
+                            # Log warning if LLM didn't return a required section
+                            if section not in new_resume_json:
+                                logger.warning(f"⚠ LLM did not return '{section}' in tailored JSON - skipping version tracking for this section")
+
                             if section in current_resume_json and section in new_resume_json:
                                 # Check if section actually changed by comparing old and new data
                                 section_changed = current_resume_json[section] != new_resume_json[section]

@@ -471,17 +471,32 @@ const ProjectEditor = () => {
         toast.error('Name is required and cannot be empty');
         return; // Don't save
       }
+
+      // Validate links: If link text is provided, URL must also be provided
+      const links = tempSectionData?.header_links || [];
+      for (const link of links) {
+        if (link.text && link.text.trim() && (!link.url || !link.url.trim())) {
+          toast.error(`Link "${link.text}" requires a URL. Please provide a URL or remove the link.`);
+          return; // Don't save
+        }
+      }
     }
 
-    // Validation for projects: Require at least one non-empty bullet point
+    // Validation for projects: Require project name and at least one non-empty bullet point
     if (editingSection === 'projects' && Array.isArray(tempSectionData)) {
       for (const project of tempSectionData) {
+        // Check if project has a name
+        if (!project.name || !project.name.trim()) {
+          toast.error('Project name is required for all projects');
+          return; // Don't save
+        }
+
         // Check if project has at least one non-empty bullet point
         const bullets = project.bullets || (project.description ? project.description.split(/[.\n]/).filter(b => b.trim()) : []);
         const hasValidBullet = bullets.some(b => b && b.trim().length > 0);
 
         if (!hasValidBullet) {
-          toast.error(`Project "${project.name || 'Untitled'}" must have at least one bullet point`);
+          toast.error(`Project "${project.name}" must have at least one bullet point`);
           return; // Don't save
         }
       }
@@ -516,10 +531,22 @@ const ProjectEditor = () => {
           toast.error(`"${exp.title}" at ${exp.company} must have at least one bullet point`);
           return; // Don't save
         }
+      }
+    }
 
-        // Auto-fill end_date with "Present" if empty
-        if (!exp.end_date || !exp.end_date.trim()) {
-          exp.end_date = 'Present';
+    // Validation for education: Require degree and institution
+    if (editingSection === 'education' && Array.isArray(tempSectionData)) {
+      for (const edu of tempSectionData) {
+        // Check if degree is provided
+        if (!edu.degree || !edu.degree.trim()) {
+          toast.error('Degree is required for all education entries');
+          return; // Don't save
+        }
+
+        // Check if institution is provided
+        if (!edu.institution || !edu.institution.trim()) {
+          toast.error(`Institution is required for "${edu.degree}"`);
+          return; // Don't save
         }
       }
     }
@@ -540,6 +567,51 @@ const ProjectEditor = () => {
         const hasValidSkill = skills.some(s => s && s.trim().length > 0);
         if (!hasValidSkill) {
           toast.error(`Category "${category}" must have at least one skill. Please add a skill or remove the category.`);
+          return; // Don't save
+        }
+      }
+    }
+
+    // Validation for custom sections
+    if (editingSection.startsWith('custom_')) {
+      // Get the section type from tempSectionData
+      const sectionType = tempSectionData?.type;
+
+      if (sectionType === 'text') {
+        // Simple Text: Require non-empty content
+        if (!tempSectionData.content || !tempSectionData.content.trim()) {
+          toast.error('Text content cannot be empty. Please provide content or remove the section.');
+          return; // Don't save
+        }
+      } else if (sectionType === 'list') {
+        // List with Headers: Require at least one item with title and bullets
+        const items = tempSectionData.items || [];
+        if (items.length === 0) {
+          toast.error('List section must have at least one item. Please add an item or remove the section.');
+          return; // Don't save
+        }
+
+        for (const item of items) {
+          // Check if item has a title
+          if (!item.title || !item.title.trim()) {
+            toast.error('All items must have a title. Please provide a title or remove the item.');
+            return; // Don't save
+          }
+
+          // Check if item has at least one non-empty bullet
+          const bullets = item.bullets || [];
+          const hasValidBullet = bullets.some(b => b && b.trim().length > 0);
+          if (!hasValidBullet) {
+            toast.error(`Item "${item.title}" must have at least one bullet point. Please add details or remove the item.`);
+            return; // Don't save
+          }
+        }
+      } else if (sectionType === 'simple_list') {
+        // Simple Bullets: Require at least one non-empty item
+        const items = tempSectionData.items || [];
+        const hasValidItem = items.some(item => item && item.trim().length > 0);
+        if (!hasValidItem) {
+          toast.error('Simple list must have at least one item. Please add an item or remove the section.');
           return; // Don't save
         }
       }

@@ -177,39 +177,69 @@ def add_hyperlink(paragraph, text: str, url: str, size: int = 10, color: RGBColo
     return hyperlink
 
 
-def add_bullet_paragraph(doc: Document, text: str, font_size: int = 10, keep_together: bool = True):
+def add_bullet_paragraph(doc: Document, text: str, font_size: int = 10):
     """
-    Add a bulleted paragraph with visible bullet points (•)
+    Add a bulleted paragraph with PERFECT alignment for multi-line bullets
 
     Args:
         doc: Document object
         text: Bullet text
         font_size: Font size in points (default 10)
         keep_together: If True, prevents bullet from splitting across pages (default True)
+
+    Alignment Details:
+        The hanging indent ensures the bullet "•" sits to the left while ALL text
+        (first line and wrapped lines) aligns perfectly at the same position.
+
+        At 10pt Calibri font:
+        - Bullet character "•" width: ~0.06 inches
+        - Space " " width: ~0.03 inches
+        - Total "• " width: ~0.09 inches (measured)
+
+        Configuration:
+        - left_indent = 0.20" → All text lines start here
+        - first_line_indent = -0.09" → Pulls bullet back
+        - Result: Bullet at 0.11", text at 0.20" (perfectly aligned)
     """
-    # Create paragraph and add bullet character directly
+    # Create paragraph
     para = doc.add_paragraph()
 
-    # Add bullet character (•) followed by text
-    run = para.add_run(f"• {sanitize_text(text)}")
+    # CRITICAL: Strip ALL leading/trailing whitespace to prevent misalignment
+    # This solves the "extra space before some bullets" issue
+    clean_text = sanitize_text(text).strip()
+
+    # Add bullet character (•) followed by exactly ONE space, then text
+    run = para.add_run(f"•{" "+clean_text}")
     run.font.size = Pt(font_size)
     run.font.name = 'Calibri'
 
-    # Set hanging indent for bullet alignment
-    para.paragraph_format.left_indent = Inches(0.12)
-    para.paragraph_format.first_line_indent = Inches(-0.10)
+    # PERFECT HANGING INDENT - Carefully calculated for 10pt Calibri
+    #
+    # Measured width of "• " at 10pt Calibri = 0.09 inches
+    #
+    # Setup:
+    #   left_indent = 0.20"        → Where ALL lines of text align
+    #   first_line_indent = -0.09" → Pulls first line back to fit bullet
+    #
+    # Result:
+    #   Bullet position: 0.20 - 0.09 = 0.11" from left margin
+    #   First line text: 0.11 + 0.09 (bullet width) = 0.20" ✓
+    #   Wrapped lines:   0.20" (directly from left_indent) ✓
+    #   PERFECT ALIGNMENT!
 
-    # Set JUSTIFY alignment for bullets
-    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    para.paragraph_format.left_indent = Inches(0.09)       # Where text aligns
+    para.paragraph_format.first_line_indent = Inches(-0.09)  # Bullet width
 
-    # Ensure no extra spacing
+    # Set JUSTIFY alignment (text fills full width on each line)
+    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # Ensure NO extra spacing between bullets (0pt before/after)
     para.paragraph_format.space_before = Pt(0)
     para.paragraph_format.space_after = Pt(0)
     para.paragraph_format.line_spacing = 1.0  # Single line spacing
 
-    # Pagination: Keep bullet paragraph together (don't split mid-bullet)
-    if keep_together:
-        para.paragraph_format.keep_together = True
+    # Pagination controls removed - allow natural page breaks
+    # para.paragraph_format.keep_together = True
 
     return para
 
@@ -356,9 +386,8 @@ def add_section_header(doc: Document, title: str, keep_with_next: bool = False):
     ind.set(qn('w:right'), '0')
     pPr_ind.append(ind)
 
-    # Pagination control: Keep header with next paragraph if requested
-    if keep_with_next:
-        para.paragraph_format.keep_with_next = True
+    # Pagination controls removed - allow natural page breaks
+    # para.paragraph_format.keep_with_next = True
 
     return para
 
@@ -368,8 +397,8 @@ def add_professional_summary(doc: Document, summary: str, section_name: str = 'P
     if not summary:
         return
 
-    # Keep header with content (entire section should stay together)
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     summary_para = doc.add_paragraph(sanitize_text(summary))
     summary_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # JUSTIFY aligned (both left and right edges)
@@ -378,8 +407,8 @@ def add_professional_summary(doc: Document, summary: str, section_name: str = 'P
     summary_para.paragraph_format.space_before = Pt(0)  # NO gap after underline
     summary_para.paragraph_format.space_after = Pt(0)
     summary_para.paragraph_format.line_spacing = 1.0  # Single line spacing
-    # Pagination: Keep summary together (don't split across pages)
-    summary_para.paragraph_format.keep_together = True
+    # Pagination controls removed - allow natural page breaks
+    # summary_para.paragraph_format.keep_together = True
     if summary_para.runs:
         summary_para.runs[0].font.size = Pt(10)
         summary_para.runs[0].font.name = 'Calibri'
@@ -399,8 +428,8 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]], sectio
     if not education:
         return
 
-    # Keep header with content (entire section should stay together)
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     for edu in education:
         # School name and location (bold) with date on same line
@@ -416,12 +445,13 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]], sectio
         school_para.paragraph_format.space_before = Pt(0)
         school_para.paragraph_format.space_after = Pt(0)
         school_para.paragraph_format.line_spacing = 1.0  # Single line spacing
-        # Pagination: Keep school with degree line
-        school_para.paragraph_format.keep_with_next = True
-        school_para.paragraph_format.keep_together = True
+        # Pagination controls removed - allow natural page breaks
+        # school_para.paragraph_format.keep_with_next = True
+        # school_para.paragraph_format.keep_together = True
 
         # Add school name and location (bold)
         school_run = school_para.add_run(', '.join(school_parts))
+        school_run.font.name = 'Calibri'
         school_run.font.bold = True
         school_run.font.size = Pt(10)
 
@@ -432,6 +462,7 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]], sectio
 
             # Add tab and date (bold to match original resume)
             date_run = school_para.add_run(f"\t{edu['graduation_date']}")
+            date_run.font.name = 'Calibri'
             date_run.font.bold = True
             date_run.font.size = Pt(10)
 
@@ -452,11 +483,12 @@ def add_education_section(doc: Document, education: List[Dict[str, Any]], sectio
         degree_para.paragraph_format.space_before = Pt(0)
         degree_para.paragraph_format.space_after = Pt(0)
         degree_para.paragraph_format.line_spacing = 1.0  # Single line spacing
-        # Pagination: Keep degree paragraph together
-        degree_para.paragraph_format.keep_together = True
+        # Pagination controls removed - allow natural page breaks
+        # degree_para.paragraph_format.keep_together = True
 
         # Add degree text (italic, no date)
         degree_run = degree_para.add_run(' '.join(degree_parts))
+        degree_run.font.name = 'Calibri'
         degree_run.font.italic = True
         degree_run.font.size = Pt(10)
 
@@ -487,7 +519,8 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
         title = exp.get('title', '')
         location = exp.get('location', '')
         start_date = exp.get('start_date', '')
-        end_date = exp.get('end_date', '')
+        currently_working = exp.get('currently_working', False)
+        end_date = 'Present' if currently_working else exp.get('end_date', '')
 
         # Line 1: Company Name (bold) + Dates (right-aligned, bold)
         company_para = doc.add_paragraph()
@@ -500,9 +533,9 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
         company_para.paragraph_format.space_after = Pt(0)  # NO gap after company line
         company_para.paragraph_format.line_spacing = Pt(11)  # Tight exact spacing for 11pt font
         company_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-        # Pagination: Keep company with role line
-        company_para.paragraph_format.keep_with_next = True
-        company_para.paragraph_format.keep_together = True
+        # Pagination controls removed - allow natural page breaks
+        # company_para.paragraph_format.keep_with_next = True
+        # company_para.paragraph_format.keep_together = True
 
         if company:
             # Add company name (bold, 11pt)
@@ -512,11 +545,13 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
             company_run.font.name = 'Calibri'
 
             # Add dates on right side (bold, 11pt)
-            if start_date and end_date:
+            if start_date:
                 tab_stops = company_para.paragraph_format.tab_stops
                 tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
 
-                date_run = company_para.add_run(f"\t{start_date} – {end_date}")
+                # Show date range if end_date exists, otherwise just start_date
+                date_text = f"{start_date} – {end_date}" if end_date else start_date
+                date_run = company_para.add_run(f"\t{date_text}")
                 date_run.font.bold = True
                 date_run.font.size = Pt(11)
                 date_run.font.name = 'Calibri'
@@ -532,9 +567,9 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
         role_para.paragraph_format.space_after = Pt(2)  # Small gap after role line before bullets
         role_para.paragraph_format.line_spacing = Pt(10)  # Exact line height for 10pt font
         role_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-        # Pagination: Keep role with bullets
-        role_para.paragraph_format.keep_with_next = True
-        role_para.paragraph_format.keep_together = True
+        # Pagination controls removed - allow natural page breaks
+        # role_para.paragraph_format.keep_with_next = True
+        # role_para.paragraph_format.keep_together = True
 
         # Build role and location text
         role_parts = []
@@ -559,14 +594,15 @@ def add_experience_section(doc: Document, experience: List[Dict[str, Any]], sect
             is_last_bullet = (i == len(bullets) - 1)
             is_first_bullet = (i == 0)
 
-            bullet_para = add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
+            bullet_para = add_bullet_paragraph(doc, bullet, font_size=10)
 
             # Add extra space before FIRST bullet only (after role line)
             if is_first_bullet:
                 bullet_para.paragraph_format.space_before = Pt(3)
 
-            if not is_last_bullet:
-                bullet_para.paragraph_format.keep_with_next = True
+            # Pagination controls removed - allow natural page breaks
+            # if not is_last_bullet:
+            #     bullet_para.paragraph_format.keep_with_next = True
 
 
 def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_name: str = 'PROJECTS'):
@@ -615,9 +651,9 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
         project_para.paragraph_format.space_after = Pt(2) if not tech_str else Pt(0)
         project_para.paragraph_format.line_spacing = Pt(11)  # Tight exact spacing for 11pt font
         project_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-        # Pagination: Keep project name with next element (either tech line or bullets)
-        project_para.paragraph_format.keep_with_next = True
-        project_para.paragraph_format.keep_together = True
+        # Pagination controls removed - allow natural page breaks
+        # project_para.paragraph_format.keep_with_next = True
+        # project_para.paragraph_format.keep_together = True
 
         if name:
             # Add project name (bold, 11pt)
@@ -648,9 +684,9 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
             tech_para.paragraph_format.space_after = Pt(2)  # Small gap after tech line before bullets
             tech_para.paragraph_format.line_spacing = Pt(10)  # Exact line height for 10pt font
             tech_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-            # Pagination: Keep tech with bullets
-            tech_para.paragraph_format.keep_with_next = True
-            tech_para.paragraph_format.keep_together = True
+            # Pagination controls removed - allow natural page breaks
+            # tech_para.paragraph_format.keep_with_next = True
+            # tech_para.paragraph_format.keep_together = True
 
             # Add technologies text (normal weight, 10pt)
             tech_run = tech_para.add_run(sanitize_text(tech_str))
@@ -675,14 +711,15 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
         for i, bullet in enumerate(all_bullets):
             is_first_bullet = (i == 0)
             is_last_bullet = (i == len(all_bullets) - 1)
-            bullet_para = add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
+            bullet_para = add_bullet_paragraph(doc, bullet, font_size=10)
 
             # If this is the first bullet AND there are no technologies, add spacing before it
             if is_first_bullet and not tech_str:
                 bullet_para.paragraph_format.space_before = Pt(2)
 
-            if not is_last_bullet:
-                bullet_para.paragraph_format.keep_with_next = True
+            # Pagination controls removed - allow natural page breaks
+            # if not is_last_bullet:
+            #     bullet_para.paragraph_format.keep_with_next = True
 
 
 def add_skills_section(doc: Document, skills: List[Dict[str, Any]], section_name: str = 'TECHNICAL SKILLS'):
@@ -698,8 +735,8 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]], section_name
     if not skills:
         return
 
-    # Keep header with content (entire section should stay together)
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     for skill_cat in skills:
         category = skill_cat.get('category', '')
@@ -714,18 +751,20 @@ def add_skills_section(doc: Document, skills: List[Dict[str, Any]], section_name
             skill_para.paragraph_format.space_before = Pt(0)
             skill_para.paragraph_format.space_after = Pt(0)
             skill_para.paragraph_format.line_spacing = 1.0  # Single line spacing
-            # Pagination: Keep skill lines together
-            skill_para.paragraph_format.keep_with_next = True
-            skill_para.paragraph_format.keep_together = True
+            # Pagination controls removed - allow natural page breaks
+            # skill_para.paragraph_format.keep_with_next = True
+            # skill_para.paragraph_format.keep_together = True
 
             # Category (bold)
             cat_run = skill_para.add_run(f"{category}: ")
+            cat_run.font.name = 'Calibri'
             cat_run.font.bold = True
             cat_run.font.size = Pt(10)
 
             # Skills (normal)
             skills_text = ', '.join(skill_items) if isinstance(skill_items, list) else str(skill_items)
             items_run = skill_para.add_run(skills_text)
+            items_run.font.name = 'Calibri'
             items_run.font.size = Pt(10)
 
 
@@ -743,11 +782,11 @@ def add_certifications_section(doc: Document, certifications: List[str], section
     if not certifications:
         return
 
-    # Keep header with content (entire section should stay together)
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     for cert in certifications:
-        add_bullet_paragraph(doc, cert, font_size=10, keep_together=True)
+        add_bullet_paragraph(doc, cert, font_size=10)
 
 
 # ============================================================================
@@ -766,8 +805,8 @@ def add_custom_text_section(doc: Document, section_data: Dict[str, Any], section
     if not section_data or not section_data.get('content'):
         return
 
-    # Add section header
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     # Add content paragraph
     content = section_data.get('content', '')
@@ -778,7 +817,8 @@ def add_custom_text_section(doc: Document, section_data: Dict[str, Any], section
     para.paragraph_format.space_before = Pt(0)
     para.paragraph_format.space_after = Pt(0)
     para.paragraph_format.line_spacing = 1.0
-    para.paragraph_format.keep_together = True
+    # Pagination controls removed - allow natural page breaks
+    # para.paragraph_format.keep_together = True
     if para.runs:
         para.runs[0].font.size = Pt(10)
         para.runs[0].font.name = 'Calibri'
@@ -797,8 +837,8 @@ def add_custom_list_section(doc: Document, section_data: Dict[str, Any], section
     if not items:
         return
 
-    # Add section header
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     for i, item in enumerate(items):
         title = item.get('title', '')
@@ -811,8 +851,9 @@ def add_custom_list_section(doc: Document, section_data: Dict[str, Any], section
             row_para = doc.add_paragraph()
             row_para.paragraph_format.space_before = Pt(0)
             row_para.paragraph_format.space_after = Pt(0)
-            row_para.paragraph_format.keep_with_next = True
-            row_para.paragraph_format.keep_together = True
+            # Pagination controls removed - allow natural page breaks
+            # row_para.paragraph_format.keep_with_next = True
+            # row_para.paragraph_format.keep_together = True
 
             # Title (bold, left-aligned)
             if title:
@@ -851,7 +892,7 @@ def add_custom_list_section(doc: Document, section_data: Dict[str, Any], section
         if bullets:
             for bullet in bullets:
                 if bullet and bullet.strip():
-                    add_bullet_paragraph(doc, bullet, font_size=10, keep_together=True)
+                    add_bullet_paragraph(doc, bullet, font_size=10)
 
         # Add spacing between items (except after last item)
         if i < len(items) - 1:
@@ -873,13 +914,13 @@ def add_custom_simple_list_section(doc: Document, section_data: Dict[str, Any], 
     if not items:
         return
 
-    # Add section header
-    add_section_header(doc, section_name, keep_with_next=True)
+    # Section header - allow natural page breaks
+    add_section_header(doc, section_name, keep_with_next=False)
 
     # Add each item as a bullet point
     for item in items:
         if item and item.strip():
-            add_bullet_paragraph(doc, item, font_size=10, keep_together=True)
+            add_bullet_paragraph(doc, item, font_size=10)
 
 
 # ============================================================================

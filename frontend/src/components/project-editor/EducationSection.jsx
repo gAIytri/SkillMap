@@ -89,7 +89,13 @@ const EducationSection = ({
                         <TextField
                           label="GPA"
                           value={edu.gpa || ''}
-                          onChange={(e) => updateTempField(idx, 'gpa', e.target.value)}
+                               onChange={(e) => {
+                            // Only allow numbers
+                            const value = e.target.value;
+                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                              updateTempField(idx, 'gpa', value);
+                            }
+                          }}
                           fullWidth
                           variant="standard"
                           InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen }, shrink: true }}

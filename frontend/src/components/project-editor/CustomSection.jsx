@@ -258,27 +258,29 @@ const CustomSection = ({
             position: 'relative'
           }}
         >
-          {/* Delete button */}
-          <IconButton
-            size="small"
-            onClick={() => {
-              const newItems = [...tempData.items];
-              newItems.splice(idx, 1);
-              updateTempField(null, 'items', newItems);
-            }}
-            sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              color: '#e74c3c',
-              bgcolor: 'rgba(0, 0, 0, 0.2)',
-              '&:hover': {
-                bgcolor: 'rgba(231, 76, 60, 0.2)'
-              }
-            }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {/* Delete button - only show if more than 1 item */}
+          {tempData.items.length > 1 && (
+            <IconButton
+              size="small"
+              onClick={() => {
+                const newItems = [...tempData.items];
+                newItems.splice(idx, 1);
+                updateTempField(null, 'items', newItems);
+              }}
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                color: '#e74c3c',
+                bgcolor: 'rgba(0, 0, 0, 0.2)',
+                '&:hover': {
+                  bgcolor: 'rgba(231, 76, 60, 0.2)'
+                }
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
 
           <TextField
             label={`Item ${idx + 1}`}
@@ -293,7 +295,7 @@ const CustomSection = ({
             InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
             InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' } }}
             sx={{
-              pr: 5,
+              pr: tempData.items.length > 1 ? 5 : 0,
               '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
               '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
             }}

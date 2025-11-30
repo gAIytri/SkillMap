@@ -184,13 +184,13 @@ const ProjectsSection = ({
                           variant="standard"
                           slotProps={{
                             input: {
-                              style: { color: '#fff', fontSize: isMobile ? '14px' : '13px', width: '100%' }
+                              style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' }
                             }
                           }}
                           sx={{
                             flex: 1,
                             minWidth: 0,
-                            maxWidth: 'calc(100% - 48px)',
+                            maxWidth: '100%',
                             '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
                             '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
                           }}

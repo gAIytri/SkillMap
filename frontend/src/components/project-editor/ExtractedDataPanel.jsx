@@ -45,7 +45,7 @@ const ExtractedDataPanel = ({
             left: 0,
             right: 0,
             bottom: 0,
-            bgcolor: 'rgba(0, 0, 0, 0.5)',
+            bgcolor: '#f4f4f4',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -63,11 +63,11 @@ const ExtractedDataPanel = ({
           <Typography
             variant="body2"
             sx={{
-              color: '#fff',
+              color: 'Black',
               fontWeight: 600
             }}
           >
-            Loading version history...
+            Updating Changes...
           </Typography>
         </Box>
       )}
