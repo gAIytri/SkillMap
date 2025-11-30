@@ -209,7 +209,7 @@ def add_bullet_paragraph(doc: Document, text: str, font_size: int = 10):
     clean_text = sanitize_text(text).strip()
 
     # Add bullet character (•) followed by exactly ONE space, then text
-    run = para.add_run(f"•{" "+clean_text}")
+    run = para.add_run(f"• {clean_text}")
     run.font.size = Pt(font_size)
     run.font.name = 'Calibri'
 
