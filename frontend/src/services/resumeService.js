@@ -57,6 +57,11 @@ const resumeService = {
             try {
               const data = JSON.parse(line.slice(6));
 
+              // Handle errors FIRST before calling onMessage
+              if (data.type === 'error') {
+                throw new Error(data.message || 'Upload failed');
+              }
+
               // Call onMessage callback for each update
               if (onMessage) {
                 onMessage(data);
@@ -66,15 +71,12 @@ const resumeService = {
               if (data.type === 'final') {
                 finalResult = data;
               }
-
-              // Handle errors
-              if (data.type === 'error') {
-                throw new Error(data.message || 'Upload failed');
-              }
             } catch (e) {
-              if (e.message.includes('Upload failed')) {
+              // Re-throw all errors (including validation errors)
+              if (e instanceof Error) {
                 throw e;
               }
+              // Only log JSON parse errors
               console.error('Failed to parse SSE message:', e);
             }
           }

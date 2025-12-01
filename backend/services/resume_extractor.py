@@ -15,6 +15,7 @@ import docx2txt
 from pdf2image import convert_from_bytes
 import pytesseract
 from PIL import Image
+import json
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -348,6 +349,83 @@ class ResumeExtractor:
             logger.error(f"OCR extraction failed: {e}")
             raise Exception(f"OCR extraction failed: {str(e)}")
 
+    def _validate_is_resume(self, text: str) -> tuple[bool, str]:
+        """
+        Validate if extracted text is actually a resume/CV
+
+        Uses GPT-4o-mini for fast, cheap validation before expensive structured parsing.
+
+        Args:
+            text: Extracted text from document
+
+        Returns:
+            (is_valid, reason) - Boolean and explanation string
+        """
+        logger.info("Validating document is a resume...")
+
+        # Only analyze first 3000 characters for speed and cost
+        text_sample = text[:3000]
+
+        prompt = f"""You are a document classifier. Determine if the following text is a RESUME/CV.
+
+A valid resume typically contains:
+- Personal/contact information (name, email, phone, or location)
+- Work experience OR education
+- Skills OR qualifications
+
+INVALID documents (reject these):
+- Cover letters (focus on job application, not qualifications)
+- Job descriptions or job postings
+- Random documents, essays, articles, books
+- Marketing materials, brochures, advertisements
+- Blank or gibberish content
+- Forms, templates, invoices, or receipts
+- Code files, logs, or technical documentation
+
+Analyze this text and respond in JSON format:
+{{
+    "is_resume": true/false,
+    "reason": "brief explanation (1-2 sentences)",
+    "confidence": "high/medium/low"
+}}
+
+TEXT TO ANALYZE:
+{text_sample}
+"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",  # Cheaper + faster for validation (~$0.0001 per call)
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a document classifier that validates if a document is a resume/CV. Be strict but fair."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                max_tokens=200
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            is_resume = result.get("is_resume", False)
+            reason = result.get("reason", "Unknown reason")
+            confidence = result.get("confidence", "low")
+
+            logger.info(f"Validation result: is_resume={is_resume}, confidence={confidence}, reason={reason}")
+
+            return is_resume, reason
+
+        except Exception as e:
+            logger.error(f"Resume validation failed: {e}")
+            # On error, fail open (allow upload to proceed)
+            # Better to allow a few false positives than block legitimate resumes
+            return True, "Validation check encountered an error, allowing upload"
+
     def _clean_extracted_data(self, data: dict) -> dict:
         """
         Post-process extracted data to remove duplicates and clean up
@@ -526,6 +604,17 @@ RESUME:
                     )
 
             send_status(f"Successfully extracted {len(extracted_text)} characters")
+
+            # Step 3.5: Validate document is actually a resume
+            send_status("Validating document is a resume...")
+            is_valid, reason = self._validate_is_resume(extracted_text)
+
+            if not is_valid:
+                error_msg = f"Document validation failed: {reason}"
+                logger.warning(error_msg)
+                raise ValueError("Please upload a Valid resume")
+
+            send_status("Document validated as resume ✓")
 
             # Step 4: Parse with LLM
             send_status("Analyzing resume content with AI...")
