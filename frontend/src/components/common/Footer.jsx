@@ -27,7 +27,7 @@ const Footer = ({ scrollToTop, setAuthMode }) => {
         sx={{
           position: 'absolute',
           top: { xs: 10, md: 20 },
-          right: { xs: 20, md: 400 },
+          right: { xs: 20, md: 40 },
           bgcolor: colorPalette.primary.darkGreen,
           color: '#fff',
           border: `2px solid ${colorPalette.primary.brightGreen}`,

@@ -90,3 +90,9 @@ coverage.xml
 # Generated files
 backend/generated_pdfs/
 backend/generated_docx/
+
+# Cloud environment files with secrets
+backend/.env.cloud-run.yaml
+
+# Documentation with credentials
+GOOGLE_OAUTH_SETUP.md
