@@ -71,9 +71,12 @@ const CustomSection = ({
               top: 8,
               right: 8,
               color: '#e74c3c',
-              bgcolor: 'rgba(0, 0, 0, 0.2)',
+              bgcolor: 'rgba(0, 0, 0, 0.3)',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s ease, color 0.2s ease',
               '&:hover': {
-                bgcolor: 'rgba(231, 76, 60, 0.2)'
+                bgcolor: 'rgba(231, 76, 60, 0.5)',
+                color: '#ff6b6b',
               }
             }}
           >
@@ -163,10 +166,8 @@ const CustomSection = ({
                       }}
                       sx={{
                         color: '#e74c3c',
-                        bgcolor: 'rgba(0, 0, 0, 0.2)',
-                        mt: 0.5,
                         '&:hover': {
-                          bgcolor: 'rgba(231, 76, 60, 0.2)'
+                          color: '#ff6b6b',
                         }
                       }}
                     >
@@ -250,38 +251,12 @@ const CustomSection = ({
         <Box
           key={idx}
           sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 1,
             mb: 2,
-            p: 2,
-            borderRadius: '8px',
-            bgcolor: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            position: 'relative'
           }}
         >
-          {/* Delete button - only show if more than 1 item */}
-          {tempData.items.length > 1 && (
-            <IconButton
-              size="small"
-              onClick={() => {
-                const newItems = [...tempData.items];
-                newItems.splice(idx, 1);
-                updateTempField(null, 'items', newItems);
-              }}
-              sx={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                color: '#e74c3c',
-                bgcolor: 'rgba(0, 0, 0, 0.2)',
-                '&:hover': {
-                  bgcolor: 'rgba(231, 76, 60, 0.2)'
-                }
-              }}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          )}
-
           <TextField
             label={`Item ${idx + 1}`}
             value={item}
@@ -295,11 +270,30 @@ const CustomSection = ({
             InputLabelProps={{ style: { color: colorPalette.secondary.mediumGreen } }}
             InputProps={{ style: { color: '#fff', fontSize: isMobile ? '14px' : '13px' } }}
             sx={{
-              pr: tempData.items.length > 1 ? 5 : 0,
               '& .MuiInput-underline:before': { borderBottomColor: colorPalette.secondary.mediumGreen },
               '& .MuiInput-underline:after': { borderBottomColor: '#fff' }
             }}
           />
+          {/* Delete button - only show if more than 1 item */}
+          {tempData.items.length > 1 && (
+            <IconButton
+              size="small"
+              onClick={() => {
+                const newItems = [...tempData.items];
+                newItems.splice(idx, 1);
+                updateTempField(null, 'items', newItems);
+              }}
+              sx={{
+                color: '#e74c3c',
+                mt: 2,
+                '&:hover': {
+                  color: '#ff6b6b',
+                }
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       ))}
       <Button

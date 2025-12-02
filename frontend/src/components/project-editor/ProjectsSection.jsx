@@ -1,8 +1,110 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress, Card, CardContent } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { colorPalette } from '../../styles/theme';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Sortable Project Card Component
+const SortableProjectCard = ({ proj, idx, isMobile, showDragHandle = true }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `proj-${idx}`, disabled: !showDragHandle });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  // Get bullets from either bullets array or description string
+  let displayBullets = [];
+  if (proj.bullets && Array.isArray(proj.bullets) && proj.bullets.length > 0) {
+    displayBullets = proj.bullets;
+  } else if (proj.description && typeof proj.description === 'string') {
+    displayBullets = proj.description.split('\n').filter(b => b.trim());
+  }
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      sx={{
+        mb: 2,
+        bgcolor: 'rgba(255, 255, 255, 0.08)',
+        border: '1px solid rgba(255, 255, 255, 0.15)',
+        cursor: isDragging ? 'grabbing' : 'default',
+      }}
+    >
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        {/* Title row with drag handle on the right */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff', flex: 1 }}>
+            {proj.name}
+          </Typography>
+          {/* Drag Handle - only show for current version */}
+          {showDragHandle && (
+            <IconButton
+              {...attributes}
+              {...listeners}
+              size="small"
+              sx={{
+                cursor: 'grab',
+                color: colorPalette.secondary.mediumGreen,
+                ml: 1,
+                '&:active': { cursor: 'grabbing' },
+              }}
+            >
+              <DragIndicatorIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+
+        {/* Rest of the content */}
+        {(proj.start_date || proj.end_date) && (
+          <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen, display: 'block' }}>
+            {proj.start_date} - {proj.end_date}
+          </Typography>
+        )}
+        {proj.technologies && proj.technologies.length > 0 && (
+          <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen, display: 'block' }}>
+            Technologies: {proj.technologies.join(', ')}
+          </Typography>
+        )}
+        {displayBullets.length > 0 && (
+          <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+            {displayBullets.map((bullet, bidx) => (
+              <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px', textAlign: 'justify' }}>
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const ProjectsSection = ({
   sectionKey,
@@ -14,13 +116,45 @@ const ProjectsSection = ({
   currentVersion,      // NEW: version number (e.g., 0, 1, 2)
   onRestoreVersion,    // NEW: (versionNumber) => void
   onViewingVersionChange,  // NEW: callback to notify parent of version change
-  restoringVersion = false  // NEW: loading state for version restoration
+  restoringVersion = false,  // NEW: loading state for version restoration
+  onReorder,            // NEW: callback when items are reordered
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Track which version is being viewed (always a number)
   const [viewingVersion, setViewingVersion] = useState(currentVersion);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end for reordering
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    // Only allow reordering for current version
+    if (viewingVersion !== currentVersion) {
+      return;
+    }
+
+    if (over && active.id !== over.id) {
+      const oldIndex = parseInt(active.id.split('-')[1]);
+      const newIndex = parseInt(over.id.split('-')[1]);
+
+      // Use data (which is the current version data)
+      const newData = arrayMove(data, oldIndex, newIndex);
+
+      // Call onReorder callback to update parent and mark as edited
+      if (onReorder) {
+        onReorder(newData);
+      }
+    }
+  };
 
   // Auto-switch to latest version when currentVersion updates (after tailoring)
   useEffect(() => {
@@ -259,43 +393,28 @@ const ProjectsSection = ({
         </>
       );
     } else {
-      // VIEW MODE
+      // VIEW MODE - Always show cards, drag handles only for current version
       return (
-        <>
-          {projectsData.map((proj, idx) => {
-            // Get bullets from either bullets array or description string
-            let displayBullets = [];
-            if (proj.bullets && Array.isArray(proj.bullets) && proj.bullets.length > 0) {
-              displayBullets = proj.bullets;
-            } else if (proj.description && typeof proj.description === 'string') {
-              displayBullets = proj.description.split('\n').filter(b => b.trim());
-            }
-
-            return (
-              <Box key={idx} sx={{ mb: 2.5, fontSize: isMobile ? '14px' : '13px' }}>
-                <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff' }}>{proj.name}</Typography>
-                {(proj.start_date || proj.end_date) && (
-                  <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen, display: 'block' }}>
-                    {proj.start_date} {proj.start_date && proj.end_date && '-'} {proj.end_date}
-                  </Typography>
-                )}
-                {/* Display bullet points */}
-                {displayBullets.length > 0 && (
-                  <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                    {displayBullets.map((bullet, bidx) => (
-                      <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px', textAlign: 'justify' }}>{bullet}</li>
-                    ))}
-                  </ul>
-                )}
-                {proj.technologies && (Array.isArray(proj.technologies) ? proj.technologies.length > 0 : proj.technologies.trim().length > 0) && (
-                  <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', mt: 0.5, fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen }}>
-                    Tech: {Array.isArray(proj.technologies) ? proj.technologies.join(', ') : proj.technologies}
-                  </Typography>
-                )}
-              </Box>
-            );
-          })}
-        </>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={projectsData.map((_, idx) => `proj-${idx}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            {projectsData.map((proj, idx) => (
+              <SortableProjectCard
+                key={`proj-${idx}`}
+                proj={proj}
+                idx={idx}
+                isMobile={isMobile}
+                showDragHandle={canEdit}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       );
     }
   };
@@ -318,8 +437,8 @@ const ProjectsSection = ({
     <Box>
       {/* Info Label */}
       <Box >
-        <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-          Click version number to view. Use "Make This Current" to restore.
+        <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontWeight:'bold'}}>
+          Click version number to view. Use " Make This Current " to restore.
         </Typography>
       </Box>
 

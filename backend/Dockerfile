@@ -27,8 +27,9 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p uploads generated_pdfs
 
-# Expose port
-EXPOSE 8000
+# Expose port (Cloud Run will override this with $PORT)
+EXPOSE 8080
 
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Cloud Run sets PORT environment variable, default to 8080 if not set
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}

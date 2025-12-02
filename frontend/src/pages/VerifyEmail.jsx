@@ -55,6 +55,38 @@ const VerifyEmail = () => {
     }
   }, [resendCooldown]);
 
+  // Poll for verification status (for cross-device verification)
+  useEffect(() => {
+    if (!email || token) return; // Don't poll if no email or using magic link
+
+    const checkVerificationStatus = async () => {
+      try {
+        const response = await api.get(`/api/auth/check-verification-status/${encodeURIComponent(email)}`);
+        if (response.data.email_verified) {
+          // User verified on another device - redirect
+          const existingUser = JSON.parse(localStorage.getItem('user') || '{}');
+          const updatedUser = {
+            ...existingUser,
+            email_verified: true,
+          };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+
+          toast.success('Email verified successfully! 🎉');
+          window.location.href = updatedUser.base_resume_id ? '/dashboard' : '/upload-resume';
+        }
+      } catch (err) {
+        // Silently fail - user may not exist yet or API error
+        console.error('Error checking verification status:', err);
+      }
+    };
+
+    // Poll every 3 seconds
+    const pollInterval = setInterval(checkVerificationStatus, 3000);
+
+    // Cleanup on unmount
+    return () => clearInterval(pollInterval);
+  }, [email, token]);
+
   const verifyWithMagicLink = async () => {
     setLoading(true);
     try {

@@ -283,3 +283,126 @@ def send_welcome_email(email: str, full_name: str) -> bool:
     except Exception as e:
         print(f"❌ Failed to send welcome email to {email}: {str(e)}")
         return False
+
+
+def send_password_reset_email(email: str, full_name: str, reset_code: str) -> bool:
+    """
+    Send password reset email with 6-digit code
+
+    Args:
+        email: Recipient email address
+        full_name: User's full name
+        reset_code: 6-digit reset code
+
+    Returns:
+        bool: True if email sent successfully, False otherwise
+    """
+    try:
+        # HTML email template
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Reset Your Password - SkillMap</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+                <tr>
+                    <td align="center">
+                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); overflow: hidden;">
+
+                            <!-- Header with gradient -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, #C8E6DC 0%, #F5F5F5 100%); padding: 40px 40px 30px 40px; text-align: center;">
+                                    <h1 style="margin: 0; color: #072D1F; font-size: 32px; font-weight: 700;">SkillMap</h1>
+                                    <p style="margin: 10px 0 0 0; color: #29B770; font-size: 16px; font-weight: 600;">AI-Powered Resume Tailoring</p>
+                                </td>
+                            </tr>
+
+                            <!-- Main content -->
+                            <tr>
+                                <td style="padding: 40px;">
+                                    <h2 style="margin: 0 0 20px 0; color: #072D1F; font-size: 24px; font-weight: 600;">Password Reset Request</h2>
+
+                                    <p style="margin: 0 0 25px 0; color: #333333; font-size: 16px; line-height: 1.6;">
+                                        Hi {full_name}, we received a request to reset your password. Use the code below to reset it:
+                                    </p>
+
+                                    <!-- Reset code box -->
+                                    <div style="background: linear-gradient(135deg, #072D1F 0%, #29B770 100%); border-radius: 8px; padding: 30px; text-align: center; margin: 30px 0;">
+                                        <p style="margin: 0 0 10px 0; color: #FFFFFF; font-size: 14px; font-weight: 600; letter-spacing: 0.5px;">YOUR RESET CODE</p>
+                                        <p style="margin: 0; color: #FFFFFF; font-size: 42px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">{reset_code}</p>
+                                        <p style="margin: 15px 0 0 0; color: #C8E6DC; font-size: 13px;">Expires in 10 minutes</p>
+                                    </div>
+
+                                    <!-- Security notice -->
+                                    <div style="background-color: #FFF9E6; border-left: 4px solid #FFB800; padding: 15px; margin: 30px 0; border-radius: 4px;">
+                                        <p style="margin: 0; color: #333333; font-size: 14px; line-height: 1.6;">
+                                            <strong>🔒 Security Tip:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+                                        </p>
+                                    </div>
+
+                                    <!-- Help text -->
+                                    <p style="margin: 30px 0 0 0; color: #666666; font-size: 14px; line-height: 1.6;">
+                                        Need help? Contact us at <a href="mailto:admin@gaiytri.com" style="color: #29B770; text-decoration: none;">admin@gaiytri.com</a>
+                                    </p>
+                                </td>
+                            </tr>
+
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background-color: #F9F9F9; padding: 30px 40px; text-align: center; border-top: 1px solid #E0E0E0;">
+                                    <p style="margin: 0 0 10px 0; color: #999999; font-size: 13px;">
+                                        © {datetime.now().year} SkillMap. All rights reserved.
+                                    </p>
+                                    <p style="margin: 0; color: #BBBBBB; font-size: 12px;">
+                                        This email was sent to {email}
+                                    </p>
+                                </td>
+                            </tr>
+
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+
+        # Plain text fallback
+        text_content = f"""
+        Password Reset Request - SkillMap
+
+        Hi {full_name},
+
+        We received a request to reset your password.
+
+        Your password reset code is: {reset_code}
+
+        This code expires in 10 minutes.
+
+        If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+
+        Need help? Contact us at admin@gaiytri.com
+
+        © {datetime.now().year} SkillMap. All rights reserved.
+        """
+
+        # Send email via Resend
+        params = {
+            "from": FROM_EMAIL,
+            "to": [email],
+            "subject": "Reset your password - SkillMap",
+            "html": html_content,
+            "text": text_content,
+        }
+
+        response = resend.Emails.send(params)
+        print(f"✅ Password reset email sent to {email} (ID: {response.get('id')})")
+        return True
+
+    except Exception as e:
+        print(f"❌ Failed to send password reset email to {email}: {str(e)}")
+        return False

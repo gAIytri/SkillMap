@@ -223,9 +223,43 @@ const ProjectEditor = () => {
 
       // Load email if exists
       if (projectData.email_body_text) {
+        // Parse email to extract subject and body
+        const emailText = projectData.email_body_text;
+        let emailSubject = 'Application'; // Fallback
+        let emailBody = emailText;
+
+        // Try new format first: SUBJECT_LINE: and EMAIL_BODY:
+        if (emailText && emailText.includes('SUBJECT_LINE:') && emailText.includes('EMAIL_BODY:')) {
+          try {
+            const parts = emailText.split('EMAIL_BODY:', 2);
+            if (parts.length === 2) {
+              // Extract subject
+              const subjectPart = parts[0].trim();
+              emailSubject = subjectPart.replace('SUBJECT_LINE:', '').trim();
+              // Extract body
+              emailBody = parts[1].trim();
+            }
+          } catch (e) {
+            console.warn('Failed to parse new email format:', e);
+          }
+        } else if (emailText && emailText.substring(0, 100).includes('Subject:')) {
+          // Fallback to old format
+          const parts = emailText.split('\n\n', 2);
+          if (parts.length >= 2 && parts[0].includes('Subject:')) {
+            emailSubject = parts[0].replace('Subject:', '').trim();
+            emailBody = parts[1].trim();
+          } else {
+            const lines = emailText.split('\n', 2);
+            if (lines.length === 2 && lines[0].includes('Subject:')) {
+              emailSubject = lines[0].replace('Subject:', '').trim();
+              emailBody = lines[1].trim();
+            }
+          }
+        }
+
         setEmail({
-          subject: `Application for ${projectData.job_description?.split('\n')[0] || 'Position'}`,
-          body: projectData.email_body_text
+          subject: emailSubject,
+          body: emailBody
         });
         console.log('✓ Email loaded from project');
       }
@@ -718,6 +752,32 @@ const ProjectEditor = () => {
     }
   };
 
+  // Handle reordering of experience items
+  const handleReorderExperience = (newData) => {
+    // Update extracted data
+    setExtractedData(prev => ({
+      ...prev,
+      experience: newData
+    }));
+
+    // Mark as having pending changes
+    setPendingChanges(true);
+    toast.success('Experience reordered. Click "Compile" to see changes in PDF.');
+  };
+
+  // Handle reordering of project items
+  const handleReorderProjects = (newData) => {
+    // Update extracted data
+    setExtractedData(prev => ({
+      ...prev,
+      projects: newData
+    }));
+
+    // Mark as having pending changes
+    setPendingChanges(true);
+    toast.success('Projects reordered. Click "Compile" to see changes in PDF.');
+  };
+
   // Handle replace resume with confirmation
   const handleReplaceConfirm = async () => {
     try {
@@ -1184,6 +1244,7 @@ const ProjectEditor = () => {
               setViewingVersions(prev => ({ ...prev, experience: versionNumber }));
             }}
             restoringVersion={restoringVersion}
+            onReorder={handleReorderExperience}
           />
         );
 
@@ -1202,6 +1263,7 @@ const ProjectEditor = () => {
               setViewingVersions(prev => ({ ...prev, projects: versionNumber }));
             }}
             restoringVersion={restoringVersion}
+            onReorder={handleReorderProjects}
           />
         );
 

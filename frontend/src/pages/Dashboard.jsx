@@ -191,7 +191,7 @@ const Dashboard = () => {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ py: isMobile ? 2 : 4, px: isMobile ? 2 : 3 }}>
+    <Container maxWidth={false} sx={{ py: isMobile ? 2 : 4, px: isMobile ? 2 : 3, maxWidth: '100%' }}>
       {/* Header */}
       <Box
         display="flex"

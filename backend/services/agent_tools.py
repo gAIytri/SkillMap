@@ -1122,9 +1122,13 @@ REQUIREMENTS:
 9. Make it feel personalized and thoughtful, not generic
 10. CRITICAL: DO NOT use hyphens (-), em dashes (—), or en dashes (–) anywhere in the text. Use spaces or commas instead.
 
-STRUCTURE:
-Subject: [Create compelling, specific subject line mentioning role and key qualification]
+OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
+Return the output in this exact format with clear separators:
 
+SUBJECT_LINE:
+[Write only the subject line here - no "Subject:" prefix, just the actual subject text]
+
+EMAIL_BODY:
 Dear Hiring Manager,
 
 [Opening - mention application submission and express enthusiasm for role]
@@ -1139,9 +1143,11 @@ Dear Hiring Manager,
 Best regards,
 [Name]
 
-IMPORTANT FORMAT:
-- Start the body directly with "Dear Hiring Manager," - do NOT include "Body:" label
-- Only include "Subject:" label before the subject line
+CRITICAL FORMATTING RULES:
+- Use "SUBJECT_LINE:" as the header (not "Subject:")
+- Use "EMAIL_BODY:" as the header (not "Body:")
+- Subject line should be compelling and specific (e.g., "Application for Software Engineer | 5+ Years Python Experience")
+- Email body starts with "Dear Hiring Manager," immediately after "EMAIL_BODY:"
 
 TONE: Professional, confident, specific, genuine, and enthusiastic."""
 
@@ -1188,21 +1194,35 @@ Generate the email with subject line and body now:"""
         }
         logger.info(f"generate_recruiter_email token usage (gpt-4o-mini): {token_usage}")
 
-        # Parse subject and body
-        subject = f"Application for {job_title} Position"
+        # Parse subject and body using new format
+        subject = f"Application for {job_title}"  # Fallback
         body = email_text
 
-        # Try to extract subject if present
-        if "Subject:" in email_text or "SUBJECT:" in email_text:
-            parts = email_text.split('\n\n', 1)
-            if len(parts) == 2:
-                subject_line = parts[0].strip()
-                # Remove "Subject:" prefix
-                subject = subject_line.replace('Subject:', '').replace('SUBJECT:', '').strip()
-                body = parts[1].strip()
-                # Remove "Body:" prefix if present
-                if body.startswith('Body:') or body.startswith('BODY:'):
-                    body = body.replace('Body:', '', 1).replace('BODY:', '', 1).strip()
+        # Try to extract using SUBJECT_LINE: and EMAIL_BODY: format
+        if "SUBJECT_LINE:" in email_text and "EMAIL_BODY:" in email_text:
+            try:
+                # Split by EMAIL_BODY: first
+                parts = email_text.split("EMAIL_BODY:", 1)
+                if len(parts) == 2:
+                    # Extract subject from the first part
+                    subject_part = parts[0].strip()
+                    subject = subject_part.replace("SUBJECT_LINE:", "").strip()
+                    # Extract body from second part
+                    body = parts[1].strip()
+                    logger.info(f"Successfully parsed email - Subject: {subject[:50]}...")
+            except Exception as e:
+                logger.warning(f"Failed to parse new format, using fallback: {e}")
+        else:
+            # Fallback to old format parsing
+            logger.warning("Email not in expected format (SUBJECT_LINE:/EMAIL_BODY:), attempting old format parsing")
+            if "Subject:" in email_text or "SUBJECT:" in email_text:
+                parts = email_text.split('\n\n', 1)
+                if len(parts) == 2:
+                    subject_line = parts[0].strip()
+                    subject = subject_line.replace('Subject:', '').replace('SUBJECT:', '').strip()
+                    body = parts[1].strip()
+                    if body.startswith('Body:') or body.startswith('BODY:'):
+                        body = body.replace('Body:', '', 1).replace('BODY:', '', 1).strip()
 
         logger.info("Recruiter email generated successfully")
 

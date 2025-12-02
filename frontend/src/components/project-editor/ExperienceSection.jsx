@@ -1,8 +1,96 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress, Checkbox, FormControlLabel } from '@mui/material';
+import { Box, Typography, Paper, TextField, useTheme, useMediaQuery, IconButton, Button, Chip, CircularProgress, Checkbox, FormControlLabel, Card, CardContent } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { colorPalette } from '../../styles/theme';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Sortable Experience Card Component
+const SortableExperienceCard = ({ exp, idx, isMobile, showDragHandle = true }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `exp-${idx}`, disabled: !showDragHandle });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      sx={{
+        mb: 2,
+        bgcolor: 'rgba(255, 255, 255, 0.08)',
+        border: '1px solid rgba(255, 255, 255, 0.15)',
+        cursor: isDragging ? 'grabbing' : 'default',
+      }}
+    >
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        {/* Title row with drag handle on the right */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff', flex: 1 }}>
+            {exp.title} at {exp.company}
+          </Typography>
+          {/* Drag Handle - only show for current version */}
+          {showDragHandle && (
+            <IconButton
+              {...attributes}
+              {...listeners}
+              size="small"
+              sx={{
+                cursor: 'grab',
+                color: colorPalette.secondary.mediumGreen,
+                ml: 1,
+                '&:active': { cursor: 'grabbing' },
+              }}
+            >
+              <DragIndicatorIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+
+        {/* Rest of the content */}
+        <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen, display: 'block' }}>
+          {exp.start_date}{exp.end_date ? ` - ${exp.end_date}` : ''}
+          {exp.location && ` | ${exp.location}`}
+        </Typography>
+        {exp.bullets && exp.bullets.length > 0 && (
+          <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+            {exp.bullets.map((bullet, bidx) => (
+              <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px', textAlign: 'justify' }}>
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const ExperienceSection = ({
   sectionKey,
@@ -14,13 +102,45 @@ const ExperienceSection = ({
   currentVersion,      // NEW: version number (e.g., 0, 1, 2)
   onRestoreVersion,    // NEW: (versionNumber) => void
   onViewingVersionChange,  // NEW: callback to notify parent of version change
-  restoringVersion = false  // NEW: loading state for version restoration
+  restoringVersion = false,  // NEW: loading state for version restoration
+  onReorder,            // NEW: callback when items are reordered
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Track which version is being viewed (always a number)
   const [viewingVersion, setViewingVersion] = useState(currentVersion);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end for reordering
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    // Only allow reordering for current version
+    if (viewingVersion !== currentVersion) {
+      return;
+    }
+
+    if (over && active.id !== over.id) {
+      const oldIndex = parseInt(active.id.split('-')[1]);
+      const newIndex = parseInt(over.id.split('-')[1]);
+
+      // Use data (which is the current version data)
+      const newData = arrayMove(data, oldIndex, newIndex);
+
+      // Call onReorder callback to update parent and mark as edited
+      if (onReorder) {
+        onReorder(newData);
+      }
+    }
+  };
 
   // Auto-switch to latest version when currentVersion updates (after tailoring)
   useEffect(() => {
@@ -187,7 +307,12 @@ const ExperienceSection = ({
                           />
                         }
                         label="Currently working here"
-                        sx={{ color: '#fff', mb: 1 }}
+                        slotProps={{
+                          typography: {
+                            sx: { color: '#fff !important' }
+                          }
+                        }}
+                        sx={{ mb: 1 }}
                       />
                       <TextField
                         label="Location"
@@ -278,25 +403,21 @@ const ExperienceSection = ({
                 </Button>
               </>
             ) : (
-              // VIEW MODE
-              data.map((exp, idx) => (
-                <Box key={idx} sx={{ mb: 2.5, fontSize: isMobile ? '14px' : '13px' }}>
-                  <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff' }}>
-                    {exp.title} at {exp.company}
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen }}>
-                    {exp.start_date} - {exp.end_date}
-                    {exp.location && ` | ${exp.location}`}
-                  </Typography>
-                  {exp.bullets && exp.bullets.length > 0 && (
-                    <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                      {exp.bullets.map((bullet, bidx) => (
-                        <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px' }}>{bullet}</li>
-                      ))}
-                    </ul>
-                  )}
-                </Box>
-              ))
+              // VIEW MODE - Cards with drag-and-drop (always show drag handles in simple view)
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={data.map((_, idx) => `exp-${idx}`)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {data.map((exp, idx) => (
+                    <SortableExperienceCard key={`exp-${idx}`} exp={exp} idx={idx} isMobile={isMobile} showDragHandle={true} />
+                  ))}
+                </SortableContext>
+              </DndContext>
             )}
           </Paper>
       </Box>
@@ -310,8 +431,8 @@ const ExperienceSection = ({
     <Box>
       {/* Info Label */}
       <Box >
-        <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-          Click version number to view. Use "Make This Current" to restore.
+<Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontWeight:'bold'}}>
+          Click version number to view. Use " Make This Current " to restore.
         </Typography>
       </Box>
 
@@ -463,7 +584,12 @@ const ExperienceSection = ({
                           />
                         }
                         label="Currently working here"
-                        sx={{ color: '#fff', mb: 1 }}
+                        slotProps={{
+                          typography: {
+                            sx: { color: '#fff !important' }
+                          }
+                        }}
+                        sx={{ mb: 1 }}
                       />
                       <TextField
                         label="Location"
@@ -554,26 +680,28 @@ const ExperienceSection = ({
                 </Button>
               </>
             ) : (
-              // VIEW MODE
+              // VIEW MODE - Always show cards, but drag handles only for current version
               <>
-                {displayData.map((exp, idx) => (
-                  <Box key={idx} sx={{ mb: 2.5, fontSize: isMobile ? '14px' : '13px' }}>
-                    <Typography variant="body2" fontWeight={600} sx={{ fontSize: isMobile ? '15px' : '14px', color: '#fff' }}>
-                      {exp.title} at {exp.company}
-                    </Typography>
-                    <Typography variant="caption" sx={{ fontSize: isMobile ? '13px' : '12px', color: colorPalette.secondary.mediumGreen }}>
-                      {exp.start_date} - {exp.end_date}
-                      {exp.location && ` | ${exp.location}`}
-                    </Typography>
-                    {exp.bullets && exp.bullets.length > 0 && (
-                      <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-                        {exp.bullets.map((bullet, bidx) => (
-                          <li key={bidx} style={{ fontSize: isMobile ? '13px' : '12px', color: '#fff', marginBottom: '6px', textAlign:'justify' }}>{bullet}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </Box>
-                ))}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={displayData.map((_, idx) => `exp-${idx}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {displayData.map((exp, idx) => (
+                      <SortableExperienceCard
+                        key={`exp-${idx}`}
+                        exp={exp}
+                        idx={idx}
+                        isMobile={isMobile}
+                        showDragHandle={viewingVersion === currentVersion}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
 
                 {/* Restore Version Button - Show ONLY when viewing a version that is NOT current */}
                 {viewingVersion !== currentVersion && (

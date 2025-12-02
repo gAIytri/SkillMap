@@ -629,7 +629,8 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
         name = project.get('name', '')
         technologies = project.get('technologies', [])
         link = project.get('link', '')
-        date = project.get('date', '')
+        start_date = project.get('start_date', '')
+        end_date = project.get('end_date', '')
 
         # Build tech string first to determine spacing
         tech_str = ''
@@ -662,12 +663,14 @@ def add_projects_section(doc: Document, projects: List[Dict[str, Any]], section_
             project_run.font.size = Pt(11)
             project_run.font.name = 'Calibri'
 
-            # Add date on right side (bold, 11pt)
-            if date:
+            # Add dates on right side (bold, 11pt) - same format as experience
+            if start_date:
                 tab_stops = project_para.paragraph_format.tab_stops
                 tab_stops.add_tab_stop(Inches(7.5), alignment=WD_ALIGN_PARAGRAPH.RIGHT)
 
-                date_run = project_para.add_run(f"\t{date}")
+                # Show date range if end_date exists, otherwise just start_date
+                date_text = f"{start_date} – {end_date}" if end_date else start_date
+                date_run = project_para.add_run(f"\t{date_text}")
                 date_run.font.bold = True
                 date_run.font.size = Pt(11)
                 date_run.font.name = 'Calibri'
@@ -862,21 +865,21 @@ def add_custom_list_section(doc: Document, section_data: Dict[str, Any], section
                 title_run.font.name = 'Calibri'
                 title_run.font.bold = True
 
-            # Subtitle (italic, right-aligned via tab)
+            # Subtitle (bold, right-aligned via tab - like dates in other sections)
             if subtitle:
                 if title:
                     row_para.add_run('\t')  # Tab to push subtitle to right
                 subtitle_run = row_para.add_run(sanitize_text(subtitle))
                 subtitle_run.font.size = Pt(10)
                 subtitle_run.font.name = 'Calibri'
-                subtitle_run.font.italic = True
+                subtitle_run.font.bold = True
 
-            # Set tab stop for right alignment
+            # Set tab stop for right alignment (match position of dates in other sections)
             if title and subtitle:
                 from docx.shared import Inches
                 from docx.enum.text import WD_TAB_ALIGNMENT
                 tab_stops = row_para.paragraph_format.tab_stops
-                tab_stops.add_tab_stop(Inches(6.0), WD_TAB_ALIGNMENT.RIGHT)
+                tab_stops.add_tab_stop(Inches(7.5), WD_TAB_ALIGNMENT.RIGHT)
 
         # Add description if present
         if description:

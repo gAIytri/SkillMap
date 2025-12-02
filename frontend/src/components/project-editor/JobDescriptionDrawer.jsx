@@ -132,12 +132,14 @@ const JobDescriptionDrawer = ({
           ) : (
             sortedMessages.map((message, index) => {
               const isEdit = message.text?.length < 200 || message.type === 'edit';
-              const timestamp = new Date(message.timestamp).toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+
+              // Format timestamp without timezone conversion
+              const date = new Date(message.timestamp);
+              const month = date.toLocaleString('en-US', { month: 'short' });
+              const day = date.getDate();
+              const hours = String(date.getHours()).padStart(2, '0');
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              const timestamp = `${month} ${day}, ${hours}:${minutes}`;
 
               return (
                 <Box

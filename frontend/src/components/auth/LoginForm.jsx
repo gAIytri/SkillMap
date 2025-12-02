@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { colorPalette } from '../../styles/theme';
 
-const LoginForm = ({ onBack, onSwitchToSignup }) => {
+const LoginForm = ({ onBack, onSwitchToSignup, onSwitchToForgotPassword }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -204,6 +204,26 @@ const LoginForm = ({ onBack, onSwitchToSignup }) => {
             required
             autoComplete="current-password"
           />
+
+          <Box textAlign="right" mt={1}>
+            <Link
+              component="button"
+              variant="body2"
+              type="button"
+              onClick={onSwitchToForgotPassword}
+              sx={{
+                color: colorPalette.primary.brightGreen,
+                textDecoration: 'none',
+                fontWeight: 500,
+                cursor: 'pointer',
+                '&:hover': {
+                  textDecoration: 'underline',
+                },
+              }}
+            >
+              Forgot Password?
+            </Link>
+          </Box>
 
           <Button
             type="submit"

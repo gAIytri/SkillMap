@@ -117,8 +117,8 @@ const ProfessionalSummarySection = ({
     <Box>
       {/* Info Label */}
       <Box>
-        <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontStyle: 'italic' }}>
-          Click version number to view. Green border = current active version. Use "Make This Current" to restore.
+       <Typography variant="caption" sx={{ fontSize: '10px', color: '#111111', fontWeight:'bold'}}>
+          Click version number to view. Use " Make This Current " to restore.
         </Typography>
       </Box>
 

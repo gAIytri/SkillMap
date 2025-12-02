@@ -7,7 +7,7 @@ import json
 import tempfile
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config.database import get_db
 from config.settings import settings
@@ -65,7 +65,7 @@ async def create_project(
 
     # Check for duplicate project names (prevent accidental duplicate clicks)
     # Only check recent projects created in the last 5 seconds
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
     five_seconds_ago = datetime.now(timezone.utc) - timedelta(seconds=5)
 
     recent_duplicate = db.query(Project).filter(
@@ -585,7 +585,7 @@ async def tailor_project_resume_with_agent(
 
                         # Save to message_history for chat interface
                         message_entry = {
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                             "text": request.job_description,
                             "type": "job_description"  # Will be detected as job_description or edit by intent
                         }
@@ -620,12 +620,16 @@ async def tailor_project_resume_with_agent(
                         else:
                             logger.warning(f"⚠ Cover letter is empty for project {project_id}, not saving")
 
-                        # Save email if generated
+                        # Save email if generated (with subject and body)
+                        email_subject = final_result.get("email_subject", "")
                         email_body_text = final_result.get("email_body", "")
                         if email_body_text:
-                            project_to_update.email_body_text = email_body_text
+                            # Store subject and body together with clear separator
+                            # Format: SUBJECT_LINE:\n[subject]\n\nEMAIL_BODY:\n[body]
+                            full_email = f"SUBJECT_LINE:\n{email_subject}\n\nEMAIL_BODY:\n{email_body_text}" if email_subject else email_body_text
+                            project_to_update.email_body_text = full_email
                             project_to_update.email_generated_at = datetime.utcnow()
-                            logger.info(f"✓ Email saved for project {project_id} (length: {len(email_body_text)} chars)")
+                            logger.info(f"✓ Email saved for project {project_id} with subject: {email_subject}")
                         else:
                             logger.warning(f"⚠ Email body is empty for project {project_id}, not saving")
 
@@ -1412,17 +1416,34 @@ async def get_email_body(
             detail="Email not generated yet. Please tailor the resume first."
         )
 
-    # Extract subject from email body (first line if it starts with "Subject:")
+    # Extract subject from email body
     email_body = project.email_body_text
-    subject = "Application for Position"  # Default subject
+    subject = "Application"  # Default subject (fallback only)
     body = email_body
 
-    # Try to extract subject if present
-    if email_body and (email_body.startswith("Subject:") or "Subject:" in email_body[:100]):
-        lines = email_body.split('\n', 1)
-        if len(lines) == 2 and "Subject:" in lines[0]:
-            subject = lines[0].replace("Subject:", "").strip()
-            body = lines[1].strip()
+    # Try new format first: SUBJECT_LINE: and EMAIL_BODY:
+    if email_body and "SUBJECT_LINE:" in email_body and "EMAIL_BODY:" in email_body:
+        try:
+            parts = email_body.split("EMAIL_BODY:", 1)
+            if len(parts) == 2:
+                # Extract subject
+                subject_part = parts[0].strip()
+                subject = subject_part.replace("SUBJECT_LINE:", "").strip()
+                # Extract body
+                body = parts[1].strip()
+        except Exception as e:
+            logger.warning(f"Failed to parse new email format: {e}")
+    elif email_body and ("Subject:" in email_body[:100]):
+        # Fallback to old format
+        parts = email_body.split('\n\n', 1)
+        if len(parts) >= 2 and "Subject:" in parts[0]:
+            subject = parts[0].replace("Subject:", "").strip()
+            body = parts[1].strip()
+        else:
+            lines = email_body.split('\n', 1)
+            if len(lines) == 2 and "Subject:" in lines[0]:
+                subject = lines[0].replace("Subject:", "").strip()
+                body = lines[1].strip()
 
     return {
         "success": True,
