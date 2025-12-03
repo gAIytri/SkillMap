@@ -28,8 +28,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear token and redirect to landing page
+    // Only redirect on 401 if it's NOT from login/register/auth endpoints
+    // Login failures should be handled by the form, not trigger a redirect
+    const isAuthEndpoint = error.config?.url?.includes('/api/auth/');
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      // Clear token and redirect to landing page (expired/invalid token)
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
       window.location.href = '/';

@@ -121,10 +121,10 @@ const SectionTemplateModal = ({ open, onClose, onSelectTemplate }) => {
         py: 2
       }}>
         <Box>
-          <Typography variant="h6" fontWeight={700} fontFamily="Poppins, sans-serif">
+          <Typography variant="h6" fontWeight={700} color='#f4f4f4' fontFamily="Poppins, sans-serif">
             Choose Section Template
           </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+          <Typography variant="body2" color='#f4f4f4' sx={{ opacity: 0.9, mt: 0.5 }}>
             Select a template that best fits your content
           </Typography>
         </Box>
@@ -209,9 +209,9 @@ const SectionTemplateModal = ({ open, onClose, onSelectTemplate }) => {
           borderRadius: 2,
           border: '1px solid rgba(76, 175, 80, 0.2)'
         }}>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
-            💡 <strong>Tip:</strong> After creating a section, you can customize its name and add your content.
-            You can also reorder sections by dragging them in the sidebar.
+          <Typography variant="body2" color="text.secondary" textAlign={'center'} sx={{ fontSize: '0.85rem' }}>
+            <strong> After creating a section, you can customize its name and add your content.
+            </strong>
           </Typography>
         </Box>
       </DialogContent>

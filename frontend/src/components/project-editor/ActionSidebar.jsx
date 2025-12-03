@@ -148,7 +148,7 @@ const ActionSidebar = ({
           flexDirection: 'column',
           alignItems: 'stretch',
           paddingBottom:2,
-          px: 1,
+          px: 2,
           gap: 1,
           overflow: 'auto',
         }}

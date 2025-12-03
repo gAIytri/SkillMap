@@ -388,7 +388,7 @@ const Dashboard = () => {
       ) : (
         <Grid container spacing={3}>
           {filteredProjects.map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.id}>
+            <Grid item xs={12} sm={6} md={3} key={project.id}>
               <Card
                 onClick={() => {
                   if (selectionMode) {

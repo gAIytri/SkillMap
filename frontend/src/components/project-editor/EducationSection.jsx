@@ -90,9 +90,10 @@ const EducationSection = ({
                           label="GPA"
                           value={edu.gpa || ''}
                                onChange={(e) => {
-                            // Only allow numbers
+                            // Only allow numbers with max value of 100
                             const value = e.target.value;
-                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            const numValue = parseFloat(value);
+                            if (value === '' || (/^\d*\.?\d*$/.test(value) && (isNaN(numValue) || numValue <= 100))) {
                               updateTempField(idx, 'gpa', value);
                             }
                           }}
@@ -106,9 +107,10 @@ const EducationSection = ({
                           label="Out of"
                           value={edu.gpa_out_of || ''}
                           onChange={(e) => {
-                            // Only allow numbers
+                            // Only allow numbers with max value of 100
                             const value = e.target.value;
-                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            const numValue = parseFloat(value);
+                            if (value === '' || (/^\d*\.?\d*$/.test(value) && (isNaN(numValue) || numValue <= 100))) {
                               updateTempField(idx, 'gpa_out_of', value);
                             }
                           }}
