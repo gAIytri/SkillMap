@@ -245,18 +245,27 @@ const DocumentViewer = ({
                   bgcolor: 'colorPalette.secondary.lightGreen',
                 }}
               >
-                <iframe
-                  ref={iframeRef}
-                  key={`pdf-${pdfZoom}`}
-                  src={`${pdfUrl}#zoom=${pdfZoom}&toolbar=0&navpanes=0`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    border: 'none',
-                    backgroundColor: '#FFF',
+                <Box
+                  sx={{
+                    transform: `scale(${pdfZoom / 100})`,
+                    transformOrigin: 'top center',
+                    transition: 'transform 0.2s ease-in-out',
+                    width: `${100 / (pdfZoom / 100)}%`,
+                    height: `${100 / (pdfZoom / 100)}%`,
                   }}
-                  title="Resume PDF Preview"
-                />
+                >
+                  <iframe
+                    ref={iframeRef}
+                    src={`${pdfUrl}#toolbar=0&navpanes=0`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      backgroundColor: '#FFF',
+                    }}
+                    title="Resume PDF Preview"
+                  />
+                </Box>
               </Box>
             ) : (
               <Paper elevation={3} sx={{ p: 4, maxWidth: '400px', textAlign: 'center' }}>
