@@ -163,14 +163,38 @@ const ActionSidebar = ({
             textTransform: 'none',
             fontFamily: 'Poppins, sans-serif',
             fontSize: '0.75rem',
+            height: '80px',
             justifyContent: 'flex-start',
             px: 1,
             '&:hover': {
               bgcolor: 'rgba(76, 175, 80, 0.1)',
             },
+            // Text overflow handling
+            overflow: 'hidden',
+            '& .MuiButton-startIcon': {
+              flexShrink: 0, // Prevent icon from shrinking
+            },
+            // Style the text content
+            display: 'flex',
+            alignItems: 'center',
+            whiteSpace: 'normal', // Allow wrapping
+            wordBreak: 'break-word',
+            lineHeight: 1.2,
+            textAlign: 'left',
           }}
         >
-          {project?.project_name}
+          <Box
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 3, // Show max 3 lines before truncating
+              WebkitBoxOrient: 'vertical',
+              lineHeight: 1.3,
+            }}
+          >
+            {project?.project_name}
+          </Box>
         </Button>
 
     

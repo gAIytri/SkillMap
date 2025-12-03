@@ -22,6 +22,7 @@ import {
   useTheme,
   useMediaQuery,
   Checkbox,
+  Collapse,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
@@ -32,6 +33,8 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { colorPalette } from '../styles/theme';
 import projectService from '../services/projectService';
 import resumeService from '../services/resumeService';
@@ -61,6 +64,7 @@ const Dashboard = () => {
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [creating, setCreating] = useState(false); // Track project creation state
+  const [expandedProjectNames, setExpandedProjectNames] = useState({}); // Track which project names are expanded
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -430,18 +434,53 @@ const Dashboard = () => {
                       />
                     )}
                     <Box flex={1}>
-                      <Typography
-                        variant="h6"
-                        fontWeight={600}
-                        gutterBottom
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {project.project_name}
-                      </Typography>
+                      {/* Project Name with Expand/Collapse */}
+                      <Box>
+                        <Typography
+                          variant="h6"
+                          fontWeight={600}
+                          gutterBottom
+                          sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: '-webkit-box',
+                            WebkitLineClamp: expandedProjectNames[project.id] ? 'unset' : 2,
+                            WebkitBoxOrient: 'vertical',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {project.project_name}
+                        </Typography>
+                        {/* Show expand/collapse button only if name is longer than 2 lines (approx 60 chars) */}
+                        {project.project_name.length > 60 && (
+                          <Button
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedProjectNames(prev => ({
+                                ...prev,
+                                [project.id]: !prev[project.id]
+                              }));
+                            }}
+                            startIcon={expandedProjectNames[project.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            sx={{
+                              textTransform: 'none',
+                              fontSize: '0.7rem',
+                              color: colorPalette.primary.darkGreen,
+                              p: 0,
+                              minWidth: 'auto',
+                              mb: 1,
+                              '&:hover': {
+                                bgcolor: 'transparent',
+                                textDecoration: 'underline',
+                              }
+                            }}
+                          >
+                            {expandedProjectNames[project.id] ? 'Show less' : 'Show more'}
+                          </Button>
+                        )}
+                      </Box>
+
                       <Typography
                         variant="body2"
                         color="text.secondary"
